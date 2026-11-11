@@ -28,7 +28,7 @@ export interface Kinematics {
 /** How far two touching things may press into each other before it counts as a new contact. */
 export const PENETRATION_TOL_M = 1e-7;
 /** Closing speed above which things that start in contact collide at once. */
-export const CLOSING_SPEED_TOL = 1e-9;
+export const CLOSING_SPEED_TOL = 1e-6;
 /** Slack, as a fraction, on "is the contact point within this segment / arc". */
 const EXTENT_TOL = 1e-9;
 

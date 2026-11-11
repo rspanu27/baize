@@ -35,9 +35,9 @@ Parallel: 0.3, 0.4, 0.5.
 | 1.11 | Event time functions: ball-ball, segment, arc, pocket, contact rule | L | 1.8, 1.9, 1.10 | Hand-computed cases; touching and grazing cases | done |
 | 1.12 | Ball-ball v1 model and cue strike | L | 1.9 | Momentum exact, energy non-increasing, unequal masses | done |
 | 1.13 | Han 2005 cushion model and interface | L | 1.9 | No energy gain over a parameter sweep; no-spin and side-spin directions correct | done |
-| 1.14 | Event loop: scheduler, cache, caps, result assembly | L | 1.11, 1.12, 1.13 | Two-ball and one-cushion shots produce the expected event lists | todo |
-| 1.15 | Same-instant and touching-ball handling | L | 1.14 | Frozen pair, ball frozen to cushion, line of touching balls, full racks all terminate | todo |
-| 1.16 | Public API, input validation, `sampleAt`, README | L | 1.14 | API tests; README example runs | todo |
+| 1.14 | Event loop: scheduler, cache, caps, result assembly | L | 1.11, 1.12, 1.13 | Two-ball and one-cushion shots produce the expected event lists | done |
+| 1.15 | Same-instant and touching-ball handling | L | 1.14 | Frozen pair, ball frozen to cushion, line of touching balls, full racks all terminate | done |
+| 1.16 | Public API, input validation, `sampleAt`, README | L | 1.14 | API tests; README example runs | done |
 | 1.17 | Verification suite (SPEC 5.8) on smallest, largest and random tables | L | 1.16, 1.2, 1.3 | 90 degree rule, 30 degree rule, stop shot, roll transition, cushion angle, cloth monotonic | todo |
 | 1.18 | Property tests: determinism, energy, termination, no overlap, in bounds | L | 1.16, 1.4 | fast-check suite passes at raised run counts | todo |
 | 1.19 | Golden snapshots, benchmark, profiling, broad-phase tuning | L | 1.17 | Snooker break-off and 9-ball break under 50 ms in Node | todo |

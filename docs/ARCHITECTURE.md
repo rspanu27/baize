@@ -247,7 +247,16 @@ The engine never moves a ball to fix an overlap. Collisions change velocities on
 
 ### Same-instant resolution
 
-After any collision, every touching neighbour of the affected balls (balls and cushion primitives) with closing speed is resolved at the same time, in a fixed order (ball index, then geometry index), until none remain. Closing speeds below a threshold are resolved as perfectly inelastic along the normal, so the loop always ends. This is how frozen balls and tight racks are handled.
+After any collision the affected balls' event times are recomputed. A touching neighbour that is now being closed on reports an event at the same instant, and that is resolved next, in the fixed scan order. Two rules make such chains end:
+
+- Closing speeds below `INELASTIC_SPEED` (1 cm/s) are resolved with no rebound.
+- A ball that leaves a collision with both speed and slip below `REST_SPEED` (1 cm/s) is put to rest. If that leaves its partner still closing on it, the remaining closing speed is taken out of the partner.
+
+This is how frozen balls and tight racks are handled.
+
+### Pressing contact
+
+Two balls left touching with no relative speed can be pushed together by their different friction decelerations (a rolling ball behind a sliding one, for example). Resolved by impulses alone, that is an endless stream of microscopic collisions. So when a slow collision leaves a pair pressing, both balls get the mass-weighted mean of their accelerations along the line of centres, which is what the contact force between them would do. Segments stay constant-acceleration, momentum is conserved, and energy cannot be added (the weighted mean of squares is never below the square of the weighted mean). The shared segments last until either ball's motion segment would have ended, until a pushed-back ball would turn round, or until anything else happens to either ball. Then the whole group of connected balls is released and each is re-classified from its actual velocity and spin.
 
 ### Scheduler
 
@@ -330,4 +339,7 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-11 | Ball-ball restitution is a required `SimInput` field, taken from the ball set. | The engine holds no material constants. |
 | 2026-11-11 | The v1 cushion model is a first-principles nose-impulse model in Han's formulation, not a transcription of Han 2005. In the sliding case friction opposes the actual slip direction. | The paper was not available to check equation by equation, and copying another project's implementation was ruled out. For a sphere the slip direction cannot change during the impact, so this is the exact Coulomb result under the same assumptions, and it passes a no-energy-gain property test. To be compared against the paper and pooltool in Phase 3. |
 | 2026-11-11 | `mouthM` is the opening where the jaw facings begin (the ends of the knuckle arcs). | Equals the point-to-point mouth on pool tables and the end-of-curve opening on snooker tables, which is how each is conventionally measured. |
-| 2026-11-11 | Contact tolerances: 0.1 um penetration bound, 1e-9 m/s closing-speed bound, 20 um input overlap allowed (`TOUCH_TOLERANCE_M`). | Link positions are quantised to 10 um, so touching balls can reload slightly overlapping. |
+| 2026-11-11 | Contact tolerances: 0.1 um penetration bound, 1e-9 m/s closing-speed bound (later 1e-6, see below), 20 um input overlap allowed (`TOUCH_TOLERANCE_M`). | Link positions are quantised to 10 um, so touching balls can reload slightly overlapping. |
+| 2026-11-11 | Rest threshold: a ball leaving a collision below 1 cm/s in both speed and slip is stopped; closing speeds below 1 cm/s do not rebound. | Found by profiling a snooker break: without it, balls nudged inside the pack traded thousands of microscopic collisions and the run never finished. At 1 cm/s a rolling ball would travel about 0.5 mm more, so the visible error is negligible. It only removes energy. |
+| 2026-11-11 | Pressing contact: a touching pair pushed together by friction shares its acceleration along the line of centres until either segment ends. | Impulses cannot represent a sustained contact force; this keeps segments quadratic, conserves momentum and cannot add energy. |
+| 2026-11-11 | Closing-speed tolerance for pairs that start in contact raised to 1e-6 m/s. | Supersedes the earlier 1e-9 m/s; values below it are rounding noise after a no-rebound contact. |
