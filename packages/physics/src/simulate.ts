@@ -3,7 +3,15 @@ import type { Kinematics } from "./detect";
 import { buildTableGeometry, cushionContactDistance, isPreparedTable } from "./geometry";
 import { frictionlessBallBall } from "./models/ballBall";
 import { noseImpulseCushion } from "./models/cushion";
-import { classify, makeSegment, nextSegment, positionAt, spinAt, velocityAt } from "./motion";
+import {
+  classify,
+  makeSegment,
+  nextSegment,
+  positionAt,
+  slipVelocity,
+  spinAt,
+  velocityAt,
+} from "./motion";
 import type { MotionParams } from "./motion";
 import { strike } from "./strike";
 import { SimInputError } from "./types";
@@ -11,7 +19,6 @@ import type {
   BallInput,
   BallTrack,
   CushionInput,
-  MotionState,
   Segment,
   SimEvent,
   SimInput,
@@ -54,6 +61,17 @@ import type {
 
 /** Relative acceleration (m/s^2) along the line of centres above which a pair is pressing. */
 const PRESSING_ACCEL_TOL = 1e-9;
+
+/** Balls whose surfaces are within this distance are in contact for the cluster solver. */
+const CLUSTER_GAP_M = 1e-6;
+/** The cluster solver stops when no touching pair closes faster than this (m/s). */
+const CLUSTER_SPEED_TOL = 2.5e-7;
+/** ... or presses harder than this (m/s^2). */
+const CLUSTER_ACCEL_TOL = 1e-7;
+/** Longest a set of pressing balls keeps one shared set of accelerations before re-solving. */
+const FORCED_MAX_S = 0.05;
+/** Upper bound on relaxation sweeps; a line of 22 balls converges well inside it. */
+const CLUSTER_SWEEPS = 2000;
 
 /** Standard gravity (CGPM 1901 conventional value), m/s^2. */
 export const STANDARD_GRAVITY = 9.80665;
@@ -415,7 +433,8 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
 
   /**
    * Applies the rest threshold to a ball coming out of a collision: below `REST_SPEED` in both
-   * speed and slip it is put to rest (vertical spin is kept). Returns true if it was.
+   * speed and slip it is put to rest (vertical spin is kept); with only the slip below it, the
+   * ball is put into natural roll. The result is left in `settled`.
    */
   const settled = { v: { x: 0, y: 0 } as Vec2, w: { x: 0, y: 0, z: 0 } as Vec3, atRest: false };
   const settle = (b: Body, v: Vec2, w: Vec3): void => {
@@ -426,6 +445,15 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       settled.v = { x: 0, y: 0 };
       settled.w = { x: 0, y: 0, z: w.z };
       settled.atRest = true;
+    } else if (ux * ux + uy * uy < limit) {
+      // Moving, but with a slip so small that cloth friction would remove it within a
+      // millisecond or two. Jump straight to the state that slide would end in (natural
+      // roll at v - 2u/7), so a ball that is rolling in all but name is treated as rolling.
+      const vx = v.x - (2 * ux) / 7;
+      const vy = v.y - (2 * uy) / 7;
+      settled.v = { x: vx, y: vy };
+      settled.w = { x: -vy / b.radiusM, y: vx / b.radiusM, z: w.z };
+      settled.atRest = false;
     } else {
       settled.v = v;
       settled.w = w;
@@ -481,32 +509,257 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     for (const b of group) refresh(b, now);
   };
 
-  /**
-   * Segment for a ball coming out of a slow (no-rebound) collision. A ball already in a
-   * pressing contact keeps the acceleration, spin rates and end time of its current segment;
-   * any other ball gets a fresh segment.
-   */
-  const slowSegment = (b: Body, now: number, r: Vec2, v: Vec2, w: Vec3): Segment => {
-    if (b.partners.length === 0) {
-      return makeSegment(now, r, v, w, b.radiusM, motion, classify(v, w, b.radiusM));
-    }
-    const s = b.seg;
-    return {
-      t0: now,
-      duration: b.end - now,
-      state: s.state,
-      r0: r,
-      v0: v,
-      a: s.a,
-      omega0: w,
-      alpha: s.alpha,
-    };
-  };
-
   /** Time until a ball that starts with velocity v and acceleration a stops moving along v. */
   const timeToReverse = (v: Vec2, a: Vec2): number => {
     const along = a.x * v.x + a.y * v.y;
     return along < 0 ? -(v.x * v.x + v.y * v.y) / along : INF;
+  };
+
+  /**
+   * Resolves a slow (no-rebound) contact, together with every ball touching the pair.
+   *
+   * Balls in mutual contact that are barely closing cannot be settled one pair per event: a
+   * line of touching balls would take hundreds of events to agree on a common speed. So the
+   * whole touching cluster is solved here in one go, by relaxation in a fixed order:
+   *   1. closing speeds between touching balls are removed (no rebound, momentum kept);
+   *   2. balls left below the rest threshold are stopped, and treated as immovable;
+   *   3. where friction would push touching balls together, they are given the mean
+   *      acceleration along their line of centres (the pressing-contact rule).
+   * Contacts closing faster than `INELASTIC_SPEED` are left alone; they come back from the
+   * event loop as ordinary collisions.
+   */
+  const resolveCluster = (a: Body, b: Body, now: number): void => {
+    // Positions now, and the cluster of balls in contact with a or b, directly or in a chain.
+    const pos: Vec2[] = bodies.map((x) => positionAt(x.seg, x.moving ? now - x.seg.t0 : 0));
+    const gapOf = (i: number, j: number): number => {
+      const dx = (pos[j] as Vec2).x - (pos[i] as Vec2).x;
+      const dy = (pos[j] as Vec2).y - (pos[i] as Vec2).y;
+      return (
+        Math.sqrt(dx * dx + dy * dy) - (bodies[i] as Body).radiusM - (bodies[j] as Body).radiusM
+      );
+    };
+    const inCluster: boolean[] = new Array<boolean>(n).fill(false);
+    const members: number[] = [a.index, b.index];
+    inCluster[a.index] = true;
+    inCluster[b.index] = true;
+    for (let q = 0; q < members.length; q++) {
+      const i = members[q] as number;
+      for (let j = 0; j < n; j++) {
+        if (inCluster[j] || (bodies[j] as Body).pocketed) continue;
+        if (gapOf(i, j) <= CLUSTER_GAP_M) {
+          inCluster[j] = true;
+          members.push(j);
+        }
+      }
+    }
+    members.sort((x, y) => x - y);
+
+    // Anything in the cluster that is in a pressing contact is released and solved afresh.
+    for (const i of members) releaseGroup(bodies[i] as Body, now);
+
+    const vel: Vec2[] = [];
+    const spin: Vec3[] = [];
+    for (const i of members) {
+      const x = bodies[i] as Body;
+      const tau = x.moving ? now - x.seg.t0 : 0;
+      vel[i] = velocityAt(x.seg, tau);
+      spin[i] = spinAt(x.seg, tau);
+    }
+
+    interface Contact {
+      readonly i: number;
+      readonly j: number;
+      readonly nx: number;
+      readonly ny: number;
+    }
+    const contacts: Contact[] = [];
+    for (let p = 0; p < members.length; p++) {
+      for (let q = p + 1; q < members.length; q++) {
+        const i = members[p] as number;
+        const j = members[q] as number;
+        const isSeed = i === Math.min(a.index, b.index) && j === Math.max(a.index, b.index);
+        if (!isSeed && gapOf(i, j) > CLUSTER_GAP_M) continue;
+        const dx = (pos[j] as Vec2).x - (pos[i] as Vec2).x;
+        const dy = (pos[j] as Vec2).y - (pos[i] as Vec2).y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        contacts.push({ i, j, nx: dx / d, ny: dy / d });
+      }
+    }
+
+    // 1 and 2: remove slow closing speeds between touching balls, stop balls that end up
+    // below the rest threshold (a stopped ball is immovable, so its neighbours must stop
+    // closing on it), and put balls with a negligible slip into natural roll.
+    //
+    // A rolling ball keeps rolling through these small impulses, so part of each impulse goes
+    // into its rotation: along the line of centres it behaves like a mass of 7/5 m, and its
+    // spin follows its velocity. A sliding ball takes the impulse on its velocity alone.
+    const fixed: boolean[] = new Array<boolean>(n).fill(false);
+    const rolls: boolean[] = new Array<boolean>(n).fill(false);
+    const restLimit = REST_SPEED * REST_SPEED;
+    const slipSq = (i: number): number => {
+      const u = slipVelocity(vel[i] as Vec2, spin[i] as Vec3, (bodies[i] as Body).radiusM);
+      return u.x * u.x + u.y * u.y;
+    };
+    /** Applies the rest and natural-roll thresholds to one ball; true if its kind changed. */
+    const classifyMember = (i: number): boolean => {
+      if (fixed[i]) return false;
+      const wasRolling = rolls[i] as boolean;
+      const snaps = !wasRolling && slipSq(i) < restLimit;
+      settle(bodies[i] as Body, vel[i] as Vec2, spin[i] as Vec3);
+      vel[i] = settled.v;
+      spin[i] = settled.w;
+      if (settled.atRest) {
+        fixed[i] = true;
+        rolls[i] = true;
+        return true;
+      }
+      if (snaps) {
+        rolls[i] = true;
+        return true;
+      }
+      return false;
+    };
+    for (const i of members) classifyMember(i);
+    for (let round = 0; round < 6; round++) {
+      for (let sweep = 0; sweep < CLUSTER_SWEEPS; sweep++) {
+        let worst = 0;
+        for (const c of contacts) {
+          const vi = vel[c.i] as Vec2;
+          const vj = vel[c.j] as Vec2;
+          const closing = (vi.x - vj.x) * c.nx + (vi.y - vj.y) * c.ny;
+          if (!(closing > 0) || closing >= INELASTIC_SPEED) continue;
+          const fi = fixed[c.i] as boolean;
+          const fj = fixed[c.j] as boolean;
+          if (fi && fj) continue;
+          if (closing > worst) worst = closing;
+          const mi = (rolls[c.i] ? 1.4 : 1) * (bodies[c.i] as Body).massKg;
+          const mj = (rolls[c.j] ? 1.4 : 1) * (bodies[c.j] as Body).massKg;
+          // Share of the closing speed each ball gives up (all of it if the other is fixed).
+          const si = fj ? 1 : fi ? 0 : mj / (mi + mj);
+          const sj = 1 - si;
+          vel[c.i] = { x: vi.x - si * closing * c.nx, y: vi.y - si * closing * c.ny };
+          vel[c.j] = { x: vj.x + sj * closing * c.nx, y: vj.y + sj * closing * c.ny };
+        }
+        if (worst < CLUSTER_SPEED_TOL) break;
+      }
+      // Rolling balls: the spin follows the new velocity.
+      for (const i of members) {
+        if (!rolls[i] || fixed[i]) continue;
+        const v = vel[i] as Vec2;
+        const r = (bodies[i] as Body).radiusM;
+        spin[i] = { x: -v.y / r, y: v.x / r, z: (spin[i] as Vec3).z };
+      }
+      let changed = false;
+      for (const i of members) if (classifyMember(i)) changed = true;
+      if (!changed) break;
+    }
+
+    // 3: fresh segments, then share accelerations across contacts that would press.
+    // A sliding ball answers a push through its centre with F / m. A rolling ball (or one at
+    // rest, which starts to roll) keeps rolling, so part of the push goes into rotation and
+    // it answers with (5/7) F / m: its effective mass along the push is 7/5 m.
+    const segs: Segment[] = [];
+    const acc: Vec2[] = [];
+    const effMass: number[] = [];
+    const forced: boolean[] = new Array<boolean>(n).fill(false);
+    for (const i of members) {
+      const x = bodies[i] as Body;
+      const v = vel[i] as Vec2;
+      const w = spin[i] as Vec3;
+      const seg = makeSegment(
+        now,
+        pos[i] as Vec2,
+        v,
+        w,
+        x.radiusM,
+        motion,
+        classify(v, w, x.radiusM),
+      );
+      segs[i] = seg;
+      acc[i] = seg.a;
+      effMass[i] = seg.state === "sliding" ? x.massKg : 1.4 * x.massKg;
+    }
+    for (let sweep = 0; sweep < CLUSTER_SWEEPS; sweep++) {
+      let worst = 0;
+      for (const c of contacts) {
+        const vi = vel[c.i] as Vec2;
+        const vj = vel[c.j] as Vec2;
+        const rel = (vi.x - vj.x) * c.nx + (vi.y - vj.y) * c.ny;
+        // Only contacts with no relative speed along the line of centres can press.
+        if (rel > CLUSTER_SPEED_TOL || rel < -CLUSTER_SPEED_TOL) continue;
+        const ai = acc[c.i] as Vec2;
+        const aj = acc[c.j] as Vec2;
+        const ain = ai.x * c.nx + ai.y * c.ny;
+        const ajn = aj.x * c.nx + aj.y * c.ny;
+        const pressing = ain - ajn;
+        if (!(pressing > PRESSING_ACCEL_TOL)) continue;
+        if (pressing > worst) worst = pressing;
+        const mi = effMass[c.i] as number;
+        const mj = effMass[c.j] as number;
+        const mean = (mi * ain + mj * ajn) / (mi + mj);
+        acc[c.i] = { x: ai.x + (mean - ain) * c.nx, y: ai.y + (mean - ain) * c.ny };
+        acc[c.j] = { x: aj.x + (mean - ajn) * c.nx, y: aj.y + (mean - ajn) * c.ny };
+        forced[c.i] = true;
+        forced[c.j] = true;
+        const bi = bodies[c.i] as Body;
+        const bj = bodies[c.j] as Body;
+        if (!bi.partners.includes(c.j)) bi.partners.push(c.j);
+        if (!bj.partners.includes(c.i)) bj.partners.push(c.i);
+      }
+      if (worst < CLUSTER_ACCEL_TOL) break;
+    }
+
+    // Shared segments all end together, at the earliest of: a rolling ball's natural stop, a
+    // pushed-back ball turning round, a sliding ball's slip running out, and a fixed
+    // re-evaluation interval (the lines of centres turn as the balls move).
+    let shared = FORCED_MAX_S;
+    for (const i of members) {
+      if (!forced[i]) continue;
+      const seg = segs[i] as Segment;
+      const a2 = acc[i] as Vec2;
+      const rev = timeToReverse(vel[i] as Vec2, a2);
+      if (rev < shared) shared = rev;
+      if (seg.state === "sliding") {
+        // Slip changes at k = a' + (5/2) a_friction; it runs out when its component along the
+        // starting slip direction reaches zero.
+        const u = slipVelocity(seg.v0, seg.omega0, (bodies[i] as Body).radiusM);
+        const kx = a2.x + 2.5 * seg.a.x;
+        const ky = a2.y + 2.5 * seg.a.y;
+        const rate = kx * u.x + ky * u.y;
+        if (rate < 0) {
+          const t = -(u.x * u.x + u.y * u.y) / rate;
+          if (t < shared) shared = t;
+        }
+      } else if (seg.duration < shared) {
+        shared = seg.duration;
+      }
+    }
+    for (const i of members) {
+      const x = bodies[i] as Body;
+      let seg = segs[i] as Segment;
+      const partners = x.partners;
+      if (forced[i]) {
+        const a2 = acc[i] as Vec2;
+        if (seg.state === "sliding") {
+          seg = { ...seg, a: a2, duration: shared };
+        } else {
+          // Rolling under the push: the spin follows the new acceleration.
+          const v = vel[i] as Vec2;
+          seg = {
+            ...seg,
+            state: "rolling",
+            a: a2,
+            duration: shared,
+            omega0: { x: -v.y / x.radiusM, y: v.x / x.radiusM, z: seg.omega0.z },
+            alpha: { x: -a2.y / x.radiusM, y: a2.x / x.radiusM, z: seg.alpha.z },
+          };
+        }
+      }
+      setSegment(x, seg);
+      x.forced = forced[i] as boolean;
+      x.partners = forced[i] ? partners : [];
+    }
+    for (const i of members) refresh(bodies[i] as Body, now);
   };
 
   const checkInBounds = (b: Body, r: Vec2): void => {
@@ -617,8 +870,14 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       const dist = Math.sqrt(dx * dx + dy * dy);
       const normal: Vec2 = { x: dx / dist, y: dy / dist };
       const closing = (va.x - vb.x) * normal.x + (va.y - vb.y) * normal.y;
-      const slow = closing < INELASTIC_SPEED;
-      if (!slow && (a.partners.length > 0 || b.partners.length > 0)) {
+      const point: Vec2 = { x: ra.x + normal.x * a.radiusM, y: ra.y + normal.y * a.radiusM };
+      if (closing < INELASTIC_SPEED) {
+        // Slow contact: no rebound. Settle the pair and everything touching it together.
+        events.push({ type: "ball-ball", t: now, ballId: a.id, otherBallId: b.id, point });
+        resolveCluster(a, b, now);
+        continue;
+      }
+      if (a.forced || b.forced) {
         // A real collision: release both balls from any pressing contact and re-read them.
         releaseGroup(a, now);
         releaseGroup(b, now);
@@ -635,7 +894,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
         { radiusM: a.radiusM, massKg: a.massKg, velocity: va, spin: wa },
         { radiusM: b.radiusM, massKg: b.massKg, velocity: vb, spin: wb },
         normal,
-        slow ? 0 : restitution,
+        restitution,
       );
       settle(a, out.a.velocity, out.a.spin);
       let vA = settled.v;
@@ -663,53 +922,9 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
           restB = settled.atRest;
         }
       }
-      if (!slow) {
-        restart(a, now, ra, vA, wA);
-        restart(b, now, rb, vB, wB);
-      } else {
-        // Slow contact: the pair now has no closing speed. If their accelerations would push
-        // them together, give both the mean acceleration along the line of centres.
-        let sA = slowSegment(a, now, ra, vA, wA);
-        let sB = slowSegment(b, now, rb, vB, wB);
-        const aAn = sA.a.x * normal.x + sA.a.y * normal.y;
-        const aBn = sB.a.x * normal.x + sB.a.y * normal.y;
-        if (aBn - aAn < -PRESSING_ACCEL_TOL) {
-          const mean = (a.massKg * aAn + b.massKg * aBn) / (a.massKg + b.massKg);
-          const accA: Vec2 = {
-            x: sA.a.x + (mean - aAn) * normal.x,
-            y: sA.a.y + (mean - aAn) * normal.y,
-          };
-          const accB: Vec2 = {
-            x: sB.a.x + (mean - aBn) * normal.x,
-            y: sB.a.y + (mean - aBn) * normal.y,
-          };
-          let duration = sA.duration < sB.duration ? sA.duration : sB.duration;
-          // Do not let a pushed-back ball run past the point where it would turn round.
-          const revA = timeToReverse(vA, accA);
-          const revB = timeToReverse(vB, accB);
-          if (revA < duration) duration = revA;
-          if (revB < duration) duration = revB;
-          const moving = (st: MotionState): MotionState =>
-            st === "stationary" || st === "spinning" ? "sliding" : st;
-          sA = { ...sA, a: accA, duration, state: moving(sA.state) };
-          sB = { ...sB, a: accB, duration, state: moving(sB.state) };
-          if (!a.partners.includes(b.index)) a.partners.push(b.index);
-          if (!b.partners.includes(a.index)) b.partners.push(a.index);
-        }
-        const forcedA = a.partners.length > 0;
-        const forcedB = b.partners.length > 0;
-        setSegment(a, sA);
-        setSegment(b, sB);
-        a.forced = forcedA;
-        b.forced = forcedB;
-      }
-      events.push({
-        type: "ball-ball",
-        t: now,
-        ballId: a.id,
-        otherBallId: b.id,
-        point: { x: ra.x + normal.x * a.radiusM, y: ra.y + normal.y * a.radiusM },
-      });
+      restart(a, now, ra, vA, wA);
+      restart(b, now, rb, vB, wB);
+      events.push({ type: "ball-ball", t: now, ballId: a.id, otherBallId: b.id, point });
       refresh(a, now);
       refresh(b, now);
       continue;

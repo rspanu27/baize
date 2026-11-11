@@ -254,9 +254,20 @@ After any collision the affected balls' event times are recomputed. A touching n
 
 This is how frozen balls and tight racks are handled.
 
-### Pressing contact
+### Slow contacts and pressing: the cluster solver
 
-Two balls left touching with no relative speed can be pushed together by their different friction decelerations (a rolling ball behind a sliding one, for example). Resolved by impulses alone, that is an endless stream of microscopic collisions. So when a slow collision leaves a pair pressing, both balls get the mass-weighted mean of their accelerations along the line of centres, which is what the contact force between them would do. Segments stay constant-acceleration, momentum is conserved, and energy cannot be added (the weighted mean of squares is never below the square of the weighted mean). The shared segments last until either ball's motion segment would have ended, until a pushed-back ball would turn round, or until anything else happens to either ball. Then the whole group of connected balls is released and each is re-classified from its actual velocity and spin.
+A collision closing slower than `INELASTIC_SPEED` is not resolved as a lone pair. A line or pack of touching balls would need hundreds of pairwise events to agree on a common speed, and balls pushed together by friction (a rolling ball behind a sliding one, a train of balls pushed along a rail) would trade microscopic collisions for as long as they stay together. Instead, `resolveCluster` takes the pair and every ball touching it, directly or through a chain, and solves the cluster in one event, by relaxation in a fixed order:
+
+1. **Speeds.** Closing speeds between touching balls are removed (no rebound, momentum kept). A ball left below the rest threshold is stopped and then treated as immovable. A ball whose slip is below the threshold is put into natural roll.
+2. **Accelerations.** Where friction would push two touching balls together, they get the mean acceleration along their line of centres, which is what the contact force between them does.
+
+A rolling ball stays rolling through all of this, so part of every push goes into its rotation: along the line of centres it behaves like a mass of 7/5 m and its spin follows its velocity. A sliding ball takes the push on its velocity alone.
+
+The shared accelerations keep every segment a constant-acceleration segment, conserve momentum and cannot add energy (the weighted mean of squares is never below the square of the weighted mean). They last until the earliest of: a rolling ball's natural stop, a pushed-back ball turning round, a sliding ball's slip running out, 50 ms (the lines of centres turn as balls move), or anything else happening to a ball in the group. Then the group is released and each ball is re-classified from its actual velocity and spin.
+
+Contacts closing faster than `INELASTIC_SPEED` are never touched by the solver; they come back from the event loop as ordinary collisions.
+
+A ball left with no speed into a cushion but with friction pushing it in is held by the cushion in the same spirit: the inward part of its acceleration is removed.
 
 ### Scheduler
 
@@ -344,3 +355,5 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-11 | Pressing contact: a touching pair pushed together by friction shares its acceleration along the line of centres until either segment ends. | Impulses cannot represent a sustained contact force; this keeps segments quadratic, conserves momentum and cannot add energy. |
 | 2026-11-11 | Closing-speed tolerance for pairs that start in contact raised to 1e-6 m/s. | Supersedes the earlier 1e-9 m/s; values below it are rounding noise after a no-rebound contact. |
 | 2026-11-12 | "Touching" in the contact rule means a gap of at most 0.1 um, not exactly zero. A ball left with no speed into a cushion but with friction pushing it in is held by the cushion (that part of its acceleration is removed). | Found by a verification test: a slow ball grazing a rail left it by a rounding error and re-touched it every two nanoseconds until the event cap. |
+| 2026-11-12 | Slow contacts are solved per touching cluster in one event (`resolveCluster`), with rolling balls treated as 7/5 m along the push. A slip below 1 cm/s is settled straight to natural roll. | Found by a 12,000-scene soak run: a row of balls frozen to a rail and each other, struck along the rail, took thousands of pairwise events. Now 15. Supersedes the pairwise pressing rule added the day before. |
+| 2026-11-12 | Break shots simulate in about 1 ms (9-ball break 0.6 ms, snooker break-off 0.8 ms, hard snooker pack split 1.0 ms; medians in Node on the development machine), so simulation stays on the main thread. | The spec limit is 50 ms. No Worker is needed for Phase 2. |
