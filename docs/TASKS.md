@@ -25,7 +25,7 @@ Parallel: 0.3, 0.4, 0.5.
 | 1.1 | Type contracts in both packages, stub modules and index files | L | 0.3 | Typecheck passes; type-level compatibility test passes | done |
 | 1.2 | Table presets (13) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | todo |
 | 1.3 | Ball sets and cloth presets (speeds with sources, colours) | I | 1.1 | Preset tests pass; every number has a source comment | todo |
-| 1.4 | Custom table validation and derived defaults, plain-word messages | I | 1.1 | Unit tests for each rule and message | todo |
+| 1.4 | Custom table validation and derived defaults, plain-word messages | I | 1.1 | Unit tests for each rule and message | done |
 | 1.5 | Markings and spots per game | I | 1.1 | Snooker spots match the rules on 12 ft; scale on other sizes | done |
 | 1.6 | Racks, `sanitizeLayout` | I | 1.5 | Racks have no overlaps; sanitize property tests pass | todo |
 | 1.7 | Maths core: vectors, `sinCos`, stable quadratic | L | 1.1 | Unit tests; `sinCos` within 1e-15 of reference | done |
