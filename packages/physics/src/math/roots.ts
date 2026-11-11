@@ -14,14 +14,15 @@ import { quadraticRoots } from "./quadratic";
  * monotone, and a monotone piece holds at most one crossing. Only + - * / and sqrt are used,
  * so results are bit-identical on every JavaScript engine.
  *
- * Contact rule:
- *  - If f starts positive, the event is the first time f falls to 0.
- *  - If f starts at or below 0 (already touching) and is closing faster than `closingTol`
- *    (f'(0) < -closingTol), the event is at t = 0.
- *  - If f starts at or below 0 and is not closing, nothing happens while it rises. If it never
- *    rises above 0 and later falls `penetrationTol` below its starting value, that is the event
- *    (resting contact that starts to press in). Once f has risen above 0 the pair has separated
- *    and the first rule applies again.
+ * Contact rule ("touching" means f <= penetrationTol, so a gap that is only rounding error
+ * still counts as contact):
+ *  - If f starts apart, the event is the first time f falls to 0.
+ *  - If f starts touching and is closing faster than `closingTol` (f'(0) < -closingTol), the
+ *    event is at t = 0.
+ *  - If f starts touching and is not closing, nothing happens while it rises. If it never
+ *    rises above `penetrationTol` and later falls `penetrationTol` below its starting value,
+ *    that is the event (resting contact that starts to press in). Once f has risen above
+ *    `penetrationTol` the pair has separated and the first rule applies again.
  *
  * `accept`, if given, can veto a crossing (for example a contact outside an arc's angular
  * range). The search then continues with the next crossing after f has risen above 0 again.
@@ -29,7 +30,10 @@ import { quadraticRoots } from "./quadratic";
 export interface CrossingOptions {
   /** Threshold on -f'(0) above which a pair that starts in contact collides at t = 0. */
   readonly closingTol: number;
-  /** How far below its starting value f must fall before resting contact counts as an event. */
+  /**
+   * Contact tolerance in the units of f: values at or below it count as touching, and resting
+   * contact becomes an event once f has fallen this far below its starting value.
+   */
   readonly penetrationTol: number;
   readonly accept?: (t: number) => boolean;
 }
@@ -131,15 +135,16 @@ export function firstDownCrossing(
   const accept = options.accept;
 
   // Start in contact and closing: immediate event.
+  const tol = options.penetrationTol;
   let vetoedAtStart = false;
-  if (c0 <= 0 && c1 < -options.closingTol) {
+  if (c0 <= tol && c1 < -options.closingTol) {
     if (accept === undefined || accept(0)) return 0;
     vetoedAtStart = true;
   }
   if (!(T > 0)) return NO_CROSSING;
 
   // Cheap rejection: a lower bound of f on [0, T] that stays positive means no contact.
-  if (c0 > 0) {
+  if (c0 > tol) {
     const T2 = T * T;
     const bound =
       c0 +
@@ -185,13 +190,13 @@ export function firstDownCrossing(
   // `level` is what f must fall to for an event: 0 once the pair is apart; a little below the
   // starting value while it has been in contact since t = 0; -Infinity after a vetoed crossing
   // until f rises above 0 again.
-  let level = c0 > 0 ? 0 : vetoedAtStart ? Number.NEGATIVE_INFINITY : c0 - options.penetrationTol;
+  let level = c0 > tol ? 0 : vetoedAtStart ? Number.NEGATIVE_INFINITY : c0 - tol;
   let a = 0;
   let fa = c0;
   for (let i = 0; i <= nF; i++) {
     const b = i < nF ? (breaksF[i] as number) : T;
     const fb = evalPoly(c0, c1, c2, c3, c4, b);
-    if (fa > 0) level = 0;
+    if (fa > tol) level = 0;
     if (fb < fa && fa > level && fb <= level) {
       const t = decreasingCrossing(c0, c1, c2, c3, c4, level, a, b);
       if (accept === undefined || accept(t)) return t;

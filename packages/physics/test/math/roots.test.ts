@@ -97,7 +97,7 @@ describe("firstDownCrossing", () => {
 
   test("tiny and huge time scales", () => {
     // (t - 1e-7)(t - 1) and (t - 500)(t - 1000)
-    const tiny = solve([1e-7, -(1 + 1e-7), 1], 2);
+    const tiny = solve([1e-7, -(1 + 1e-7), 1], 2, { closingTol: 1e-9, penetrationTol: 1e-12 });
     expect(Math.abs(tiny - 1e-7) / 1e-7).toBeLessThan(1e-8);
     expect(solve([500000, -1500, 1], 2000)).toBeCloseTo(500, 9);
   });
@@ -167,5 +167,25 @@ describe("firstDownCrossing", () => {
       }),
       { numRuns: 3000 },
     );
+  });
+});
+
+describe("contact tolerance", () => {
+  test("a gap within the tolerance counts as touching: closing collides at once", () => {
+    // Gap of 1e-7 with tolerance 1e-6, closing at 1: no need to wait for the gap to close.
+    expect(solve([1e-7, -1, 0], 5)).toBe(0);
+  });
+
+  test("leaving contact by less than the tolerance and coming back is still resting contact", () => {
+    // Starts at +1e-9 moving away at 1e-6, pulled back at 2 per s^2: peaks at about 1.25e-12
+    // above its start, far inside the tolerance, so it only counts once it has pressed in.
+    const t = solve([1e-9, 1e-6, -1], 5);
+    expect(t).toBeGreaterThan(5e-4);
+    expect(t).toBeCloseTo(1e-3, 5);
+  });
+
+  test("a real separation followed by a return is an ordinary collision", () => {
+    // Rises to 0.25 (far above the tolerance), then falls through zero at t = 1.
+    expect(solve([0, 1, -1], 5)).toBeCloseTo(1, 12);
   });
 });

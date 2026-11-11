@@ -110,6 +110,12 @@ interface Body {
    * forces and the segment must not be continued with `nextSegment`.
    */
   partners: number[];
+  /**
+   * True while the current segment's acceleration has been altered by a contact force (a
+   * pressing ball or a cushion the ball is running along). Such a segment is ended by
+   * re-classifying the ball from its actual state, never with `nextSegment`.
+   */
+  forced: boolean;
 }
 
 function fail(code: SimInputError["code"], message: string): never {
@@ -277,6 +283,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       cushionKind: CushionKind.None,
       cushionIndex: -1,
       partners: [],
+      forced: false,
     });
   }
   // pairTime[i * n + j] for i < j: absolute time of the next collision between i and j.
@@ -403,6 +410,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     b.seg = seg;
     b.end = seg.t0 + seg.duration;
     b.moving = seg.state === "sliding" || seg.state === "rolling";
+    b.forced = false;
   };
 
   /**
@@ -436,7 +444,19 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
    * balls whose state changes. Does nothing for a ball with no partners.
    */
   const releaseGroup = (root: Body, now: number): void => {
-    if (root.partners.length === 0) return;
+    if (root.partners.length === 0) {
+      if (!root.forced) return;
+      // Held only by a cushion: re-classify this ball alone.
+      const tau = now - root.seg.t0;
+      const from = root.seg.state;
+      settle(root, velocityAt(root.seg, tau), spinAt(root.seg, tau));
+      restart(root, now, positionAt(root.seg, tau), settled.v, settled.w);
+      if (root.seg.state !== from) {
+        events.push({ type: "transition", t: now, ballId: root.id, from, to: root.seg.state });
+      }
+      refresh(root, now);
+      return;
+    }
     const group: Body[] = [];
     const stack: Body[] = [root];
     const seen = new Set<number>();
@@ -561,7 +581,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     if (best > now) now = best;
     const a = bodies[ia] as Body;
 
-    if (kind === 3 && a.partners.length > 0) {
+    if (kind === 3 && a.forced) {
       // The shared segment of a pressing contact has run out: release the group. Each ball
       // is re-classified from its actual state, and events are emitted for state changes.
       releaseGroup(a, now);
@@ -676,8 +696,12 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
           if (!a.partners.includes(b.index)) a.partners.push(b.index);
           if (!b.partners.includes(a.index)) b.partners.push(a.index);
         }
+        const forcedA = a.partners.length > 0;
+        const forcedB = b.partners.length > 0;
         setSegment(a, sA);
         setSegment(b, sB);
+        a.forced = forcedA;
+        b.forced = forcedB;
       }
       events.push({
         type: "ball-ball",
@@ -724,7 +748,27 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       const vn = va.x * normal.x + va.y * normal.y;
       const v: Vec2 = vn < 0 ? { x: va.x - vn * normal.x, y: va.y - vn * normal.y } : va;
       settle(a, v, wa);
-      restart(a, now, ra, settled.v, settled.w);
+      let seg = makeSegment(
+        now,
+        ra,
+        settled.v,
+        settled.w,
+        a.radiusM,
+        motion,
+        classify(settled.v, settled.w, a.radiusM),
+      );
+      // The ball now has no speed into the cushion. If friction would push it into the
+      // cushion, the cushion holds it: remove that part of the acceleration so the ball runs
+      // along the nose instead of re-touching it endlessly.
+      const an = seg.a.x * normal.x + seg.a.y * normal.y;
+      const held = an < -PRESSING_ACCEL_TOL;
+      if (held) {
+        const acc: Vec2 = { x: seg.a.x - an * normal.x, y: seg.a.y - an * normal.y };
+        const rev = timeToReverse(seg.v0, acc);
+        seg = { ...seg, a: acc, duration: rev < seg.duration ? rev : seg.duration };
+      }
+      setSegment(a, seg);
+      a.forced = held;
     } else {
       const out = cushionModel.resolve(
         { radiusM: a.radiusM, massKg: a.massKg, velocity: va, spin: wa },
