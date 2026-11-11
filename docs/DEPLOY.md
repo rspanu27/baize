@@ -27,6 +27,24 @@ Cloudflare detects pnpm from `pnpm-lock.yaml` and takes the pnpm version from th
 
 The dashboard wording changes from time to time. If a label above does not match, the values in the table are what matter.
 
+## If the dashboard shows the Workers flow instead
+
+Cloudflare is folding Pages into Workers, and the "connect a repository" screen may ask for a deploy command instead of an output directory. That flow works too and is also free for static files. It reads `wrangler.jsonc` in the repo root, which points at `apps/web/dist`.
+
+| Setting | Value |
+|---|---|
+| Project name | `baize` (must match `name` in `wrangler.jsonc`) |
+| Build command | `pnpm --filter web build` |
+| Deploy command | `npx wrangler deploy` |
+| Preview / non-production deploy command | `npx wrangler versions upload` |
+| Preview builds for non-production branches | Enabled |
+| Cloudflare Access protection | Off |
+| Path (root directory) | `/` |
+| API token | Leave the default; Cloudflare creates one for the build |
+| Variable | `NODE_VERSION` = `24` |
+
+The site is then served at `baize.<your-subdomain>.workers.dev`.
+
 ## What happens after setup
 
 - Every push to `main` builds and publishes the production site.
