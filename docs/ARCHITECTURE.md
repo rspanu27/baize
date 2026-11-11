@@ -267,7 +267,7 @@ After any collision, every touching neighbour of the affected balls (balls and c
 Both are pure functions behind interfaces, and both are tested for no energy gain.
 
 - `BallBallModel` v1: instantaneous, frictionless, restitution from the ball set, unequal masses supported. Spins are unchanged. Momentum is conserved exactly.
-- `CushionModel` v1: Han 2005, with cushion height and spin. Implemented from the paper's equations, not from another code base. The vertical velocity it produces is discarded because there is no airborne state; that only removes energy.
+- `CushionModel` v1 (`noseImpulseCushion`): an impulse at the cushion nose with restitution and Coulomb friction, sticking or sliding, accounting for spin and nose height. It uses Han's (2005) formulation of the contact but is derived from first principles in `models/cushion.ts`, not transcribed from the paper or from another code base. The vertical velocity it produces is discarded because there is no airborne state; that only removes energy.
 
 ## 8. Editor architecture
 
@@ -328,3 +328,6 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-11 | Photo import: collection starts in Phase 5; manual corner handles may sit off-image; accuracy targets scale with table length; single photo through the system camera. | Interview. |
 | 2026-11-11 | Pockets are described per type by five numbers (`mouthM`, `jawRadiusM`, `facingAngleRad`, `dropRadiusM`, `dropSetbackM`); jaw style is only a custom-table input that picks defaults. Facings run until they meet the drop circle. | One geometry code path for angled and rounded jaws; closure is guaranteed by construction instead of by a separate facing-length number. Replaces the `jaw: { style, ... }` sketch. |
 | 2026-11-11 | Ball-ball restitution is a required `SimInput` field, taken from the ball set. | The engine holds no material constants. |
+| 2026-11-11 | The v1 cushion model is a first-principles nose-impulse model in Han's formulation, not a transcription of Han 2005. In the sliding case friction opposes the actual slip direction. | The paper was not available to check equation by equation, and copying another project's implementation was ruled out. For a sphere the slip direction cannot change during the impact, so this is the exact Coulomb result under the same assumptions, and it passes a no-energy-gain property test. To be compared against the paper and pooltool in Phase 3. |
+| 2026-11-11 | `mouthM` is the opening where the jaw facings begin (the ends of the knuckle arcs). | Equals the point-to-point mouth on pool tables and the end-of-curve opening on snooker tables, which is how each is conventionally measured. |
+| 2026-11-11 | Contact tolerances: 0.1 um penetration bound, 1e-9 m/s closing-speed bound, 20 um input overlap allowed (`TOUCH_TOLERANCE_M`). | Link positions are quantised to 10 um, so touching balls can reload slightly overlapping. |

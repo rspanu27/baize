@@ -32,9 +32,9 @@ Parallel: 0.3, 0.4, 0.5.
 | 1.8 | `firstDownCrossing` root finder | L | 1.7 | Property test against dense sampling on random polynomials; degenerate cases | done |
 | 1.9 | Motion segments, transitions, state classification | L | 1.7 | Analytic slide and roll distances match; energy never rises within a segment | done |
 | 1.10 | Table geometry from spec | L | 1.1 | Closed-boundary and symmetry tests on fixtures and random custom tables | done |
-| 1.11 | Event time functions: ball-ball, segment, arc, pocket, contact rule | L | 1.8, 1.9, 1.10 | Hand-computed cases; touching and grazing cases | todo |
-| 1.12 | Ball-ball v1 model and cue strike | L | 1.9 | Momentum exact, energy non-increasing, unequal masses | todo |
-| 1.13 | Han 2005 cushion model and interface | L | 1.9 | No energy gain over a parameter sweep; no-spin and side-spin directions correct | todo |
+| 1.11 | Event time functions: ball-ball, segment, arc, pocket, contact rule | L | 1.8, 1.9, 1.10 | Hand-computed cases; touching and grazing cases | done |
+| 1.12 | Ball-ball v1 model and cue strike | L | 1.9 | Momentum exact, energy non-increasing, unequal masses | done |
+| 1.13 | Han 2005 cushion model and interface | L | 1.9 | No energy gain over a parameter sweep; no-spin and side-spin directions correct | done |
 | 1.14 | Event loop: scheduler, cache, caps, result assembly | L | 1.11, 1.12, 1.13 | Two-ball and one-cushion shots produce the expected event lists | todo |
 | 1.15 | Same-instant and touching-ball handling | L | 1.14 | Frozen pair, ball frozen to cushion, line of touching balls, full racks all terminate | todo |
 | 1.16 | Public API, input validation, `sampleAt`, README | L | 1.14 | API tests; README example runs | todo |
