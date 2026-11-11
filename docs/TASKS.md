@@ -23,15 +23,15 @@ Parallel: 0.3, 0.4, 0.5.
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
 | 1.1 | Type contracts in both packages, stub modules and index files | L | 0.3 | Typecheck passes; type-level compatibility test passes | done |
-| 1.2 | Table presets (13) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | todo |
+| 1.2 | Table presets (13) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | research done (docs/research/table-presets.md); waiting for sign-off, 11 presets not 13 |
 | 1.3 | Ball sets and cloth presets (speeds with sources, colours) | I | 1.1 | Preset tests pass; every number has a source comment | done |
 | 1.4 | Custom table validation and derived defaults, plain-word messages | I | 1.1 | Unit tests for each rule and message | done |
 | 1.5 | Markings and spots per game | I | 1.1 | Snooker spots match the rules on 12 ft; scale on other sizes | done |
-| 1.6 | Racks, `sanitizeLayout` | I | 1.5 | Racks have no overlaps; sanitize property tests pass | todo |
+| 1.6 | Racks, `sanitizeLayout` | I | 1.5 | Racks have no overlaps; sanitize property tests pass | done (rack rules still to verify against sources) |
 | 1.7 | Maths core: vectors, `sinCos`, stable quadratic | L | 1.1 | Unit tests; `sinCos` within 1e-15 of reference | done |
 | 1.8 | `firstDownCrossing` root finder | L | 1.7 | Property test against dense sampling on random polynomials; degenerate cases | done |
-| 1.9 | Motion segments, transitions, state classification | L | 1.7 | Analytic slide and roll distances match; energy never rises within a segment | todo |
-| 1.10 | Table geometry from spec | L | 1.1 | Closed-boundary and symmetry tests on fixtures and random custom tables | todo |
+| 1.9 | Motion segments, transitions, state classification | L | 1.7 | Analytic slide and roll distances match; energy never rises within a segment | done |
+| 1.10 | Table geometry from spec | L | 1.1 | Closed-boundary and symmetry tests on fixtures and random custom tables | done |
 | 1.11 | Event time functions: ball-ball, segment, arc, pocket, contact rule | L | 1.8, 1.9, 1.10 | Hand-computed cases; touching and grazing cases | todo |
 | 1.12 | Ball-ball v1 model and cue strike | L | 1.9 | Momentum exact, energy non-increasing, unequal masses | todo |
 | 1.13 | Han 2005 cushion model and interface | L | 1.9 | No energy gain over a parameter sweep; no-spin and side-spin directions correct | todo |
