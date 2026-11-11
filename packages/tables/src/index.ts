@@ -9,4 +9,4 @@ export type { ClothColour, ClothCoefficients } from "./presets/cloth";
 export { validateTable, resolveCustomTable } from "./validate";
 export { markingsFor, spotsFor } from "./markings";
 export { racksFor, rackLayout } from "./racks";
-export { ballSizeOf, noseContactDistanceM, sanitizeLayout } from "./layout";
+export { TOUCH_TOLERANCE_M, ballSizeOf, noseContactDistanceM, sanitizeLayout } from "./layout";
