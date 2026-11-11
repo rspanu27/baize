@@ -1,2 +1,5 @@
-/** Placeholder export; the simulator arrives in later tasks. */
+/** Kept until the web placeholder page is replaced. */
 export const PHYSICS_PLACEHOLDER = "baize-physics";
+
+export type * from "./types";
+export { SimInputError } from "./types";

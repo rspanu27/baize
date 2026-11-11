@@ -22,7 +22,7 @@ Parallel: 0.3, 0.4, 0.5.
 
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
-| 1.1 | Type contracts in both packages, stub modules and index files | L | 0.3 | Typecheck passes; type-level compatibility test passes | todo |
+| 1.1 | Type contracts in both packages, stub modules and index files | L | 0.3 | Typecheck passes; type-level compatibility test passes | done |
 | 1.2 | Table presets (13) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | todo |
 | 1.3 | Ball sets and cloth presets (speeds with sources, colours) | I | 1.1 | Preset tests pass; every number has a source comment | todo |
 | 1.4 | Custom table validation and derived defaults, plain-word messages | I | 1.1 | Unit tests for each rule and message | todo |

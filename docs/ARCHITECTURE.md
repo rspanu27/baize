@@ -74,20 +74,22 @@ interface TableSpec {
   name: string;
   game: GameType;
   playingArea: { lengthM: number; widthM: number };    // cushion nose to cushion nose
-  pockets: {
-    cornerMouthM: number;
-    middleMouthM: number;
-    jaw: { style: 'angled' | 'rounded'; angleRad?: number; radiusM?: number };
-    dropRadiusM: number;                               // derived for custom tables
-    dropSetbackM: number;                              // derived for custom tables
-  };
+  pockets: { corner: PocketSpec; middle: PocketSpec };
   cushion: { noseHeightM: number; restitution: number; friction: number };
   defaultBallSetId: string;
 }
 
+interface PocketSpec {
+  mouthM: number;            // distance between the two jaw points where the straight nose ends
+  jawRadiusM: number;        // knuckle arc radius; 0 = sharp point
+  facingAngleRad: number;    // angle between rail nose line and jaw facing; pi/2 = square
+  dropRadiusM: number;       // drop circle (the slate cut): a ball is potted when its centre enters
+  dropSetbackM: number;      // drop circle centre, measured outwards from the mouth line on the pocket axis
+}
+
 interface BallSetSpec {
   id: string;
-  kinds: BallKind[];
+  kinds: { kind: BallKind; count: number }[];
   object: { diameterM: number; massKg: number };
   cue?: { diameterM: number; massKg: number };         // only when the cue ball differs
   restitution: number;                                 // ball-ball
@@ -126,7 +128,7 @@ interface DiagramDoc {
 }
 ```
 
-`CustomTableFields` holds only what the user enters: game, length, width, corner mouth, middle mouth, and optionally jaw shape. `resolveCustomTable` turns it into a full `TableSpec`.
+`CustomTableFields` holds only what the user enters: game, length, width, corner mouth, middle mouth, and optionally jaw style (`angled` or `rounded`). `resolveCustomTable` turns it into a full `TableSpec`.
 
 `resolveDoc(doc)` produces the scene the renderer and the simulator use: `{ table: TableSpec, ballSet: BallSetSpec, cloth: ClothSpec, balls }`.
 
@@ -209,7 +211,7 @@ Level cue. `speedMps` is the cue-ball speed after the strike, along the aim dire
 - **Arcs:** convex circular arcs (jaw knuckles). Radius 0 is a sharp jaw point.
 - **Pocket zones:** one drop circle per pocket.
 
-Rails are cut back at each pocket by the mouth width. Jaw facings and knuckles are generated from mouth width and jaw shape: `angled` for pool, `rounded` for snooker, blackball and Chinese 8-ball. Middle pockets sit on the long rails (`x = 0` and `x = W`) at `y = L/2`. Order and ids are stable (`rail:left-lower`, `jaw:corner-bl:a`, ...).
+Rails are cut back at each pocket by the mouth width. Each jaw is a knuckle arc (`jawRadiusM`, turning from the rail direction to the facing direction) followed by a straight facing that runs until it meets the drop circle, so the boundary is closed by construction. Pool jaws have a near-zero radius; snooker, blackball and Chinese 8-ball jaws have a large one. The custom-table jaw style only picks defaults for these numbers. Middle pockets sit on the long rails (`x = 0` and `x = W`) at `y = L/2`. Order and ids are stable (`rail:left-lower`, `jaw:corner-bl:a`, ...).
 
 Cushion contact uses the real nose: a ball touches a nose of height `h` when its centre is `sqrt(R^2 - (h - R)^2)` from the nose line, computed per ball.
 
@@ -324,3 +326,5 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-11 | Units: metric/imperial toggle as a browser preference. Speed slider with named stops. Path emphasis on cue ball and first object ball. | Interview. |
 | 2026-11-11 | Priority if time is short: physics correctness first; export, measuring tool and mobile polish slip first. | Interview. |
 | 2026-11-11 | Photo import: collection starts in Phase 5; manual corner handles may sit off-image; accuracy targets scale with table length; single photo through the system camera. | Interview. |
+| 2026-11-11 | Pockets are described per type by five numbers (`mouthM`, `jawRadiusM`, `facingAngleRad`, `dropRadiusM`, `dropSetbackM`); jaw style is only a custom-table input that picks defaults. Facings run until they meet the drop circle. | One geometry code path for angled and rounded jaws; closure is guaranteed by construction instead of by a separate facing-length number. Replaces the `jaw: { style, ... }` sketch. |
+| 2026-11-11 | Ball-ball restitution is a required `SimInput` field, taken from the ball set. | The engine holds no material constants. |
