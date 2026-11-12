@@ -4,3 +4,8 @@
   height: auto;
   max-width: 100%;
 }
+
+/* Dragging balls must not scroll or zoom the page on touch screens. */
+.table-view {
+  touch-action: none;
+}

@@ -81,42 +81,6 @@ export function trackLength(track: BallTrack): number {
   return total;
 }
 
-const POOL_COLOURS: Record<number, string> = {
-  1: "#f2c200",
-  2: "#1f4fbf",
-  3: "#d12a2a",
-  4: "#5b2a8c",
-  5: "#f07a1a",
-  6: "#1c7c4a",
-  7: "#7a1f24",
-  8: "#141414",
-};
-
-export interface BallLook {
-  /** Main colour. */
-  colour: string;
-  /** Striped balls are white with a band of the main colour. */
-  striped: boolean;
-  /** Number shown on the ball, if any. */
-  label: string;
-}
-
-/** How to draw a ball of a given kind ("cue", "1".."15", or a snooker colour). */
-export function ballLook(kind: string): BallLook {
-  if (kind === "cue") return { colour: "#fbfaf2", striped: false, label: "" };
-  const n = Number(kind);
-  if (Number.isInteger(n) && n >= 1 && n <= 15) {
-    const base = n <= 8 ? n : n - 8;
-    return { colour: POOL_COLOURS[base] ?? "#888888", striped: n > 8, label: String(n) };
-  }
-  const named: Record<string, string> = {
-    red: "#c8102e",
-    yellow: "#f2c200",
-    green: "#1c7c4a",
-    brown: "#6b3f1d",
-    blue: "#1f4fbf",
-    pink: "#ef8fb0",
-    black: "#141414",
-  };
-  return { colour: named[kind] ?? "#888888", striped: false, label: "" };
-}
+// Moved to the view layer so the editor and the playground draw balls the same way.
+export { ballLook } from "../view/ballLook";
+export type { BallLook } from "../view/ballLook";

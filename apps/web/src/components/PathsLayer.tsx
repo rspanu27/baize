@@ -1,4 +1,4 @@
-import { ballLook } from "../playground/draw";
+import { ballLook } from "../view/ballLook";
 import type { BallPath, PathModel, PathRole } from "../sim/pathModel";
 import { simulationFor } from "../sim/useSimulation";
 import { useDoc } from "../store/store";

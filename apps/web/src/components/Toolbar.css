@@ -1,0 +1,43 @@
+.toolbar-group {
+  margin-top: 0.75rem;
+}
+
+.toolbar-group h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.toolbar-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+  gap: 0.4rem;
+}
+
+/* Touch targets are at least 44 px. */
+.editor-panels .toolbar-panel button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.editor-panels .toolbar-panel .toolbar-palette button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+}
+
+.toolbar-swatch {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+.editor-panels .toolbar-panel button:focus-visible {
+  outline: 2px solid #7fd1ff;
+  outline-offset: 2px;
+}

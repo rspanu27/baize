@@ -1,0 +1,41 @@
+.ball {
+  cursor: grab;
+  outline: none;
+}
+
+.ball:active {
+  cursor: grabbing;
+}
+
+.ball-selection {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.9;
+}
+
+.ball-focus {
+  fill: none;
+  stroke: #7fd1ff;
+  opacity: 0;
+}
+
+.ball:focus-visible .ball-focus {
+  opacity: 1;
+}
+
+.ball-uncertain-ring {
+  fill: none;
+  stroke: #ffb020;
+  stroke-linecap: round;
+}
+
+.ball-uncertain-badge {
+  fill: #ffb020;
+  stroke: #3a2600;
+}
+
+.ball-uncertain-mark {
+  fill: #3a2600;
+  font-weight: 700;
+  font-family: system-ui, sans-serif;
+}

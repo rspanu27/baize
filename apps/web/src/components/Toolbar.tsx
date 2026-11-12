@@ -1,19 +1,163 @@
+import { rackLayout } from "@baize/tables";
+import type { BallKind, RackKind } from "@baize/tables";
+import { useEffect } from "react";
+import { nextBallId } from "../doc/ops";
+import type { Scene } from "../doc/resolve";
+import { simulationFor } from "../sim/useSimulation";
 import { canRedo, canUndo } from "../store/history";
-import { useEditor } from "../store/store";
+import { useDoc, useEditor } from "../store/store";
+import { BallBody } from "./BallBody";
+import {
+  historyShortcut,
+  isTypingTarget,
+  paletteEntries,
+  rackEntries,
+  tableCentre,
+} from "./ToolbarModel";
+import "./Toolbar.css";
 
-/** Undo and redo. Task 2.8 extends this with ball and rack controls. */
+export interface ToolbarViewProps {
+  scene: Scene | undefined;
+  canUndo: boolean;
+  canRedo: boolean;
+  hasSelection: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onAddBall: (kind: BallKind) => void;
+  onRemoveSelected: () => void;
+  onClear: () => void;
+  onRack: (rack: RackKind) => void;
+}
+
+/** The toolbar's markup; `Toolbar` connects it to the store. */
+export function ToolbarView(props: ToolbarViewProps) {
+  const { scene } = props;
+  return (
+    <div className="toolbar-panel">
+      <div className="toolbar-row" role="group" aria-label="History">
+        <button type="button" onClick={props.onUndo} disabled={!props.canUndo}>
+          Undo
+        </button>
+        <button type="button" onClick={props.onRedo} disabled={!props.canRedo}>
+          Redo
+        </button>
+      </div>
+      {scene ? (
+        <>
+          <div className="toolbar-group">
+            <h2>Add a ball</h2>
+            <div className="toolbar-palette" role="group" aria-label="Ball palette">
+              {paletteEntries(scene).map((entry) => (
+                <button
+                  key={entry.kind}
+                  type="button"
+                  aria-label={`Add ${entry.name}`}
+                  title={entry.remaining > 0 ? `Add ${entry.name}` : `No more ${entry.name}s`}
+                  disabled={entry.remaining === 0}
+                  data-kind={entry.kind}
+                  onClick={() => {
+                    props.onAddBall(entry.kind);
+                  }}
+                >
+                  <svg className="toolbar-swatch" viewBox="-1 -1 2 2" aria-hidden="true">
+                    <BallBody kind={entry.kind} r={0.95} />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="toolbar-group">
+            <h2>Balls</h2>
+            <div className="toolbar-row">
+              <button type="button" onClick={props.onRemoveSelected} disabled={!props.hasSelection}>
+                Remove ball
+              </button>
+              <button type="button" onClick={props.onClear} disabled={scene.balls.length === 0}>
+                Clear table
+              </button>
+            </div>
+          </div>
+          <div className="toolbar-group">
+            <h2>Racks</h2>
+            <div className="toolbar-row">
+              {rackEntries(scene).map((entry) => (
+                <button
+                  key={entry.rack}
+                  type="button"
+                  disabled={!entry.fits}
+                  title={entry.reason}
+                  onClick={() => {
+                    props.onRack(entry.rack);
+                  }}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Undo and redo, the ball palette, removing and clearing balls, and racks. */
 export function Toolbar() {
+  const doc = useDoc();
+  const scene = simulationFor(doc).scene;
   const history = useEditor((s) => s.history);
+  const selectedBallId = useEditor((s) => s.selectedBallId);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target as { tagName?: string; isContentEditable?: boolean } | null)) {
+        return;
+      }
+      const action = historyShortcut(e);
+      if (!action) return;
+      e.preventDefault();
+      (action === "undo" ? undo : redo)();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [undo, redo]);
+
   return (
-    <div className="toolbar">
-      <button type="button" onClick={undo} disabled={!canUndo(history)}>
-        Undo
-      </button>
-      <button type="button" onClick={redo} disabled={!canRedo(history)}>
-        Redo
-      </button>
-    </div>
+    <ToolbarView
+      scene={scene}
+      canUndo={canUndo(history)}
+      canRedo={canRedo(history)}
+      hasSelection={selectedBallId !== undefined}
+      onUndo={undo}
+      onRedo={redo}
+      onAddBall={(kind) => {
+        if (!scene) return;
+        const state = useEditor.getState();
+        const id = nextBallId(state.history.present.balls);
+        state.addBall(kind, tableCentre(scene));
+        // The new ball is selected, if it was added (the set may have had none left).
+        if (useEditor.getState().history.present.balls.some((b) => b.id === id)) {
+          useEditor.getState().select(id);
+        }
+      }}
+      onRemoveSelected={() => {
+        const id = useEditor.getState().selectedBallId;
+        if (id !== undefined) useEditor.getState().removeBall(id);
+      }}
+      onClear={() => {
+        useEditor.getState().clearBalls();
+      }}
+      onRack={(rack) => {
+        if (!scene) return;
+        useEditor.getState().loadLayout(rackLayout(scene.table, scene.ballSet, rack), {
+          source: "rack",
+          mode: "replace",
+        });
+      }}
+    />
   );
 }
