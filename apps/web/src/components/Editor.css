@@ -1,0 +1,92 @@
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: 100vh;
+  box-sizing: border-box;
+  align-items: start;
+}
+
+.editor-table {
+  min-width: 0;
+}
+
+.editor-table .table-view {
+  max-height: calc(100vh - 2rem);
+}
+
+.editor-panels {
+  background: #18261f;
+  border: 1px solid #2a3d33;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.editor-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.editor-panels h2 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.editor-panels select,
+.editor-panels button,
+.editor-panels input {
+  font: inherit;
+  color: inherit;
+}
+
+.editor-panels select,
+.editor-panels button {
+  background: #22362c;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.editor-panels select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editor-panels button:disabled {
+  opacity: 0.5;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editor-problems {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  color: #ffb4a8;
+}
+
+.editor-problem {
+  color: #ffb4a8;
+}
+
+.editor-note {
+  margin: 1rem 0 0;
+  color: #8fa397;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 800px) {
+  .editor {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.5rem;
+  }
+
+  .editor-table .table-view {
+    max-height: none;
+  }
+}
