@@ -23,7 +23,7 @@ Parallel: 0.3, 0.4, 0.5.
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
 | 1.1 | Type contracts in both packages, stub modules and index files | L | 0.3 | Typecheck passes; type-level compatibility test passes | done |
-| 1.2 | Table presets (13) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | research done (docs/research/table-presets.md); waiting for sign-off, 11 presets not 13 |
+| 1.2 | Table presets (11) with sources; numbers shown to You for sign-off before encoding | I, You | 1.1 | Every preset passes validation; sign-off noted in PROGRESS | done (11 presets, not 13; sizes signed off 2026-11-12 with owner-supplied blackball sizes) |
 | 1.3 | Ball sets and cloth presets (speeds with sources, colours) | I | 1.1 | Preset tests pass; every number has a source comment | done |
 | 1.4 | Custom table validation and derived defaults, plain-word messages | I | 1.1 | Unit tests for each rule and message | done |
 | 1.5 | Markings and spots per game | I | 1.1 | Snooker spots match the rules on 12 ft; scale on other sizes | done |
@@ -38,10 +38,10 @@ Parallel: 0.3, 0.4, 0.5.
 | 1.14 | Event loop: scheduler, cache, caps, result assembly | L | 1.11, 1.12, 1.13 | Two-ball and one-cushion shots produce the expected event lists | done |
 | 1.15 | Same-instant and touching-ball handling | L | 1.14 | Frozen pair, ball frozen to cushion, line of touching balls, full racks all terminate | done |
 | 1.16 | Public API, input validation, `sampleAt`, README | L | 1.14 | API tests; README example runs | done |
-| 1.17 | Verification suite (SPEC 5.8) on smallest, largest and random tables | L | 1.16, 1.2, 1.3 | 90 degree rule, 30 degree rule, stop shot, roll transition, cushion angle, cloth monotonic | done (on custom-built tables; rerun on the presets once 1.2 is encoded) |
+| 1.17 | Verification suite (SPEC 5.8) on smallest, largest and random tables | L | 1.16, 1.2, 1.3 | 90 degree rule, 30 degree rule, stop shot, roll transition, cushion angle, cloth monotonic | done (on presets and custom tables) |
 | 1.18 | Property tests: determinism, energy, termination, no overlap, in bounds | L | 1.16, 1.4 | fast-check suite passes at raised run counts | done (12,000 scenes) |
 | 1.19 | Golden snapshots, benchmark, profiling, broad-phase tuning | L | 1.17 | Snooker break-off and 9-ball break under 50 ms in Node | done (about 1 ms) |
-| 1.20 | Independent review, fixes, PROGRESS entry | R, L | 1.17, 1.18, 1.19 | Reviewer findings closed; `pnpm check` passes | todo |
+| 1.20 | Independent review, fixes, PROGRESS entry | R, L | 1.17, 1.18, 1.19 | Reviewer findings closed; `pnpm check` passes | done (1 blocker and 6 should-fix findings fixed; see PROGRESS) |
 
 Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs alongside the physics track (1.7 to 1.16), which the lead does in sequence.
 

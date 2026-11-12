@@ -2,7 +2,7 @@
 export const TABLES_PLACEHOLDER = "baize-tables";
 
 export type * from "./types";
-export { TABLE_PRESETS, getTablePreset } from "./presets/tables";
+export { PRESET_BALL_DIAMETER_M, TABLE_PRESETS, getTablePreset } from "./presets/tables";
 export { BALL_SETS, getBallSet } from "./presets/balls";
 export { CLOTH_COLOURS, CLOTH_SPEEDS, makeCloth } from "./presets/cloth";
 export type { ClothColour, ClothCoefficients } from "./presets/cloth";

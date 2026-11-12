@@ -4,6 +4,8 @@ Status: research only, nothing here is wired into `packages/tables`. Written 202
 
 **Correction to the task board:** the preset count is **11, not 13**. Snooker 9 ft and snooker 8 ft are not wanted. The list is: snooker 12/10/6 ft; pool 9, 8, 8 pro/oversize, 7 (bar box), 7 Valley; UK blackball 7 and 6 ft; Chinese 8-ball 9 ft.
 
+> **Update 2026-11-12.** Two things changed after this research was written. (1) `mouthM` is defined as the opening where the jaw facings begin (the published "at the fall" opening for rounded jaws), not the jaw-point width, so the `opening + 2 r sin(phi)` formula below is no longer used: presets encode the published opening directly. (2) The project owner supplied the blackball playing areas: 7 ft 1.83 x 0.91 m, 6 ft 1.68 x 0.84 m. The encoded values and their comments in `packages/tables/src/presets/tables.ts` are authoritative.
+
 ## What is verified and what is not
 
 Verified from a primary source (an official rulebook or specification text I opened):

@@ -1,4 +1,4 @@
-import { resolveCustomTable, validateTable } from "@baize/tables";
+import { getBallSet, getTablePreset, resolveCustomTable, validateTable } from "@baize/tables";
 import type { BallSetSpec, ClothSpec, CustomTableFields, TableSpec } from "@baize/tables";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
@@ -48,10 +48,20 @@ const ODD_SET: BallSetSpec = {
   object: { diameterM: 0.0508, massKg: 0.118 },
 };
 
+function presetCase(id: string, label: string): Case {
+  const table = getTablePreset(id);
+  const set = table ? getBallSet(table.defaultBallSetId) : undefined;
+  if (!table || !set) throw new Error(`missing preset ${id}`);
+  return { name: `${label}: preset ${id}`, table, set };
+}
+
 const CASES: Case[] = [
-  { name: "blackball 6 ft (smallest)", table: BLACKBALL_6, set: BLACKBALL_BALLS },
-  { name: "pool 7 ft", table: POOL_7, set: POOL_BALLS },
-  { name: "snooker 12 ft (largest)", table: SNOOKER_12, set: SNOOKER_BALLS },
+  presetCase("blackball-6@1", "smallest"),
+  presetCase("snooker-12@1", "largest"),
+  presetCase("chinese8-9@1", "rounded pool"),
+  { name: "blackball 6 ft (custom-built)", table: BLACKBALL_6, set: BLACKBALL_BALLS },
+  { name: "pool 7 ft (custom-built)", table: POOL_7, set: POOL_BALLS },
+  { name: "snooker 12 ft (custom-built)", table: SNOOKER_12, set: SNOOKER_BALLS },
   { name: "odd custom table", table: ODD_CUSTOM, set: ODD_SET },
 ];
 
