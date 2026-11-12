@@ -1,5 +1,6 @@
-import { ballSizeOf } from "./layout";
+import { ballSizeOf, noseContactDistanceM } from "./layout";
 import { spotsFor } from "./markings";
+import { pocketDropCircles } from "./validate";
 import type {
   BallKind,
   BallSetSpec,
@@ -145,7 +146,7 @@ const BLACKBALL_PATTERN: string[] = ["Y", "RY", "YBR", "RYRY", "RRYRY"];
  * reds row by row from the apex; pool and blackball then the object balls row by row from the
  * apex (left to right within a row, looking from the baulk end).
  */
-export function rackLayout(table: TableSpec, ballSet: BallSetSpec, rack: RackKind): Layout {
+function buildRack(table: TableSpec, ballSet: BallSetSpec, rack: RackKind): Layout {
   if (RACK_GAME[rack] !== table.game) {
     throw new Error(`Rack '${rack}' is for ${RACK_GAME[rack]}, but the table is for ${table.game}`);
   }
@@ -227,4 +228,64 @@ export function rackLayout(table: TableSpec, ballSet: BallSetSpec, rack: RackKin
     }
   }
   return { balls };
+}
+
+/** Overlap deeper than this (metres) between two racked balls is a real overlap. Design tolerance. */
+const RACK_OVERLAP_TOL_M = 1e-9;
+
+/** Why a rack does not fit on a table, in plain words, or undefined if it fits. */
+function rackProblem(table: TableSpec, ballSet: BallSetSpec, layout: Layout): string | undefined {
+  const { widthM, lengthM } = table.playingArea;
+  const pockets = pocketDropCircles(table);
+  const sized = layout.balls.map((b) => ({ ...b, r: ballSizeOf(ballSet, b.kind).diameterM / 2 }));
+  for (let i = 0; i < sized.length; i++) {
+    const a = sized[i] as (typeof sized)[number];
+    const margin = noseContactDistanceM(a.r, table.cushion.noseHeightM) - RACK_OVERLAP_TOL_M;
+    if (a.x < margin || a.x > widthM - margin || a.y < margin || a.y > lengthM - margin) {
+      return "some balls would be off the table";
+    }
+    for (const p of pockets) {
+      const dx = a.x - p.x;
+      const dy = a.y - p.y;
+      if (Math.sqrt(dx * dx + dy * dy) < p.radiusM) return "some balls would be over a pocket";
+    }
+    for (let j = i + 1; j < sized.length; j++) {
+      const b = sized[j] as (typeof sized)[number];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      if (Math.sqrt(dx * dx + dy * dy) < a.r + b.r - RACK_OVERLAP_TOL_M) {
+        return "some balls would overlap";
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Ball positions for a rack on a given table with a given ball set. Throws if the rack does
+ * not belong to the table's game, the ball set lacks the balls, or the rack does not fit
+ * (for example a snooker pack on a very short custom table, where the black spot ends up
+ * inside the pack).
+ */
+export function rackLayout(table: TableSpec, ballSet: BallSetSpec, rack: RackKind): Layout {
+  const layout = buildRack(table, ballSet, rack);
+  const problem = rackProblem(table, ballSet, layout);
+  if (problem) {
+    throw new Error(
+      `This rack does not fit on this table with these balls: ${problem}. Use a longer table or smaller balls.`,
+    );
+  }
+  return layout;
+}
+
+/** True when `rackLayout` would succeed for this table, ball set and rack. */
+export function rackFits(table: TableSpec, ballSet: BallSetSpec, rack: RackKind): boolean {
+  if (RACK_GAME[rack] !== table.game) return false;
+  let layout: Layout;
+  try {
+    layout = buildRack(table, ballSet, rack);
+  } catch {
+    return false;
+  }
+  return rackProblem(table, ballSet, layout) === undefined;
 }

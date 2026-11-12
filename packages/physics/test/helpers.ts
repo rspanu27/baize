@@ -8,7 +8,7 @@ import {
 } from "@baize/tables";
 import type { BallSetSpec, ClothSpec, Layout, RackKind, TableSpec } from "@baize/tables";
 import { expect } from "vitest";
-import { kineticEnergy, sampleAt } from "../src/index";
+import { buildTableGeometry, cushionContactDistance, kineticEnergy, sampleAt } from "../src/index";
 import type { BallInput, SimEvent, SimInput, SimResult } from "../src/index";
 
 function ballSet(id: string): BallSetSpec {
@@ -142,6 +142,13 @@ export function checkInvariants(result: SimResult, input: SimInput, overlapTol =
   }
   const grid = 60;
   for (let i = 0; i <= grid; i++) times.add((i / grid) * result.durationS);
+  // Inside every motion segment too, so that a pass-through between events cannot hide.
+  for (const track of result.tracks) {
+    for (const s of track.segments) {
+      if (!Number.isFinite(s.duration) || s.state === "stationary") continue;
+      for (const f of [0.2, 0.4, 0.6, 0.8]) times.add(s.t0 + f * s.duration);
+    }
+  }
   const sorted = [...times].sort((a, b) => a - b);
 
   // Energy never increases. (Comparing just after each event with any earlier time.)
@@ -152,8 +159,10 @@ export function checkInvariants(result: SimResult, input: SimInput, overlapTol =
     previous = e;
   }
 
-  // No overlap beyond the tolerance, and every ball inside the table bounds.
+  // No overlap beyond the tolerance, and every ball where a ball can be: inside the cushions,
+  // or in the mouth of a pocket. Anywhere else means it got behind a cushion.
   const table = "kind" in input.table ? input.table.table : input.table;
+  const geometry = buildTableGeometry(table);
   const W = table.playingArea.widthM;
   const L = table.playingArea.lengthM;
   const radius = new Map(input.balls.map((b) => [b.id, b.radiusM]));
@@ -162,10 +171,17 @@ export function checkInvariants(result: SimResult, input: SimInput, overlapTol =
     for (let i = 0; i < balls.length; i++) {
       const a = balls[i] as (typeof balls)[number];
       const ra = radius.get(a.id) ?? 0;
-      expect(a.position.x).toBeGreaterThan(-0.2);
-      expect(a.position.x).toBeLessThan(W + 0.2);
-      expect(a.position.y).toBeGreaterThan(-0.2);
-      expect(a.position.y).toBeLessThan(L + 0.2);
+      const cd = cushionContactDistance(ra, table.cushion.noseHeightM) - 1e-6;
+      const { x, y } = a.position;
+      const insideCushions = x >= cd && x <= W - cd && y >= cd && y <= L - cd;
+      const inPocketMouth = geometry.pockets.some((p) => {
+        const dx = x - p.centre.x;
+        const dy = y - p.centre.y;
+        return Math.sqrt(dx * dx + dy * dy) <= p.radiusM + 3 * ra;
+      });
+      if (!insideCushions && !inPocketMouth) {
+        throw new Error(`ball ${a.id} is behind a cushion at (${x}, ${y}), t = ${t}`);
+      }
       for (let j = i + 1; j < balls.length; j++) {
         const b = balls[j] as (typeof balls)[number];
         const dx = a.position.x - b.position.x;

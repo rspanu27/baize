@@ -16,6 +16,11 @@ const G = 0.001;
  */
 const PHENOLIC_RESTITUTION = 0.94;
 
+/** x cubed by multiplication: `**` is not guaranteed to round the same way in every browser. */
+function cube(x: number): number {
+  return x * x * x;
+}
+
 const SNOOKER_KINDS: BallSetSpec["kinds"] = [
   { kind: "cue", count: 1 },
   { kind: "red", count: 15 },
@@ -88,7 +93,7 @@ export const BALL_SETS: readonly BallSetSpec[] = [
       diameterM: 50.8 * MM,
       // UNVERIFIED: no per-ball mass found. Scaled from 142 g at 52.5 mm by volume (d^3),
       // same phenolic density: 142 * (50.8 / 52.5)^3 = 128.7 g.
-      massKg: 142 * (50.8 / 52.5) ** 3 * G,
+      massKg: 142 * cube(50.8 / 52.5) * G,
     },
     restitution: PHENOLIC_RESTITUTION,
   },
@@ -103,9 +108,9 @@ export const BALL_SETS: readonly BallSetSpec[] = [
       // UNVERIFIED: a full 22-ball 1 7/8 in snooker set was not found for sale; the size comes
       // from the small-table ball size chart
       // (https://www.askabilliards.com/blogs/billiards-guide/pool-ball-size-chart-what-size-pool-balls-do-you-need).
-      diameterM: 47.6 * MM,
-      // UNVERIFIED: scaled from 142 g at 52.5 mm by volume: 142 * (47.6 / 52.5)^3 = 105.8 g.
-      massKg: 142 * (47.6 / 52.5) ** 3 * G,
+      diameterM: 47.625 * MM,
+      // UNVERIFIED: scaled from 142 g at 52.5 mm by volume: 142 * (47.625 / 52.5)^3 = 106.0 g.
+      massKg: 142 * cube(47.625 / 52.5) * G,
     },
     restitution: PHENOLIC_RESTITUTION,
   },
@@ -137,13 +142,13 @@ export const BALL_SETS: readonly BallSetSpec[] = [
       // UNVERIFIED: no per-ball mass found (only ~2.1 kg per 16-ball set including packaging).
       // Scaled from the WPA pool mean of 163.0 g at 57.15 mm by volume:
       // 163.0 * (50.8 / 57.15)^3 = 114.5 g.
-      massKg: 5.75 * 28.349523125 * (50.8 / 57.15) ** 3 * G,
+      massKg: 5.75 * 28.349523125 * cube(50.8 / 57.15) * G,
     },
     cue: {
       // 1 7/8 in = 47.625 mm white ball, same listing as above.
-      diameterM: 47.6 * MM,
-      // UNVERIFIED: scaled by volume as above: 163.0 * (47.6 / 57.15)^3 = 94.2 g.
-      massKg: 5.75 * 28.349523125 * (47.6 / 57.15) ** 3 * G,
+      diameterM: 47.625 * MM,
+      // UNVERIFIED: scaled by volume as above: 163.0 * (47.625 / 57.15)^3 = 94.3 g.
+      massKg: 5.75 * 28.349523125 * cube(47.625 / 57.15) * G,
     },
     restitution: PHENOLIC_RESTITUTION,
   },

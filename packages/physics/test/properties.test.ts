@@ -2,7 +2,7 @@ import { resolveCustomTable, validateTable } from "@baize/tables";
 import type { CustomTableFields, TableSpec } from "@baize/tables";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import { cushionContactDistance, sampleAt, simulate } from "../src/index";
+import { buildTableGeometry, cushionContactDistance, sampleAt, simulate } from "../src/index";
 import type { BallInput, ClothInput, ShotInput, SimInput } from "../src/index";
 import { BLACKBALL_6, POOL_9, SNOOKER_12, checkInvariants, eventsOf } from "./helpers";
 
@@ -89,6 +89,7 @@ const sceneArb: fc.Arbitrary<Scene | undefined> = fc
     const W = table.playingArea.widthM;
     const L = table.playingArea.lengthM;
     const balls: BallInput[] = [];
+    const pocketCircles = buildTableGeometry(table).pockets;
     for (let i = 0; i < placements.length; i++) {
       const p = placements[i] as (typeof placements)[number];
       const radiusM = (i === 0 ? p.cueSizeFactor : 1) * (diameterM / 2);
@@ -103,6 +104,13 @@ const sceneArb: fc.Arbitrary<Scene | undefined> = fc
         y = other.y + d * Math.sin(p.touchAngle);
       }
       if (x < margin || x > W - margin || y < margin || y > L - margin) continue;
+      // Not over a pocket: the simulator rejects that as input.
+      const overPocket = pocketCircles.some((c) => {
+        const dx = x - c.centre.x;
+        const dy = y - c.centre.y;
+        return Math.sqrt(dx * dx + dy * dy) < c.radiusM + 1e-6;
+      });
+      if (overPocket) continue;
       // Reject overlaps; exact touching is allowed.
       const clash = balls.some((b) => {
         const dx = b.x - x;

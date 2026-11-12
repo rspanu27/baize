@@ -147,7 +147,9 @@ function validateTable(table: TableInput): void {
     if (!(p.jawRadiusM >= 0) || !Number.isFinite(p.jawRadiusM)) {
       invalid(`${name} pocket jaw radius must be zero or positive`);
     }
-    if (!Number.isFinite(p.dropSetbackM)) invalid(`${name} pocket drop setback must be finite`);
+    if (!(p.dropSetbackM >= 0) || !Number.isFinite(p.dropSetbackM)) {
+      invalid(`${name} pocket drop setback must be zero or positive`);
+    }
     // The jaw must turn away from the table by more than 0 and at most a right angle.
     if (!(p.facingAngleRad >= Math.PI / 2 && p.facingAngleRad < Math.PI)) {
       invalid(`${name} pocket facing angle must be between 90 and 180 degrees`);
@@ -247,12 +249,11 @@ export function buildTableGeometry(table: TableInput): TableGeometry {
   for (const frame of frames) {
     const a = buildJaw(frame, frame.jaws[0], "a");
     const b = buildJaw(frame, frame.jaws[1], "b");
-    // Drop circle: on the pocket axis, `dropSetbackM` beyond the line joining the facing starts.
-    const midX = 0.5 * (a.jaw.facingStart.x + b.jaw.facingStart.x);
-    const midY = 0.5 * (a.jaw.facingStart.y + b.jaw.facingStart.y);
+    // Drop circle: on the pocket axis, `dropSetbackM` out from the pocket origin (the corner
+    // of the nose rectangle, or the middle of the opening on the nose line).
     const centre: Vec2 = {
-      x: midX + frame.spec.dropSetbackM * frame.axis.x,
-      y: midY + frame.spec.dropSetbackM * frame.axis.y,
+      x: frame.origin.x + frame.spec.dropSetbackM * frame.axis.x,
+      y: frame.origin.y + frame.spec.dropSetbackM * frame.axis.y,
     };
     const jawA = a.finish(centre);
     const jawB = b.finish(centre);

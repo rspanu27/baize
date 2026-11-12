@@ -18,7 +18,7 @@ const table = prepareTable({
       jawRadiusM: 0.002,
       facingAngleRad: 2.478,
       dropRadiusM: 0.066,
-      dropSetbackM: 0.057,
+      dropSetbackM: 0,
     },
     middle: {
       mouthM: 0.127,

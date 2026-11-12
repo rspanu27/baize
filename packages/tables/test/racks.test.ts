@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ballSizeOf, noseContactDistanceM, sanitizeLayout, TOUCH_TOLERANCE_M } from "../src/layout";
 import { spotsFor } from "../src/markings";
 import { getBallSet } from "../src/presets/balls";
-import { racksFor, rackLayout } from "../src/racks";
-import { resolveCustomTable } from "../src/validate";
+import fc from "fast-check";
+import { rackFits, racksFor, rackLayout } from "../src/racks";
+import { pocketDropCircles, resolveCustomTable } from "../src/validate";
 import type { BallKind, BallSetSpec, GameType, RackKind, TableSpec } from "../src/types";
 
 interface Case {
@@ -209,5 +210,83 @@ describe("rackLayout ball set check", () => {
   });
   it("exposes the touch tolerance", () => {
     expect(TOUCH_TOLERANCE_M).toBe(2e-5);
+  });
+});
+
+describe("racks that do not fit", () => {
+  const snooker52 = getBallSet("snooker-52@1") as BallSetSpec;
+  const small = (lengthM: number): TableSpec =>
+    resolveCustomTable(
+      { game: "snooker", lengthM, widthM: lengthM / 2, cornerMouthM: 0.086, middleMouthM: 0.1 },
+      snooker52.object.diameterM,
+    );
+
+  it("a full snooker pack on a very short table is refused with a plain message", () => {
+    for (const lengthM of [1.0, 1.6]) {
+      const table = small(lengthM);
+      expect(rackFits(table, snooker52, "snooker-15")).toBe(false);
+      expect(() => rackLayout(table, snooker52, "snooker-15")).toThrow(/does not fit/);
+    }
+  });
+
+  it("rackFits is true exactly when rackLayout succeeds, and false for another game's rack", () => {
+    const full = small(3.569);
+    expect(rackFits(full, snooker52, "snooker-15")).toBe(true);
+    expect(rackFits(full, snooker52, "pool-9ball")).toBe(false);
+  });
+
+  it("every rack that fits on a random valid table is clean", () => {
+    const games: [GameType, string, number][] = [
+      ["snooker", "snooker-52@1", 0.0525],
+      ["pool", "pool-57@1", 0.05715],
+      ["blackball", "blackball-51@1", 0.0508],
+    ];
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...games),
+        fc.double({ min: 1.2, max: 4.2, noNaN: true }),
+        fc.double({ min: 0.47, max: 0.53, noNaN: true }),
+        ([game, setId, ball], lengthM, ratio) => {
+          const set = getBallSet(setId) as BallSetSpec;
+          let table: TableSpec;
+          try {
+            table = resolveCustomTable(
+              {
+                game,
+                lengthM,
+                widthM: lengthM * ratio,
+                cornerMouthM: 1.8 * ball,
+                middleMouthM: 2 * ball,
+              },
+              ball,
+            );
+          } catch {
+            return;
+          }
+          const circles = pocketDropCircles(table);
+          for (const rack of racksFor(game)) {
+            if (!rackFits(table, set, rack)) {
+              expect(() => rackLayout(table, set, rack)).toThrow();
+              continue;
+            }
+            const balls = rackLayout(table, set, rack).balls.map((b) => ({
+              ...b,
+              r: ballSizeOf(set, b.kind).diameterM / 2,
+            }));
+            for (let i = 0; i < balls.length; i++) {
+              const a = balls[i] as (typeof balls)[number];
+              for (const c of circles) {
+                expect(Math.hypot(a.x - c.x, a.y - c.y)).toBeGreaterThanOrEqual(c.radiusM);
+              }
+              for (let j = i + 1; j < balls.length; j++) {
+                const b = balls[j] as (typeof balls)[number];
+                expect(Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r).toBeGreaterThan(-1e-9);
+              }
+            }
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
   });
 });

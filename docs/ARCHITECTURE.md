@@ -35,7 +35,7 @@ Dependency direction: `web -> physics`, `web -> tables`, `vision -> tables`. Not
 | `motion.ts` | Segment construction, evaluation, transition times, state classification. |
 | `geometry.ts` | `buildTableGeometry`. |
 | `detect.ts` | Event time functions and the contact rule. |
-| `models/ballBall.ts`, `models/cushionHan.ts`, `strike.ts` | Collision models and cue strike. |
+| `models/ballBall.ts`, `models/cushion.ts`, `strike.ts` | Collision models and cue strike. |
 | `simulate.ts` | Scheduler, same-instant resolution, caps, result assembly. |
 | `sample.ts` | `sampleAt`, `kineticEnergy`. |
 | `index.ts` | Public API only. |
@@ -80,11 +80,11 @@ interface TableSpec {
 }
 
 interface PocketSpec {
-  mouthM: number;            // distance between the two jaw points where the straight nose ends
+  mouthM: number;            // width of the opening where the two jaw facings begin (after the knuckle arcs)
   jawRadiusM: number;        // knuckle arc radius; 0 = sharp point
   facingAngleRad: number;    // angle between rail nose line and jaw facing; pi/2 = square
   dropRadiusM: number;       // drop circle (the slate cut): a ball is potted when its centre enters
-  dropSetbackM: number;      // drop circle centre, measured outwards from the mouth line on the pocket axis
+  dropSetbackM: number;      // drop circle centre, measured outwards from the pocket origin along the pocket axis; may be 0
 }
 
 interface BallSetSpec {
@@ -258,7 +258,7 @@ This is how frozen balls and tight racks are handled.
 
 A collision closing slower than `INELASTIC_SPEED` is not resolved as a lone pair. A line or pack of touching balls would need hundreds of pairwise events to agree on a common speed, and balls pushed together by friction (a rolling ball behind a sliding one, a train of balls pushed along a rail) would trade microscopic collisions for as long as they stay together. Instead, `resolveCluster` takes the pair and every ball touching it, directly or through a chain, and solves the cluster in one event, by relaxation in a fixed order:
 
-1. **Speeds.** Closing speeds between touching balls are removed (no rebound, momentum kept). A ball left below the rest threshold is stopped and then treated as immovable. A ball whose slip is below the threshold is put into natural roll.
+1. **Speeds.** Closing speeds between touching balls are removed (no rebound). Momentum is kept between sliding balls; a rolling ball keeps rolling, so the cloth takes part of the impulse and the pair's momentum changes by a small amount (at most about a sixth of the closing speed, which is itself below 1 cm/s). A ball left below the rest threshold is stopped and then treated as immovable. A ball whose slip is below the threshold is put into natural roll.
 2. **Accelerations.** Where friction would push two touching balls together, they get the mean acceleration along their line of centres, which is what the contact force between them does.
 
 A rolling ball stays rolling through all of this, so part of every push goes into its rotation: along the line of centres it behaves like a mass of 7/5 m and its spin follows its velocity. A sliding ball takes the push on its velocity alone.
@@ -357,3 +357,7 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-12 | "Touching" in the contact rule means a gap of at most 0.1 um, not exactly zero. A ball left with no speed into a cushion but with friction pushing it in is held by the cushion (that part of its acceleration is removed). | Found by a verification test: a slow ball grazing a rail left it by a rounding error and re-touched it every two nanoseconds until the event cap. |
 | 2026-11-12 | Slow contacts are solved per touching cluster in one event (`resolveCluster`), with rolling balls treated as 7/5 m along the push. A slip below 1 cm/s is settled straight to natural roll. | Found by a 12,000-scene soak run: a row of balls frozen to a rail and each other, struck along the rail, took thousands of pairwise events. Now 15. Supersedes the pairwise pressing rule added the day before. |
 | 2026-11-12 | Break shots simulate in about 1 ms (9-ball break 0.6 ms, snooker break-off 0.8 ms, hard snooker pack split 1.0 ms; medians in Node on the development machine), so simulation stays on the main thread. | The spec limit is 50 ms. No Worker is needed for Phase 2. |
+| 2026-11-12 | `dropSetbackM` is measured from the pocket origin (the corner of the nose rectangle, or the middle of the opening on the nose line), not from the line joining the facing starts. Defaults: 0 for corners, half the mouth for middles. | Review finding: with rounded jaws the old reference sat a ball radius behind the nose, so balls came to rest inside the pocket without being potted. |
+| 2026-11-12 | A ball placed over a drop circle is rejected (`ball-in-pocket`), and `sanitizeLayout` moves such balls out. Input overlap tolerance raised to 50 um. | Review findings: a resting ball over a pocket was never potted until touched; a sanitised layout could fail validation after a link round-trip. |
+| 2026-11-12 | Spin decaying on the spot does not count against `maxTimeS`. | Review finding: every ball was already in its final place, yet the run reported `timeLimit`. |
+| 2026-11-12 | Known limits kept after the Phase 1 review: a ball can come to rest hanging on a jaw, slightly outside the nose rectangle (a later shot must sanitise it first); closure for ball centres is tested by simulation, not proved for hand-written presets with unusual drop circles; tunnelling is checked by the root finder's own tests plus sampling inside every segment, not by an analytic minimum-distance check. | Recorded so they are not mistaken for guarantees. |

@@ -25,11 +25,18 @@ export interface Vec3 {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * One pocket type. The straight nose ends at two jaw points `mouthM` apart. Each jaw turns
- * into the pocket on an arc of radius `jawRadiusM` (0 = sharp point), then runs straight at
- * `facingAngleRad` to the rail (measured inside the cushion; pi/2 = square to the rail) until it
- * meets the drop circle. A ball is potted when its centre enters the drop circle, whose centre
- * is on the pocket axis `dropSetbackM` outside the mouth line.
+ * One pocket type. The straight nose stops at a jaw point on each side. Each jaw turns into
+ * the pocket on an arc of radius `jawRadiusM` (0 = sharp point), then runs straight (the
+ * facing) at `facingAngleRad` to the rail (measured inside the cushion; pi/2 = square to the
+ * rail) until it meets the drop circle.
+ *
+ * `mouthM` is the width of the opening where the two facings begin, that is, at the ends of
+ * the knuckle arcs. With a small jaw radius this is the point-to-point mouth; with a large one
+ * the jaw points themselves are further apart.
+ *
+ * A ball is potted when its centre enters the drop circle. The circle's centre is on the pocket
+ * axis, `dropSetbackM` out from the pocket origin: the corner of the nose rectangle for a corner
+ * pocket, the middle of the opening on the nose line for a middle pocket. It may be 0.
  */
 export interface PocketInput {
   readonly mouthM: number;
@@ -311,6 +318,7 @@ export type SimInputErrorCode =
   | "invalid-table"
   | "invalid-cloth"
   | "ball-outside-table"
+  | "ball-in-pocket"
   | "balls-overlap"
   | "unknown-shot-ball"
   | "elevation-not-supported"

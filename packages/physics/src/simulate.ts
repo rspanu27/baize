@@ -95,9 +95,10 @@ export const REST_SPEED = 1e-2;
 
 /**
  * Overlap between two input balls, or between an input ball and a cushion, that still counts
- * as touching. Matches the 0.01 mm quantisation of shared links with some margin.
+ * as touching. A sanitised layout may keep overlaps of up to 20 um, and the 0.01 mm
+ * quantisation of shared links can add about 14 um more, so this allows 50 um.
  */
-export const INPUT_OVERLAP_TOL_M = 2e-5;
+export const INPUT_OVERLAP_TOL_M = 5e-5;
 
 const INF = Number.POSITIVE_INFINITY;
 
@@ -177,6 +178,13 @@ function validate(input: SimInput, geometry: TableGeometry, cushion: CushionInpu
     const d = cushionContactDistance(b.radiusM, cushion.noseHeightM) - INPUT_OVERLAP_TOL_M;
     if (b.x < d || b.x > geometry.widthM - d || b.y < d || b.y > geometry.lengthM - d) {
       fail("ball-outside-table", `ball "${b.id}" is not inside the cushions`);
+    }
+    for (const pocket of geometry.pockets) {
+      const px = b.x - pocket.centre.x;
+      const py = b.y - pocket.centre.y;
+      if (px * px + py * py < pocket.radiusM * pocket.radiusM) {
+        fail("ball-in-pocket", `ball "${b.id}" is over the ${pocket.id} pocket and would drop`);
+      }
     }
   }
   for (let i = 0; i < balls.length; i++) {
@@ -429,6 +437,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     b.end = seg.t0 + seg.duration;
     b.moving = seg.state === "sliding" || seg.state === "rolling";
     b.forced = false;
+    checkInBounds(b, seg.r0);
   };
 
   /**
@@ -822,8 +831,14 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
 
     if (kind === 0) break;
     if (best > p.maxTimeS) {
-      status = "timeLimit";
-      break;
+      // Only spin decaying on the spot is left once nothing is translating: every ball is
+      // already where it will stay, so that does not count against the time cap.
+      let translating = false;
+      for (let i = 0; i < n; i++) if ((bodies[i] as Body).moving) translating = true;
+      if (translating) {
+        status = "timeLimit";
+        break;
+      }
     }
     if (eventCount >= p.maxEvents) {
       status = "eventLimit";
@@ -852,6 +867,11 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
 
     // Anything other than a slow ball-ball contact ends the pressing contacts of the balls
     // involved, so they are released first (which re-starts them at `now`).
+    // Releasing re-scans the ball, which overwrites its cached cushion event, so remember
+    // what this event is about first.
+    const hitKind = a.cushionKind;
+    const hitIndex = a.cushionIndex;
+    const wasForced = a.forced;
     if (kind === 1) releaseGroup(a, now);
     let tauA = now - a.seg.t0;
     let ra = positionAt(a.seg, tauA);
@@ -931,8 +951,8 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     }
 
     // Cushion or pocket.
-    if (a.cushionKind === CushionKind.Pocket) {
-      const pocket = pockets[a.cushionIndex] as (typeof pockets)[number];
+    if (hitKind === CushionKind.Pocket) {
+      const pocket = pockets[hitIndex] as (typeof pockets)[number];
       a.pocketed = true;
       setSegment(
         a,
@@ -945,12 +965,12 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
 
     let normal: Vec2;
     let cushionId: string;
-    if (a.cushionKind === CushionKind.Segment) {
-      const seg = segments[a.cushionIndex] as (typeof segments)[number];
+    if (hitKind === CushionKind.Segment) {
+      const seg = segments[hitIndex] as (typeof segments)[number];
       normal = seg.normal;
       cushionId = seg.id;
     } else {
-      const arc = arcs[a.cushionIndex] as (typeof arcs)[number];
+      const arc = arcs[hitIndex] as (typeof arcs)[number];
       const dx = ra.x - arc.centre.x;
       const dy = ra.y - arc.centre.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -958,6 +978,11 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       cushionId = arc.id;
     }
     const closing = -(va.x * normal.x + va.y * normal.y);
+    if (wasForced && !(closing > 0)) {
+      // The release (rest threshold or natural-roll snap) left the ball no longer heading
+      // into this cushion. It has already been re-started and re-scanned; nothing to resolve.
+      continue;
+    }
     if (closing < INELASTIC_SPEED) {
       // Too slow to rebound: just stop the motion into the cushion.
       const vn = va.x * normal.x + va.y * normal.y;

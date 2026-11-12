@@ -12,13 +12,24 @@ export type GameType = "snooker" | "pool" | "blackball";
 /**
  * One pocket type (corner or middle).
  *
- * The straight cushion nose ends at two "jaw points", `mouthM` apart. From each point the
- * jaw turns into the pocket along an arc of radius `jawRadiusM` (0 = sharp point), then runs
- * straight (the facing). `facingAngleRad` is the angle between the rail nose line and the
- * facing, measured inside the cushion: pi/2 means the facing is square to the rail.
+ * Definitions. The "pocket origin" is the rectangle corner where the two nose lines meet (corner
+ * pocket) or the point on the long nose line at half the length (middle pocket). The "pocket
+ * axis" is the unit vector from the origin out of the table: along the outward diagonal for a
+ * corner, square to the rail for a middle pocket.
+ *
+ * Each straight nose stops at a "jaw point". The jaw then turns away from the table on a knuckle
+ * arc of radius `jawRadiusM` (0 = sharp point) through the angle pi - `facingAngleRad`, and
+ * continues as a straight facing. `facingAngleRad` is the angle between the rail nose line and
+ * the facing, measured inside the cushion: pi/2 means the facing is square to the rail.
+ *
+ * `mouthM` is the width of the opening where the two facings BEGIN (the ends of the knuckle
+ * arcs), measured across the pocket axis. It is not the distance between the jaw points: the two
+ * agree to a fraction of a millimetre for a tiny radius, but with a large radius the jaw points
+ * are further apart than `mouthM`.
  *
  * A ball is potted when its centre enters the drop circle, which models the slate cut. The
- * circle's centre lies on the pocket axis, `dropSetbackM` outside the mouth line.
+ * circle has radius `dropRadiusM` and its centre lies on the pocket axis, `dropSetbackM` outward
+ * from the pocket origin (0 puts the centre on the origin itself).
  */
 export interface PocketSpec {
   mouthM: number;

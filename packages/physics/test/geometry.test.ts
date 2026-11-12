@@ -216,11 +216,11 @@ describe("buildTableGeometry", () => {
   test("every valid custom table gives closed, symmetric geometry", () => {
     const fields = fc.record({
       game: fc.constantFrom("snooker", "pool", "blackball"),
-      lengthM: fc.double({ min: 1.5, max: 4, noNaN: true }),
-      ratio: fc.double({ min: 0.45, max: 0.55, noNaN: true }),
-      ballDiameterM: fc.double({ min: 0.046, max: 0.064, noNaN: true }),
-      cornerBalls: fc.double({ min: 1.45, max: 2.5, noNaN: true }),
-      middleBalls: fc.double({ min: 1.45, max: 2.5, noNaN: true }),
+      lengthM: fc.double({ min: 1.0, max: 4.5, noNaN: true }),
+      ratio: fc.double({ min: 0.4, max: 0.6, noNaN: true }),
+      ballDiameterM: fc.double({ min: 0.045, max: 0.065, noNaN: true }),
+      cornerBalls: fc.double({ min: 1.0, max: 4.0, noNaN: true }),
+      middleBalls: fc.double({ min: 1.0, max: 4.0, noNaN: true }),
       jawStyle: fc.constantFrom("angled", "rounded"),
     });
     fc.assert(
@@ -240,7 +240,7 @@ describe("buildTableGeometry", () => {
         const base = signature(g, (p) => p);
         expect(signature(g, (p) => ({ x: table.playingArea.widthM - p.x, y: p.y }))).toEqual(base);
       }),
-      { numRuns: 300 },
+      { numRuns: 600 },
     );
   });
 });

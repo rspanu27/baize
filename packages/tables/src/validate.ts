@@ -40,8 +40,12 @@ export const TABLE_DEFAULTS = {
    */
   tightMouthBalls: 1.4,
   generousMouthBalls: 2.6,
-  /** Corner pocket cut-back along each rail is mouth / sqrt(2): the mouth is measured between jaw points across the 45 degree axis. Geometry, ARCHITECTURE.md section 6. */
-  cornerCutBackPerMouth: Math.SQRT1_2,
+  /**
+   * Shortest piece of straight cushion that must remain between two pockets, in ball
+   * diameters. Design choice: with less than one ball of straight rail the table is not
+   * playable and the pocket jaws would nearly meet.
+   */
+  minStraightRailBalls: 1,
 
   /** Jaw knuckle radius for the 'angled' (pool) style, metres. UNVERIFIED: the WPA specification gives no pocket-point radius (checked poolroom.com page, only facing thickness 1/16-1/4 in); 2 mm is a typical sharp-but-not-zero rounding. */
   angledJawRadiusM: 0.002,
@@ -60,7 +64,9 @@ export const TABLE_DEFAULTS = {
    * Jaw knuckle radius for the 'rounded' (snooker-style) style, as a multiple of ball
    * diameter. UNVERIFIED approximation: WPBSA defines pocket openings by proprietary
    * templates (see https://forums.azbilliards.com/threads/what-size-are-the-pockets-and-balls-on.268994/)
-   * and publishes no radius. One ball diameter gives the visibly round snooker jaws.
+   * and publishes no radius. One ball diameter gives the visibly round snooker jaws. The
+   * radius is also never more than half the mouth: a jaw curve deeper than half the opening
+   * would put the end of the curve behind the pocket drop.
    */
   roundedJawRadiusBalls: 1.0,
   /** Facing angles after the curve for 'rounded'. UNVERIFIED geometry: facings run parallel to the pocket axis, i.e. 135 degrees (3 PI / 4) from the rail for a corner on the 45 degree diagonal and 90 degrees (PI / 2) for a middle pocket whose axis is square to the rail. */
@@ -69,11 +75,12 @@ export const TABLE_DEFAULTS = {
     middle: Math.PI / 2,
   },
   /**
-   * Drop circle (slate cut) model. UNVERIFIED: no published geometry. Radius is half the
-   * mouth plus a fraction of a ball, setback equals radius minus that fraction of a ball, so
-   * the circle reaches only dropReachBalls * ball diameter past the mouth line (a potted
-   * ball is one whose centre has passed the mouth line by about 8 mm) and, for mouth >= ball
-   * diameter, never contains a jaw point (radius <= 0.65 mouth < mouth / sqrt(2)).
+   * Drop circle (slate cut) model. UNVERIFIED: no published geometry. The radius is half the
+   * mouth plus `dropReachBalls` ball diameters. The centre is on the pocket axis, measured
+   * out from the pocket origin: on the corner of the nose rectangle for a corner pocket
+   * (setback 0), and half a mouth behind the nose line for a middle pocket. Either way the
+   * circle reaches `dropReachBalls` ball diameters (about 8 mm) into the table past the
+   * line across the mouth, and for mouth >= ball diameter it never contains a jaw point.
    */
   dropReachBalls: 0.15,
 
@@ -113,6 +120,47 @@ function isPositiveNumber(value: unknown): value is number {
 }
 
 type Issue = ValidationIssue;
+
+function defaultJawStyle(game: GameType): JawStyle {
+  return game === "pool" ? "angled" : "rounded";
+}
+
+/** Jaw knuckle radius and facing angle that a jaw style gives a pocket. */
+function jawShape(
+  kind: "corner" | "middle",
+  style: JawStyle,
+  ballDiameterM: number,
+  mouthM: number,
+): { jawRadiusM: number; facingAngleRad: number } {
+  const D = TABLE_DEFAULTS;
+  return style === "angled"
+    ? { jawRadiusM: D.angledJawRadiusM, facingAngleRad: D.angledFacingAngleRad[kind] }
+    : {
+        jawRadiusM: Math.min(D.roundedJawRadiusBalls * ballDiameterM, mouthM / 2),
+        facingAngleRad: D.roundedFacingAngleRad[kind],
+      };
+}
+
+/**
+ * How far along a rail, from the pocket origin, the straight cushion nose is cut back.
+ *
+ * `mouthM` is the opening where the jaw facings begin, after the knuckle arc of radius rho that
+ * turns through theta = pi - facing angle. Working back from the facing start to the jaw point:
+ *   corner:  mouth / sqrt(2) + rho (sin theta + cos theta - 1)
+ *   middle:  mouth / 2 + rho sin theta
+ * (ARCHITECTURE.md section 6; the physics geometry uses the same construction.)
+ */
+export function pocketCutBackM(
+  kind: "corner" | "middle",
+  mouthM: number,
+  jawRadiusM: number,
+  facingAngleRad: number,
+): number {
+  const theta = Math.PI - facingAngleRad;
+  return kind === "corner"
+    ? mouthM * Math.SQRT1_2 + jawRadiusM * (Math.sin(theta) + Math.cos(theta) - 1)
+    : mouthM / 2 + jawRadiusM * Math.sin(theta);
+}
 
 /**
  * Checks custom table fields against sane ranges. Errors block the table from being used;
@@ -205,25 +253,33 @@ export function validateTable(fields: CustomTableFields, ballDiameterM: number):
     });
   }
 
-  if (hasCorner && hasWidth && widthM - 2 * D.cornerCutBackPerMouth * cornerMouthM <= 0) {
+  // Straight cushion left between pockets, using the jaw shape this table will be given.
+  const style = fields.jawStyle ?? defaultJawStyle(fields.game);
+  const shapeBall = hasBall ? ballDiameterM : 0;
+  const cornerShape = jawShape("corner", style, shapeBall, hasCorner ? cornerMouthM : 0);
+  const middleShape = jawShape("middle", style, shapeBall, hasMiddle ? middleMouthM : 0);
+  const cornerCut = hasCorner
+    ? pocketCutBackM("corner", cornerMouthM, cornerShape.jawRadiusM, cornerShape.facingAngleRad)
+    : 0;
+  const middleCut = hasMiddle
+    ? pocketCutBackM("middle", middleMouthM, middleShape.jawRadiusM, middleShape.facingAngleRad)
+    : 0;
+  const minRail = D.minStraightRailBalls * shapeBall;
+
+  if (hasCorner && hasWidth && widthM - 2 * cornerCut < minRail) {
     issues.push({
       field: "cornerMouthM",
       severity: "error",
       code: "corner-pockets-leave-no-end-cushion",
-      message: `The corner pockets (${mm(cornerMouthM)}) are so wide that nothing is left of the short cushions on a ${metres(widthM)} wide table. Make the corner pockets narrower.`,
+      message: `The corner pockets (${mm(cornerMouthM)}) are so wide that almost nothing is left of the short cushions on a ${metres(widthM)} wide table. Make the corner pockets narrower.`,
     });
   }
-  if (
-    hasCorner &&
-    hasMiddle &&
-    hasLength &&
-    lengthM / 2 - D.cornerCutBackPerMouth * cornerMouthM - middleMouthM / 2 <= 0
-  ) {
+  if (hasCorner && hasMiddle && hasLength && lengthM / 2 - cornerCut - middleCut < minRail) {
     issues.push({
       field: "middleMouthM",
       severity: "error",
       code: "pockets-leave-no-side-cushion",
-      message: `The corner pockets (${mm(cornerMouthM)}) and middle pockets (${mm(middleMouthM)}) are so wide that nothing is left of the long cushions on a ${metres(lengthM)} long table. Make the pockets narrower.`,
+      message: `The corner pockets (${mm(cornerMouthM)}) and middle pockets (${mm(middleMouthM)}) are so wide that almost nothing is left of the long cushions on a ${metres(lengthM)} long table. Make the pockets narrower.`,
     });
   }
 
@@ -267,10 +323,6 @@ export function validateTable(fields: CustomTableFields, ballDiameterM: number):
   return issues;
 }
 
-function defaultJawStyle(game: GameType): JawStyle {
-  return game === "pool" ? "angled" : "rounded";
-}
-
 function buildPocket(
   kind: "corner" | "middle",
   mouthM: number,
@@ -278,16 +330,43 @@ function buildPocket(
   style: JawStyle,
 ): PocketSpec {
   const D = TABLE_DEFAULTS;
-  const reachM = D.dropReachBalls * ballDiameterM;
-  const dropRadiusM = mouthM / 2 + reachM;
+  const shape = jawShape(kind, style, ballDiameterM, mouthM);
   return {
     mouthM,
-    jawRadiusM: style === "angled" ? D.angledJawRadiusM : D.roundedJawRadiusBalls * ballDiameterM,
-    facingAngleRad:
-      style === "angled" ? D.angledFacingAngleRad[kind] : D.roundedFacingAngleRad[kind],
-    dropRadiusM,
-    dropSetbackM: dropRadiusM - reachM,
+    jawRadiusM: shape.jawRadiusM,
+    facingAngleRad: shape.facingAngleRad,
+    dropRadiusM: mouthM / 2 + D.dropReachBalls * ballDiameterM,
+    // Measured from the pocket origin: the corner itself, or half a mouth behind the nose line.
+    dropSetbackM: kind === "corner" ? 0 : mouthM / 2,
   };
+}
+
+export interface DropCircle {
+  id: "corner-bl" | "corner-br" | "corner-tl" | "corner-tr" | "middle-l" | "middle-r";
+  x: number;
+  y: number;
+  radiusM: number;
+}
+
+/**
+ * The six drop circles of a table: a ball whose centre is inside one is potted. Each centre
+ * is `dropSetbackM` out from the pocket origin along the pocket axis (the outward diagonal
+ * for a corner, square to the rail for a middle pocket).
+ */
+export function pocketDropCircles(table: TableSpec): DropCircle[] {
+  const W = table.playingArea.widthM;
+  const L = table.playingArea.lengthM;
+  const c = table.pockets.corner;
+  const m = table.pockets.middle;
+  const d = c.dropSetbackM * Math.SQRT1_2;
+  return [
+    { id: "corner-bl", x: -d, y: -d, radiusM: c.dropRadiusM },
+    { id: "corner-br", x: W + d, y: -d, radiusM: c.dropRadiusM },
+    { id: "corner-tl", x: -d, y: L + d, radiusM: c.dropRadiusM },
+    { id: "corner-tr", x: W + d, y: L + d, radiusM: c.dropRadiusM },
+    { id: "middle-l", x: -m.dropSetbackM, y: L / 2, radiusM: m.dropRadiusM },
+    { id: "middle-r", x: W + m.dropSetbackM, y: L / 2, radiusM: m.dropRadiusM },
+  ];
 }
 
 /**

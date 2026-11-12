@@ -1,6 +1,12 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { TABLE_DEFAULTS, resolveCustomTable, validateTable } from "../src/validate";
+import {
+  TABLE_DEFAULTS,
+  pocketCutBackM,
+  pocketDropCircles,
+  resolveCustomTable,
+  validateTable,
+} from "../src/validate";
 import type { CustomTableFields, PocketSpec, ValidationIssue } from "../src/types";
 
 const snooker: CustomTableFields = {
@@ -227,7 +233,9 @@ describe("resolveCustomTable", () => {
     expect(t.game).toBe("snooker");
     expect(t.playingArea).toEqual({ lengthM: 3.569, widthM: 1.778 });
     expect(t.defaultBallSetId).toBe("snooker-52@1");
-    expect(t.pockets.corner.jawRadiusM).toBeCloseTo(snookerBall, 12);
+    // One ball diameter, but never more than half the mouth (0.0933 / 2 here).
+    expect(t.pockets.corner.jawRadiusM).toBeCloseTo(0.0933 / 2, 12);
+    expect(t.pockets.middle.jawRadiusM).toBeLessThanOrEqual(snookerBall + 1e-12);
     expect(t.pockets.corner.mouthM).toBe(0.0933);
     expect(t.cushion.noseHeightM).toBeCloseTo(0.635 * snookerBall, 12);
   });
@@ -273,25 +281,24 @@ describe("resolveCustomTable", () => {
   function checkDrop(pocket: PocketSpec, kind: "corner" | "middle", ball: number): void {
     const m = pocket.mouthM;
     const r = ball / 2;
-    // (a) jaw facings can reach the circle
+    const cut = pocketCutBackM(kind, m, pocket.jawRadiusM, pocket.facingAngleRad);
+    // (a) the circle is wide enough for the jaw facings to reach it
     expect(pocket.dropRadiusM).toBeGreaterThanOrEqual((m / 2) * 0.9);
-    // (b) positive setback, circle reaches only slightly past the mouth line
-    expect(pocket.dropSetbackM).toBeGreaterThan(0);
-    expect(pocket.dropRadiusM - pocket.dropSetbackM).toBeLessThanOrEqual(0.2 * ball);
-    // (c) a ball resting on a rail at least one mouth from the nearest jaw point is outside
+    // (b) the centre is at or behind the pocket origin
+    expect(pocket.dropSetbackM).toBeGreaterThanOrEqual(0);
     if (kind === "corner") {
-      // Corner at origin, rail along +x. Mouth line midpoint is m/2 along the inward
-      // diagonal; the circle centre is setback beyond it, away from the table.
-      const t = (m / 2 - pocket.dropSetbackM) / Math.SQRT2;
-      const jawX = m * Math.SQRT1_2;
-      const bx = jawX + m;
-      const by = r;
-      expect(Math.hypot(bx - t, by - t)).toBeGreaterThan(pocket.dropRadiusM);
+      // Circle centre: setback out along the diagonal from the corner at the origin.
+      const c = -pocket.dropSetbackM * Math.SQRT1_2;
+      // (c) along each rail the circle stays inside the pocket opening (short of the jaw point)
+      expect(Math.sqrt(pocket.dropRadiusM * pocket.dropRadiusM - c * c) + c).toBeLessThan(cut);
+      // (d) a ball resting on the rail one mouth beyond the jaw point is not over the pocket
+      expect(Math.hypot(cut + m - c, r - c)).toBeGreaterThan(pocket.dropRadiusM);
     } else {
       // Middle pocket on the rail x = 0 at y = 0; circle centre at x = -setback.
-      const bx = r;
-      const by = m / 2 + m;
-      expect(Math.hypot(bx + pocket.dropSetbackM, by)).toBeGreaterThan(pocket.dropRadiusM);
+      // (c) the circle reaches only a little way past the nose line into the table
+      expect(pocket.dropRadiusM - pocket.dropSetbackM).toBeLessThanOrEqual(0.2 * ball);
+      // (d) as above
+      expect(Math.hypot(r + pocket.dropSetbackM, cut + m)).toBeGreaterThan(pocket.dropRadiusM);
     }
   }
 
@@ -330,5 +337,98 @@ describe("resolveCustomTable", () => {
 
   it("exposes readonly derivation constants", () => {
     expect(TABLE_DEFAULTS.defaultBallSetId.snooker).toBe("snooker-52@1");
+  });
+});
+
+describe("review fixes", () => {
+  it("rejects tables whose pockets leave no straight cushion once the jaw curve is counted", () => {
+    const cases: [CustomTableFields, number][] = [
+      [
+        { game: "snooker", lengthM: 1.0, widthM: 0.5, cornerMouthM: 0.3, middleMouthM: 0.45 },
+        0.0525,
+      ],
+      [
+        { game: "snooker", lengthM: 1.0, widthM: 0.5, cornerMouthM: 0.33, middleMouthM: 0.1 },
+        0.0525,
+      ],
+      [
+        { game: "snooker", lengthM: 2.0, widthM: 0.5, cornerMouthM: 0.33, middleMouthM: 0.1 },
+        0.065,
+      ],
+    ];
+    for (const [fields, ball] of cases) {
+      const errors = validateTable(fields, ball).filter((i) => i.severity === "error");
+      expect(errors.length).toBeGreaterThan(0);
+      expect(
+        errors.some(
+          (e) =>
+            e.code === "corner-pockets-leave-no-end-cushion" ||
+            e.code === "pockets-leave-no-side-cushion",
+        ),
+      ).toBe(true);
+      expect(() => resolveCustomTable(fields, ball)).toThrow();
+    }
+  });
+
+  it("wide range: every accepted table keeps a ball of straight cushion on every rail", () => {
+    const wide = fc
+      .record({
+        game: fc.constantFrom("snooker", "pool", "blackball"),
+        lengthM: fc.double({ min: 1.0, max: 4.5, noNaN: true }),
+        ratio: fc.double({ min: 0.4, max: 0.6, noNaN: true }),
+        ball: fc.double({ min: 0.045, max: 0.065, noNaN: true }),
+        cornerBalls: fc.double({ min: 1.0, max: 4.0, noNaN: true }),
+        middleBalls: fc.double({ min: 1.0, max: 4.0, noNaN: true }),
+        jawStyle: fc.constantFrom("angled", "rounded", undefined),
+      })
+      .map((f) => ({
+        ball: f.ball,
+        fields: {
+          game: f.game,
+          lengthM: f.lengthM,
+          widthM: f.lengthM * f.ratio,
+          cornerMouthM: f.cornerBalls * f.ball,
+          middleMouthM: f.middleBalls * f.ball,
+          ...(f.jawStyle ? { jawStyle: f.jawStyle } : {}),
+        } as CustomTableFields,
+      }));
+    fc.assert(
+      fc.property(wide, ({ fields, ball }) => {
+        fc.pre(validateTable(fields, ball).every((i) => i.severity !== "error"));
+        const t = resolveCustomTable(fields, ball);
+        const c = t.pockets.corner;
+        const m = t.pockets.middle;
+        const cornerCut = pocketCutBackM("corner", c.mouthM, c.jawRadiusM, c.facingAngleRad);
+        const middleCut = pocketCutBackM("middle", m.mouthM, m.jawRadiusM, m.facingAngleRad);
+        expect(t.playingArea.widthM - 2 * cornerCut).toBeGreaterThanOrEqual(ball - 1e-12);
+        expect(t.playingArea.lengthM / 2 - cornerCut - middleCut).toBeGreaterThanOrEqual(
+          ball - 1e-12,
+        );
+      }),
+      { numRuns: 500 },
+    );
+  });
+
+  it("pocketDropCircles: six circles, symmetric, corners on the corners of a pool table", () => {
+    const t = resolveCustomTable(
+      { game: "pool", lengthM: 2.54, widthM: 1.27, cornerMouthM: 0.1143, middleMouthM: 0.127 },
+      0.05715,
+    );
+    const circles = pocketDropCircles(t);
+    expect(circles.map((c) => c.id)).toEqual([
+      "corner-bl",
+      "corner-br",
+      "corner-tl",
+      "corner-tr",
+      "middle-l",
+      "middle-r",
+    ]);
+    const byId = new Map(circles.map((c) => [c.id, c]));
+    expect(byId.get("corner-bl")).toMatchObject({ x: -0, y: -0 });
+    expect(byId.get("corner-tr")).toMatchObject({ x: 1.27, y: 2.54 });
+    expect(byId.get("middle-l")?.x).toBeCloseTo(-0.0635, 12);
+    expect(byId.get("middle-r")?.x).toBeCloseTo(1.27 + 0.0635, 12);
+    expect(byId.get("middle-l")?.y).toBe(1.27);
+    expect(byId.get("corner-bl")?.radiusM).toBeCloseTo(0.1143 / 2 + 0.15 * 0.05715, 12);
   });
 });

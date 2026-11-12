@@ -7,6 +7,7 @@ import type {
   SanitizeResult,
   TableSpec,
 } from "./types";
+import { pocketDropCircles } from "./validate";
 
 /** Size of one ball of a set: the cue ball may differ from the object balls. */
 export function ballSizeOf(ballSet: BallSetSpec, kind: BallKind): BallSize {
@@ -36,9 +37,18 @@ const MOVED_EPSILON_M = 1e-12;
 /** Maximum push-apart iterations per ball before the spiral search. Design limit. */
 const MAX_PUSH_ITERATIONS = 64;
 
-/** Maximum rings, and angular samples per ring unit, of the free-position search. Design limits. */
-const MAX_SPIRAL_RINGS = 400;
-const SPIRAL_ANGLES_PER_RING = 8;
+/** Maximum rings of the free-position search. Design limit. */
+const MAX_SEARCH_RINGS = 400;
+
+/** How far outside a pocket's drop circle a ball is put when it is moved out of it. Design margin. */
+const POCKET_CLEARANCE_M = 1e-4;
+
+/** Distance between two points, by sqrt (bit-identical in every browser, unlike Math.hypot). */
+function distance(ax: number, ay: number, bx: number, by: number): number {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
 interface Item {
   index: number;
@@ -122,13 +132,31 @@ export function sanitizeLayout(
   };
   for (const it of items) clampItem(it, it);
 
+  // Step 3b: a ball over a pocket would drop. Move it straight out of the drop circle, then
+  // back inside the cushions. If that is not enough, step 4 finds it a free position.
+  const pockets = pocketDropCircles(table);
+  const overPocket = (p: { x: number; y: number }): (typeof pockets)[number] | undefined =>
+    pockets.find((c) => distance(p.x, p.y, c.x, c.y) < c.radiusM);
+  for (const it of items) {
+    const c = overPocket(it);
+    if (!c) continue;
+    const dist = distance(it.x, it.y, c.x, c.y);
+    // Away from the pocket centre; from the exact centre, towards the middle of the table.
+    const ux = dist > 0 ? (it.x - c.x) / dist : widthM / 2 - c.x > 0 ? 1 : -1;
+    const uy = dist > 0 ? (it.y - c.y) / dist : 0;
+    const target = c.radiusM + POCKET_CLEARANCE_M;
+    it.x = c.x + ux * target;
+    it.y = c.y + uy * target;
+    clampItem(it, it);
+  }
+
   // Step 4: resolve overlaps in descending priority; placed balls never move.
   const placed: Item[] = [];
   const overlapOf = (it: Item, p: { x: number; y: number }): Item | undefined => {
     let worst: Item | undefined;
     let worstDepth = TOUCH_TOLERANCE_M;
     for (const o of placed) {
-      const depth = it.r + o.r - Math.hypot(p.x - o.x, p.y - o.y);
+      const depth = it.r + o.r - distance(p.x, p.y, o.x, o.y);
       if (depth > worstDepth) {
         worst = o;
         worstDepth = depth;
@@ -143,7 +171,7 @@ export function sanitizeLayout(
     for (let n = 0; hit && n < MAX_PUSH_ITERATIONS; n++) {
       const dx = p.x - hit.x;
       const dy = p.y - hit.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = Math.sqrt(dx * dx + dy * dy);
       const ux = dist > 0 ? dx / dist : 1;
       const uy = dist > 0 ? dy / dist : 0;
       const target = it.r + hit.r;
@@ -152,23 +180,24 @@ export function sanitizeLayout(
       clampItem(it, p);
       hit = overlapOf(it, p);
     }
-    if (hit) {
-      // Nearest free position on rings around the original (clamped) position.
+    if (hit || overPocket(p)) {
+      // Nearest free position on square rings of a grid around the original (clamped)
+      // position, walked in a fixed order. A grid, not angles: no sin or cos, so the result is
+      // bit-identical in every browser.
       const step = it.r / 2;
       const origin = { x: it.x, y: it.y };
       let found: { x: number; y: number } | undefined;
-      for (let ring = 1; ring <= MAX_SPIRAL_RINGS && !found; ring++) {
-        const count = SPIRAL_ANGLES_PER_RING * ring;
-        for (let a = 0; a < count; a++) {
-          const angle = (2 * Math.PI * a) / count;
-          const c = {
-            x: origin.x + Math.cos(angle) * step * ring,
-            y: origin.y + Math.sin(angle) * step * ring,
-          };
-          clampItem(it, c);
-          if (!overlapOf(it, c)) {
-            found = c;
-            break;
+      for (let ring = 1; ring <= MAX_SEARCH_RINGS && !found; ring++) {
+        for (let gx = -ring; gx <= ring && !found; gx++) {
+          for (let gy = -ring; gy <= ring; gy++) {
+            // Only the perimeter of the square of this ring.
+            if (gx !== -ring && gx !== ring && gy !== -ring && gy !== ring) continue;
+            const c = { x: origin.x + gx * step, y: origin.y + gy * step };
+            clampItem(it, c);
+            if (!overlapOf(it, c) && !overPocket(c)) {
+              found = c;
+              break;
+            }
           }
         }
       }

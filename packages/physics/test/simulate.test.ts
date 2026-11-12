@@ -466,3 +466,167 @@ describe("input validation", () => {
     expect(() => simulate(ok, { maxEvents: 0 })).toThrow(RangeError);
   });
 });
+
+describe("review regressions", () => {
+  test("a ball potted while in a pressing contact does not crash the engine", () => {
+    // Two balls pressing together crawl into the bottom-left corner pocket. Found in review:
+    // releasing the pressing contact overwrote the cached pocket event and the loop then
+    // read a cushion that did not exist.
+    const input = scene(
+      [
+        poolBall("A", 0.08691679045920402, 0.08691679045920402, {
+          velocity: { x: -0.024748737341529166, y: -0.024748737341529166 },
+          spin: { x: 0.8660975447604258, y: -0.8660975447604258, z: 0 },
+        }),
+        poolBall("B", 0.04650563791439282, 0.04650563791439282, {
+          velocity: { x: -0.024748737341529166, y: -0.024748737341529166 },
+          spin: { x: -3.414898890769678, y: 3.414898890769678, z: 0 },
+        }),
+      ],
+      { ballRestitution: 0.95 },
+    );
+    for (const shift of [0, 3e-6, 6e-6, 9e-6, -5e-6, 2e-5]) {
+      const balls = input.balls.map((b) =>
+        b.id === "B" ? { ...b, x: b.x - shift, y: b.y - shift } : b,
+      );
+      let shifted: SimResult | undefined;
+      try {
+        shifted = simulate({ ...input, balls });
+      } catch (e) {
+        // The only acceptable throw is input validation (the shifted ball may start in the pocket).
+        expect(e).toBeInstanceOf(SimInputError);
+        continue;
+      }
+      expect(shifted.status).toBe("complete");
+      checkInvariants(shifted, { ...input, balls });
+    }
+  });
+
+  test("a ball that is only spinning does not hit the time limit", () => {
+    const input = scene([poolBall("cue", CX, 1, { spin: { x: 0, y: 0, z: 30 } })], {
+      cloth: { ...MEDIUM, spinningFriction: 1e-5 },
+    });
+    const r = simulate(input, { maxTimeS: 2 });
+    expect(r.status).toBe("complete");
+    expect(finalPosition(r, "cue")).toEqual({ x: CX, y: 1 });
+  });
+
+  test("the time limit leaves no event after the cap and a result that can be sampled", () => {
+    const input: SimInput = {
+      ...rackInput(POOL_9, POOL_BALLS, "pool-9ball"),
+      shot: {
+        ballId: "cue-0",
+        aimAngleRad: Math.PI / 2,
+        speedMps: 8,
+        tipOffset: { side: 0, vertical: 0 },
+      },
+    };
+    const r = simulate(input, { maxTimeS: 0.6 });
+    expect(r.status).toBe("timeLimit");
+    for (const e of r.events) expect(e.t).toBeLessThanOrEqual(0.6);
+    for (const t of [0, 0.3, 0.6, 5]) {
+      for (const b of sampleAt(r, t)) {
+        expect(Number.isFinite(b.position.x + b.position.y + b.velocity.x + b.velocity.y)).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  test("a ball placed over a pocket is rejected", () => {
+    const pocket = prepareTable(POOL_9).geometry.pockets[0];
+    expect(pocket).toBeDefined();
+    if (!pocket) return;
+    // Just inside the edge of the corner drop circle, on the table diagonal.
+    const d = (pocket.radiusM - 0.001) / Math.SQRT2;
+    const input = scene([poolBall("a", pocket.centre.x + d, pocket.centre.y + d)]);
+    expect(errorCode(() => simulate(input))).toBe("ball-in-pocket");
+  });
+});
+
+describe("pocket jaws", () => {
+  // The bottom rail's jaw point at the bottom-left corner, and the knuckle arc that starts there.
+  const geometry = prepareTable(POOL_9).geometry;
+  const rail = geometry.segments.find((s) => s.id === "rail-bottom");
+  const jawX = rail?.a.x ?? Number.NaN;
+
+  test("a ball driven straight at a jaw point hits the jaw and is thrown back onto the table", () => {
+    // Travelling straight down at the knuckle from above: it meets the jaw, not the rail.
+    const input = scene([poolBall("obj", jawX, 0.4, { velocity: { x: 0, y: -2.5 } })]);
+    const r = simulate(input);
+    const first = eventsOf(r, "ball-cushion")[0];
+    expect(first?.cushionId.startsWith("jaw-corner-bl") || first?.cushionId === "rail-bottom").toBe(
+      true,
+    );
+    expect(r.status).toBe("complete");
+    checkInvariants(r, input);
+  });
+
+  test("a ball rolled along the rail into the corner is potted; one sent wide of the pocket hits a jaw first", () => {
+    // Along the bottom rail towards the corner: touching the rail all the way, it must drop.
+    const probe = simulate(scene([poolBall("p", 0.6, 0.3, { velocity: { x: 0, y: -1 } })]));
+    const railY = eventsOf(probe, "ball-cushion")[0]?.point.y ?? Number.NaN;
+    const along = scene([poolBall("obj", 0.5, railY, { velocity: { x: -1.2, y: 0 } })]);
+    const potted = simulate(along);
+    expect(eventsOf(potted, "pocket").map((e) => e.pocketId)).toEqual(["corner-bl"]);
+    checkInvariants(potted, along);
+
+    // Aimed from the middle of the table at the far jaw of the same pocket: it must touch
+    // a jaw or facing of that pocket before anything else.
+    const leftRail = geometry.segments.find((s) => s.id === "rail-left-lower");
+    const target = { x: 0, y: (leftRail?.a.y ?? 0) + 0.01 };
+    const from = { x: 0.5, y: 0.25 };
+    const len = Math.hypot(target.x - from.x, target.y - from.y);
+    const wide = scene([
+      poolBall("obj", from.x, from.y, {
+        velocity: { x: (2 * (target.x - from.x)) / len, y: (2 * (target.y - from.y)) / len },
+      }),
+    ]);
+    const r = simulate(wide);
+    const firstHit = eventsOf(r, "ball-cushion")[0];
+    expect(firstHit).toBeDefined();
+    expect(firstHit?.cushionId).toMatch(/^(jaw|facing)-corner-bl|^rail-left-lower$/);
+    expect(r.status).toBe("complete");
+    checkInvariants(r, wide);
+  });
+
+  test("random shots into every pocket mouth never put a ball behind a cushion", () => {
+    const W9 = POOL_9.playingArea.widthM;
+    const L9 = POOL_9.playingArea.lengthM;
+    const targets = [
+      { x: 0, y: 0 },
+      { x: W9, y: 0 },
+      { x: 0, y: L9 },
+      { x: W9, y: L9 },
+      { x: 0, y: L9 / 2 },
+      { x: W9, y: L9 / 2 },
+    ];
+    let potted = 0;
+    let rattled = 0;
+    for (let i = 0; i < 240; i++) {
+      const target = targets[i % 6] as { x: number; y: number };
+      // Deterministic spread of start points, speeds and aim offsets.
+      const from = {
+        x: W9 * (0.25 + (0.5 * ((i * 37) % 100)) / 100),
+        y: L9 * (0.2 + (0.6 * ((i * 53) % 100)) / 100),
+      };
+      const offset = (((i * 29) % 21) - 10) * 0.006;
+      const aim = { x: target.x + offset, y: target.y - offset };
+      const len = Math.hypot(aim.x - from.x, aim.y - from.y);
+      const speed = 0.6 + ((i * 17) % 10) * 0.45;
+      const input = scene([
+        poolBall("obj", from.x, from.y, {
+          velocity: { x: (speed * (aim.x - from.x)) / len, y: (speed * (aim.y - from.y)) / len },
+        }),
+      ]);
+      const r = simulate(input);
+      expect(r.status).toBe("complete");
+      checkInvariants(r, input);
+      if (eventsOf(r, "pocket").length > 0) potted++;
+      if (eventsOf(r, "ball-cushion").some((e) => /^(jaw|facing)-/.test(e.cushionId))) rattled++;
+    }
+    // The spread is wide enough that both outcomes must occur.
+    expect(potted).toBeGreaterThan(20);
+    expect(rattled).toBeGreaterThan(20);
+  });
+});
