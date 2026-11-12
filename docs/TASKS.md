@@ -1,4 +1,4 @@
-﻿# Baize task board
+# Baize task board
 
 Status: `todo`, `doing`, `done`, `blocked`. Update a task's status when it starts and when it finishes.
 
