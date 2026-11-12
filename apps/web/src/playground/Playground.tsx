@@ -1,20 +1,16 @@
 import { buildTableGeometry, sampleAt, simulate } from "@baize/physics";
-import type { BallInput, SimResult } from "@baize/physics";
-import {
-  ballSizeOf,
-  getBallSet,
-  getTablePreset,
-  makeCloth,
-  markingsFor,
-  rackLayout,
-} from "@baize/tables";
-import type { BallKind, BallSetSpec, ClothSpeed, RackKind, TableSpec } from "@baize/tables";
+import type { SimResult } from "@baize/physics";
+import { getBallSet, getTablePreset, makeCloth, markingsFor } from "@baize/tables";
+import type { BallKind, BallSetSpec, ClothSpeed, TableSpec } from "@baize/tables";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { ballLook, cushionPaths, toScreen, toTable, trackLength, trackPath } from "./draw";
+import { freshRack, layoutAfterShot, placeCueBall } from "./play";
+import type { RackChoice, SceneBall } from "./play";
 
 /**
- * A first look at the engine: one table (pool 8 ft pro), a rack, one shot.
+ * A first look at the engine: one table (pool 8 ft pro), a rack, and shot after shot from
+ * wherever the balls come to rest. No rules of any game are applied.
  * Layout and styling are throwaway; the table and path drawing carry over to the editor.
  */
 
@@ -23,62 +19,12 @@ const MARGIN_M = 0.17; // space around the playing area for cushions, pockets an
 const CUSHION_DEPTH_M = 0.05; // drawn depth of the cushion rubber behind the nose
 const CLOTH_COLOUR = "#1d7a5f";
 
-type RackChoice = RackKind | "two-balls";
-
 const RACKS: { id: RackChoice; label: string }[] = [
   { id: "pool-9ball", label: "9-ball rack" },
   { id: "pool-8ball", label: "8-ball rack" },
   { id: "pool-15", label: "15-ball rack" },
   { id: "two-balls", label: "Cue ball and one ball" },
 ];
-
-interface SceneBall extends BallInput {
-  kind: BallKind;
-}
-
-function useScene(rack: RackChoice): {
-  balls: SceneBall[];
-  error: string | undefined;
-} {
-  return useMemo(() => {
-    const table = getTablePreset(TABLE_ID);
-    const set = table ? getBallSet(table.defaultBallSetId) : undefined;
-    if (!table || !set) return { balls: [], error: "The table preset is missing." };
-    try {
-      const layout =
-        rack === "two-balls"
-          ? {
-              balls: [
-                {
-                  kind: "cue" as BallKind,
-                  x: table.playingArea.widthM / 2,
-                  y: table.playingArea.lengthM / 4,
-                },
-                {
-                  kind: "1" as BallKind,
-                  x: table.playingArea.widthM * 0.62,
-                  y: table.playingArea.lengthM * 0.7,
-                },
-              ],
-            }
-          : rackLayout(table, set, rack);
-      const balls = layout.balls.map((b, i) => {
-        const size = ballSizeOf(set, b.kind);
-        return {
-          id: `${b.kind}-${String(i)}`,
-          kind: b.kind,
-          radiusM: size.diameterM / 2,
-          massKg: size.massKg,
-          x: b.x,
-          y: b.y,
-        };
-      });
-      return { balls, error: undefined };
-    } catch (e) {
-      return { balls: [], error: e instanceof Error ? e.message : String(e) };
-    }
-  }, [rack]);
-}
 
 interface ShotOutcome {
   result?: SimResult;
@@ -99,7 +45,7 @@ function runShot(
   vertical: number,
 ): ShotOutcome {
   const cue = balls[0];
-  if (!table || !set || !cue) return { ms: 0 };
+  if (!table || !set || cue?.kind !== "cue") return { ms: 0 };
   const started = performance.now();
   try {
     const result = simulate({
@@ -120,22 +66,42 @@ function runShot(
   }
 }
 
+function initialBalls(rack: RackChoice): SceneBall[] {
+  const table = getTablePreset(TABLE_ID);
+  const set = table ? getBallSet(table.defaultBallSetId) : undefined;
+  return table && set ? freshRack(table, set, rack) : [];
+}
+
+function ballName(kind: BallKind): string {
+  return kind === "cue" ? "cue ball" : kind;
+}
+
+const START_MESSAGE = "Aim by clicking the table, then press Shoot.";
+
 export function Playground() {
   const table = getTablePreset(TABLE_ID);
   const set = table ? getBallSet(table.defaultBallSetId) : undefined;
 
   const [rack, setRack] = useState<RackChoice>("pool-9ball");
+  const [balls, setBalls] = useState<SceneBall[]>(() => initialBalls("pool-9ball"));
+  const [pottedSoFar, setPottedSoFar] = useState<BallKind[]>([]);
+  const [shots, setShots] = useState(0);
+  const [message, setMessage] = useState(START_MESSAGE);
+  const [placing, setPlacing] = useState(false);
+
   const [clothSpeed, setClothSpeed] = useState<ClothSpeed>("medium");
   const [aimDeg, setAimDeg] = useState(90);
   const [speed, setSpeed] = useState(6);
   const [side, setSide] = useState(0);
   const [vertical, setVertical] = useState(0);
+  const [showAllPaths, setShowAllPaths] = useState(true);
+
+  // The shot being played, frozen at the moment Shoot was pressed. Undefined while aiming.
+  const [running, setRunning] = useState<SimResult | undefined>(undefined);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(1);
-  const [showAllPaths, setShowAllPaths] = useState(true);
 
-  const { balls, error: sceneError } = useScene(rack);
   const geometry = useMemo(() => (table ? buildTableGeometry(table) : undefined), [table]);
 
   // Keep the tip inside the miscue limit of half a ball radius.
@@ -143,25 +109,46 @@ export function Playground() {
   const tipScale = tipLength > 0.5 ? 0.5 / tipLength : 1;
   const tipSide = side * tipScale;
   const tipVertical = vertical * tipScale;
-  const tip = { side: tipSide, vertical: tipVertical };
 
-  const sim = useMemo(
+  // Live preview of the shot being aimed.
+  const preview = useMemo(
     () => runShot(table, set, balls, clothSpeed, aimDeg, speed, tipSide, tipVertical),
     [table, set, balls, clothSpeed, aimDeg, speed, tipSide, tipVertical],
   );
 
-  const duration = sim.result?.durationS ?? 0;
+  const shown = running ?? preview.result;
+  const duration = shown?.durationS ?? 0;
 
-  // Any change to the shot rewinds the playback. (State is adjusted while rendering, not in
-  // an effect, so there is no extra render with stale playback.)
-  const [shown, setShown] = useState(sim.result);
-  if (shown !== sim.result) {
-    setShown(sim.result);
-    setTime(0);
+  /** The running shot is over: the table carries on from where the balls stopped. */
+  const finishShot = (): void => {
+    if (!running || !table || !set) return;
+    const after = layoutAfterShot(running, balls, table, set);
+    setBalls(after.balls);
+    setPottedSoFar((p) => [...p, ...after.potted]);
+    setShots((n) => n + 1);
+    setRunning(undefined);
     setPlaying(false);
-  }
+    setTime(0);
+    setPlacing(after.scratch);
+    const down =
+      after.potted.length > 0 ? `Potted: ${after.potted.join(", ")}.` : "Nothing potted.";
+    const objectBalls = after.balls.filter((b) => b.kind !== "cue").length;
+    setMessage(
+      after.scratch
+        ? `${down} The cue ball went in and is back on the head spot. Click the table to place it, then press Done.`
+        : objectBalls === 0
+          ? `${down} The table is clear. Press Re-rack to play again.`
+          : `${down} Aim the next shot.`,
+    );
+  };
+  const finishRef = useRef(finishShot);
+  useEffect(() => {
+    finishRef.current = finishShot;
+  });
 
+  // Playback clock. When it reaches the end of the shot, the shot is finished.
   const last = useRef<number | undefined>(undefined);
+  const clock = useRef(0);
   useEffect(() => {
     if (!playing) {
       last.current = undefined;
@@ -171,14 +158,12 @@ export function Playground() {
     const tick = (now: number): void => {
       const dt = last.current === undefined ? 0 : (now - last.current) / 1000;
       last.current = now;
-      setTime((t) => {
-        const next = t + dt * rate;
-        if (next >= duration) {
-          setPlaying(false);
-          return duration;
-        }
-        return next;
-      });
+      clock.current += dt * rate;
+      if (clock.current >= duration) {
+        finishRef.current();
+        return;
+      }
+      setTime(clock.current);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -193,21 +178,49 @@ export function Playground() {
   const L = table.playingArea.lengthM;
   const kindOf = new Map(balls.map((b) => [b.id, b.kind]));
   const radiusOf = new Map(balls.map((b) => [b.id, b.radiusM]));
-  const now = sim.result ? sampleAt(sim.result, time) : undefined;
-  const final = sim.result ? sampleAt(sim.result, duration + 1) : undefined;
-  const cue = balls[0];
-  const firstHit = sim.result?.events.find((e) => e.type === "ball-ball");
+  const cue = balls[0]?.kind === "cue" ? balls[0] : undefined;
+  const aiming = running === undefined;
+  const now = running ? sampleAt(running, time) : undefined;
+  const final = shown ? sampleAt(shown, duration + 1) : undefined;
+  const firstHit = shown?.events.find((e) => e.type === "ball-ball");
   const firstObjectId = firstHit?.type === "ball-ball" ? firstHit.otherBallId : undefined;
-  const potted = sim.result?.events.filter((e) => e.type === "pocket") ?? [];
-  const cueTrack = sim.result?.tracks[0];
+  const shotPots = shown?.events.filter((e) => e.type === "pocket") ?? [];
+  const cueTrack = shown?.tracks[0];
+  const objectBallsLeft = balls.filter((b) => b.kind !== "cue").length;
+
+  const reRack = (choice: RackChoice): void => {
+    setRack(choice);
+    setBalls(freshRack(table, set, choice));
+    setPottedSoFar([]);
+    setShots(0);
+    setRunning(undefined);
+    setPlaying(false);
+    setTime(0);
+    setPlacing(false);
+    setAimDeg(90);
+    setMessage(START_MESSAGE);
+  };
+
+  const shoot = (): void => {
+    if (!preview.result || preview.result.durationS === 0) return;
+    clock.current = 0;
+    setTime(0);
+    setRunning(preview.result);
+    setPlaying(true);
+    setPlacing(false);
+    setMessage("Shot in progress.");
+  };
 
   const onTableClick = (event: MouseEvent<SVGSVGElement>): void => {
-    if (!cue) return;
-    const svg = event.currentTarget;
-    const matrix = svg.getScreenCTM();
+    if (!aiming || !cue) return;
+    const matrix = event.currentTarget.getScreenCTM();
     if (!matrix) return;
     const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
     const target = toTable({ x: point.x, y: point.y });
+    if (placing) {
+      setBalls(placeCueBall(balls, target, table, set));
+      return;
+    }
     const angle = (Math.atan2(target.y - cue.y, target.x - cue.x) * 180) / Math.PI;
     setAimDeg(Math.round(((angle + 360) % 360) * 10) / 10);
   };
@@ -219,12 +232,14 @@ export function Playground() {
       })
     : undefined;
   const cueStart = cue ? toScreen(cue) : undefined;
+  const drawn =
+    now ?? balls.map((b) => ({ id: b.id, state: "stationary", position: { x: b.x, y: b.y } }));
 
   return (
     <div className="playground">
       <div className="table-wrap">
         <svg
-          className="table"
+          className={placing ? "table placing" : "table"}
           viewBox={`${String(-MARGIN_M)} ${String(-MARGIN_M)} ${String(L + 2 * MARGIN_M)} ${String(W + 2 * MARGIN_M)}`}
           onClick={onTableClick}
           role="img"
@@ -298,30 +313,32 @@ export function Playground() {
             return null;
           })}
 
-          {/* Paths. */}
-          {sim.result?.tracks.map((track, i) => {
-            const d = trackPath(track);
-            if (!d) return null;
-            const isCue = i === 0;
-            const isFirst = track.id === firstObjectId;
-            if (!showAllPaths && !isCue && !isFirst) return null;
-            const look = ballLook(kindOf.get(track.id) ?? "cue");
-            return (
-              <path
-                key={track.id}
-                d={d}
-                fill="none"
-                stroke={isCue ? "#ffffff" : look.colour === "#141414" ? "#bbbbbb" : look.colour}
-                strokeWidth={isCue || isFirst ? 0.008 : 0.004}
-                strokeOpacity={isCue ? 0.95 : isFirst ? 0.9 : 0.55}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            );
-          })}
+          {/* Paths of the shot being aimed or played. */}
+          {placing
+            ? null
+            : shown?.tracks.map((track, i) => {
+                const d = trackPath(track);
+                if (!d) return null;
+                const isCue = i === 0;
+                const isFirst = track.id === firstObjectId;
+                if (!showAllPaths && !isCue && !isFirst) return null;
+                const look = ballLook(kindOf.get(track.id) ?? "cue");
+                return (
+                  <path
+                    key={track.id}
+                    d={d}
+                    fill="none"
+                    stroke={isCue ? "#ffffff" : look.colour === "#141414" ? "#bbbbbb" : look.colour}
+                    strokeWidth={isCue || isFirst ? 0.008 : 0.004}
+                    strokeOpacity={isCue ? 0.95 : isFirst ? 0.9 : 0.55}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                );
+              })}
 
-          {/* Collision marks: where the cue ball first meets a ball. */}
-          {firstHit?.type === "ball-ball" ? (
+          {/* Where the cue ball first meets a ball. */}
+          {!placing && firstHit?.type === "ball-ball" ? (
             <circle
               cx={toScreen(firstHit.point).x}
               cy={toScreen(firstHit.point).y}
@@ -332,27 +349,29 @@ export function Playground() {
             />
           ) : null}
 
-          {/* Final positions as outlines. */}
-          {final?.map((b) => {
-            if (b.state === "pocketed") return null;
-            const c = toScreen(b.position);
-            return (
-              <circle
-                key={`end-${b.id}`}
-                cx={c.x}
-                cy={c.y}
-                r={radiusOf.get(b.id) ?? 0.028}
-                fill="none"
-                stroke="#ffffff"
-                strokeOpacity={0.45}
-                strokeWidth={0.003}
-                strokeDasharray="0.012 0.008"
-              />
-            );
-          })}
+          {/* Where each ball will come to rest. */}
+          {placing
+            ? null
+            : final?.map((b) => {
+                if (b.state === "pocketed") return null;
+                const c = toScreen(b.position);
+                return (
+                  <circle
+                    key={`end-${b.id}`}
+                    cx={c.x}
+                    cy={c.y}
+                    r={radiusOf.get(b.id) ?? 0.028}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeOpacity={0.45}
+                    strokeWidth={0.003}
+                    strokeDasharray="0.012 0.008"
+                  />
+                );
+              })}
 
-          {/* Aim line, shown before the shot is played. */}
-          {time === 0 && cueStart && aimEnd ? (
+          {/* Aim line while aiming. */}
+          {aiming && !placing && cueStart && aimEnd ? (
             <line
               x1={cueStart.x}
               y1={cueStart.y}
@@ -364,11 +383,8 @@ export function Playground() {
             />
           ) : null}
 
-          {/* Balls at the current time. */}
-          {(
-            now ??
-            balls.map((b) => ({ id: b.id, state: "stationary", position: { x: b.x, y: b.y } }))
-          ).map((b) => {
+          {/* Balls: where they are now. */}
+          {drawn.map((b) => {
             if (b.state === "pocketed") return null;
             const c = toScreen(b.position);
             const r = radiusOf.get(b.id) ?? 0.028;
@@ -410,118 +426,62 @@ export function Playground() {
       <div className="panel">
         <h1>Baize playground</h1>
         <p className="sub">
-          {table.name}, {(L * 1000).toFixed(0)} × {(W * 1000).toFixed(0)} mm. Click the table to
-          aim.
+          {table.name}, {(L * 1000).toFixed(0)} × {(W * 1000).toFixed(0)} mm.
+        </p>
+        <p className="message" role="status">
+          {message}
         </p>
 
-        <label>
-          Balls
-          <select
-            value={rack}
-            onChange={(e) => {
-              setRack(e.target.value as RackChoice);
-            }}
-          >
-            {RACKS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Cloth speed
-          <select
-            value={clothSpeed}
-            onChange={(e) => {
-              setClothSpeed(e.target.value as ClothSpeed);
-            }}
-          >
-            <option value="slow">Slow</option>
-            <option value="medium">Medium</option>
-            <option value="fast">Fast</option>
-          </select>
-        </label>
-
-        <label>
-          Aim: {aimDeg.toFixed(1)}°
-          <input
-            type="range"
-            min={0}
-            max={360}
-            step={0.1}
-            value={aimDeg}
-            onChange={(e) => {
-              setAimDeg(Number(e.target.value));
-            }}
-          />
-        </label>
-        <label>
-          Speed: {speed.toFixed(1)} m/s
-          <input
-            type="range"
-            min={0.2}
-            max={10}
-            step={0.1}
-            value={speed}
-            onChange={(e) => {
-              setSpeed(Number(e.target.value));
-            }}
-          />
-        </label>
-        <label>
-          Side:{" "}
-          {tip.side === 0
-            ? "centre"
-            : `${Math.abs(tip.side).toFixed(2)} ${tip.side > 0 ? "right" : "left"}`}
-          <input
-            type="range"
-            min={-0.5}
-            max={0.5}
-            step={0.01}
-            value={side}
-            onChange={(e) => {
-              setSide(Number(e.target.value));
-            }}
-          />
-        </label>
-        <label>
-          Height:{" "}
-          {tip.vertical === 0
-            ? "centre"
-            : `${Math.abs(tip.vertical).toFixed(2)} ${tip.vertical > 0 ? "above (follow)" : "below (draw)"}`}
-          <input
-            type="range"
-            min={-0.5}
-            max={0.5}
-            step={0.01}
-            value={vertical}
-            onChange={(e) => {
-              setVertical(Number(e.target.value));
-            }}
-          />
-        </label>
-
         <div className="row">
-          <button
-            type="button"
-            onClick={() => {
-              if (time >= duration) setTime(0);
-              setPlaying((p) => !p);
-            }}
-            disabled={!sim.result || duration === 0}
-          >
-            {playing ? "Pause" : time > 0 && time < duration ? "Resume" : "Play"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setPlaying(false);
-              setTime(0);
-            }}
-          >
-            Reset
-          </button>
+          {aiming && placing ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setPlacing(false);
+                setMessage("Aim the next shot.");
+              }}
+            >
+              Done
+            </button>
+          ) : null}
+          {aiming && !placing ? (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={shoot}
+                disabled={!preview.result || preview.result.durationS === 0 || !cue}
+              >
+                Shoot
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlacing(true);
+                  setMessage("Click the table to place the cue ball, then press Done.");
+                }}
+              >
+                Move cue ball
+              </button>
+            </>
+          ) : null}
+          {!aiming ? (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  setPlaying((p) => !p);
+                }}
+              >
+                {playing ? "Pause" : "Resume"}
+              </button>
+              <button type="button" onClick={finishShot}>
+                Skip to end
+              </button>
+            </>
+          ) : null}
           <select
             value={rate}
             onChange={(e) => {
@@ -535,20 +495,81 @@ export function Playground() {
             <option value={0.1}>0.1×</option>
           </select>
         </div>
-        <label>
-          Time: {time.toFixed(2)} of {duration.toFixed(2)} s
-          <input
-            type="range"
-            min={0}
-            max={Math.max(duration, 0.001)}
-            step={0.001}
-            value={Math.min(time, duration)}
-            onChange={(e) => {
-              setPlaying(false);
-              setTime(Number(e.target.value));
-            }}
-          />
-        </label>
+
+        <fieldset disabled={!aiming}>
+          <label>
+            Aim: {aimDeg.toFixed(1)}°
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={0.1}
+              value={aimDeg}
+              onChange={(e) => {
+                setAimDeg(Number(e.target.value));
+              }}
+            />
+          </label>
+          <label>
+            Speed: {speed.toFixed(1)} m/s
+            <input
+              type="range"
+              min={0.2}
+              max={10}
+              step={0.1}
+              value={speed}
+              onChange={(e) => {
+                setSpeed(Number(e.target.value));
+              }}
+            />
+          </label>
+          <label>
+            Side:{" "}
+            {tipSide === 0
+              ? "centre"
+              : `${Math.abs(tipSide).toFixed(2)} ${tipSide > 0 ? "right" : "left"}`}
+            <input
+              type="range"
+              min={-0.5}
+              max={0.5}
+              step={0.01}
+              value={side}
+              onChange={(e) => {
+                setSide(Number(e.target.value));
+              }}
+            />
+          </label>
+          <label>
+            Height:{" "}
+            {tipVertical === 0
+              ? "centre"
+              : `${Math.abs(tipVertical).toFixed(2)} ${tipVertical > 0 ? "above (follow)" : "below (draw)"}`}
+            <input
+              type="range"
+              min={-0.5}
+              max={0.5}
+              step={0.01}
+              value={vertical}
+              onChange={(e) => {
+                setVertical(Number(e.target.value));
+              }}
+            />
+          </label>
+          <label>
+            Cloth speed
+            <select
+              value={clothSpeed}
+              onChange={(e) => {
+                setClothSpeed(e.target.value as ClothSpeed);
+              }}
+            >
+              <option value="slow">Slow</option>
+              <option value="medium">Medium</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+        </fieldset>
+
         <label className="check">
           <input
             type="checkbox"
@@ -560,35 +581,65 @@ export function Playground() {
           Show every ball's path
         </label>
 
-        {sceneError ? <p className="error">{sceneError}</p> : null}
-        {sim.error ? <p className="error">{sim.error}</p> : null}
-        {sim.result ? (
-          <dl className="readout">
-            <dt>Result</dt>
-            <dd>
-              {sim.result.status === "complete"
-                ? "all balls at rest"
-                : `stopped early: ${sim.result.status}`}
-            </dd>
-            <dt>Events</dt>
-            <dd>{sim.result.stats.eventCount}</dd>
-            <dt>Computed in</dt>
-            <dd>{sim.ms.toFixed(1)} ms</dd>
-            <dt>Cue ball travel</dt>
-            <dd>{cueTrack ? `${trackLength(cueTrack).toFixed(2)} m` : "none"}</dd>
-            <dt>Potted</dt>
-            <dd>
-              {potted.length === 0
-                ? "nothing"
-                : potted
-                    .map((e) =>
-                      kindOf.get(e.ballId) === "cue" ? "cue ball" : kindOf.get(e.ballId),
-                    )
-                    .join(", ")}
-            </dd>
-          </dl>
-        ) : null}
-        <p className="note">Physics v1: no throw, squirt, swerve or nap yet.</p>
+        <div className="row">
+          <select
+            value={rack}
+            onChange={(e) => {
+              reRack(e.target.value as RackChoice);
+            }}
+            aria-label="Balls"
+          >
+            {RACKS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              reRack(rack);
+            }}
+          >
+            Re-rack
+          </button>
+        </div>
+
+        {preview.error ? <p className="error">{preview.error}</p> : null}
+        <dl className="readout">
+          <dt>Shots played</dt>
+          <dd>{shots}</dd>
+          <dt>Balls left</dt>
+          <dd>{objectBallsLeft}</dd>
+          <dt>Potted so far</dt>
+          <dd>{pottedSoFar.length === 0 ? "nothing" : pottedSoFar.join(", ")}</dd>
+          {shown ? (
+            <>
+              <dt>{aiming ? "This shot would pot" : "This shot pots"}</dt>
+              <dd>
+                {shotPots.length === 0
+                  ? "nothing"
+                  : shotPots.map((e) => ballName(kindOf.get(e.ballId) ?? "cue")).join(", ")}
+              </dd>
+              <dt>Cue ball travel</dt>
+              <dd>{cueTrack ? `${trackLength(cueTrack).toFixed(2)} m` : "none"}</dd>
+              <dt>Shot length</dt>
+              <dd>
+                {aiming
+                  ? `${duration.toFixed(1)} s`
+                  : `${time.toFixed(1)} of ${duration.toFixed(1)} s`}
+              </dd>
+              <dt>Events</dt>
+              <dd>
+                {shown.stats.eventCount}
+                {aiming ? `, computed in ${preview.ms.toFixed(1)} ms` : ""}
+              </dd>
+            </>
+          ) : null}
+        </dl>
+        <p className="note">
+          No rules are applied. Physics v1: no throw, squirt, swerve or nap yet.
+        </p>
       </div>
     </div>
   );

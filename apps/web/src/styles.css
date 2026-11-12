@@ -138,3 +138,36 @@ body {
     max-height: none;
   }
 }
+
+.table.placing {
+  cursor: copy;
+}
+
+.panel .message {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: #22362c;
+  border-radius: 0.35rem;
+  min-height: 2.4em;
+}
+
+.panel .row {
+  flex-wrap: wrap;
+}
+
+.panel button.primary {
+  background: #2f7d5b;
+  border-color: #3f9a72;
+  font-weight: 600;
+}
+
+.panel fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.panel fieldset:disabled {
+  opacity: 0.5;
+}
