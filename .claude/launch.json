@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "fnm env --shell powershell | Out-String | Invoke-Expression; pnpm --filter web exec vite --port 5173 --strictPort"
+      ],
+      "port": 5173
+    }
+  ]
+}
