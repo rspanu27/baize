@@ -1,4 +1,6 @@
-import type { BallTrack, CushionArc, CushionSegment, TableGeometry, Vec2 } from "@baize/physics";
+import type { BallTrack, TableGeometry, Vec2 } from "@baize/physics";
+import { cushionPaths as tableCushionPaths } from "../view/tableArt";
+import { makeViewTransform } from "../view/transform";
 
 /**
  * Pure drawing helpers for the playground: table coordinates in, SVG strings out.
@@ -29,67 +31,12 @@ function pt(p: Vec2): string {
   return `${fmt(s.x)} ${fmt(s.y)}`;
 }
 
-const ARC_STEPS = 8;
-
-/** Points along a jaw arc, from its `from` end to its `to` end. */
-function arcPoints(arc: CushionArc): Vec2[] {
-  const out: Vec2[] = [];
-  const a0 = Math.atan2(arc.from.y, arc.from.x);
-  let sweep = Math.atan2(arc.to.y, arc.to.x) - a0;
-  if (sweep < 0) sweep += 2 * Math.PI;
-  for (let i = 0; i <= ARC_STEPS; i++) {
-    const a = a0 + (sweep * i) / ARC_STEPS;
-    out.push({
-      x: arc.centre.x + arc.radiusM * Math.cos(a),
-      y: arc.centre.y + arc.radiusM * Math.sin(a),
-    });
-  }
-  return out;
-}
-
-function near(a: Vec2, b: Vec2): boolean {
-  return Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
-}
-
 /**
- * One jaw as a run of points starting at the jaw point on the rail and ending at the far end
- * of the facing (or of the knuckle arc, if the facing is inside the pocket drop).
- */
-function jawFrom(point: Vec2, geometry: TableGeometry): Vec2[] {
-  const arc = geometry.arcs.find((a) => {
-    const pts = arcPoints(a);
-    return near(pts[0] as Vec2, point) || near(pts[pts.length - 1] as Vec2, point);
-  });
-  if (!arc) return [point];
-  let pts = arcPoints(arc);
-  if (!near(pts[0] as Vec2, point)) pts = pts.reverse();
-  const facing = geometry.segments.find((s) => s.id === `facing-${arc.id.slice(4)}`);
-  if (facing) pts.push(facing.b);
-  return pts;
-}
-
-/**
- * SVG path data for the six cushions. Each is the nose line with its two jaws, closed along a
- * line `depthM` behind the nose.
+ * SVG path data for the six cushions of a landscape table (the editor's version, which takes
+ * any view transform, lives in `view/tableArt`).
  */
 export function cushionPaths(geometry: TableGeometry, depthM: number): string[] {
-  const rails = geometry.segments.filter((s) => s.id.startsWith("rail-"));
-  return rails.map((rail: CushionSegment) => {
-    const jawA = jawFrom(rail.a, geometry).reverse();
-    const jawB = jawFrom(rail.b, geometry);
-    const chain = [...jawA, ...jawB];
-    const n = rail.normal;
-    // Push a point back to the line `depthM` behind the nose.
-    const back = (p: Vec2): Vec2 => {
-      const depth = -((p.x - rail.a.x) * n.x + (p.y - rail.a.y) * n.y);
-      const more = Math.max(0, depthM - depth);
-      return { x: p.x - n.x * more, y: p.y - n.y * more };
-    };
-    const first = chain[0] as Vec2;
-    const last = chain[chain.length - 1] as Vec2;
-    const all = [...chain, back(last), back(first)];
-    return `M ${all.map(pt).join(" L ")} Z`;
-  });
+  return tableCushionPaths(geometry, depthM, makeViewTransform(geometry, "landscape"));
 }
 
 /**

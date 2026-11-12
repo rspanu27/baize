@@ -50,10 +50,10 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
 | 2.1 | `DiagramDoc`, `resolveDoc`, store with undo/redo, `loadLayout` | L | 1.16, 1.6 | Store unit tests: undo/redo; loadLayout is one step | done |
-| 2.2 | URL codec and migration scaffold | I | 2.1 | Round-trip property test; bad input gives a clear error | todo |
-| 2.3 | Unit formatting and parsing (metric/imperial) | I | 0.3 | Unit tests | todo |
-| 2.4 | Aim geometry: ghost ball, cut angle, line angles, distances | I | 0.3 | Unit tests with known angles | todo |
-| 2.5 | Table SVG: cloth, cushions and jaws from engine geometry, pockets, markings, view transform | U | 2.1, 1.5, 1.10 | Component test renders every preset and a custom table | todo |
+| 2.2 | URL codec and migration scaffold | I | 2.1 | Round-trip property test; bad input gives a clear error | done |
+| 2.3 | Unit formatting and parsing (metric/imperial) | I | 0.3 | Unit tests | done |
+| 2.4 | Aim geometry: ghost ball, cut angle, line angles, distances | I | 0.3 | Unit tests with known angles | done |
+| 2.5 | Table SVG: cloth, cushions and jaws from engine geometry, pockets, markings, view transform | U | 2.1, 1.5, 1.10 | Component test renders every preset and a custom table | done |
 | 2.6 | Ball rendering for all kinds, low-confidence marker | U | 2.5 | Component test | todo |
 | 2.7 | Drag, snap to spots, no-overlap placement | U | 2.6 | Interaction test: drag updates the doc, snaps, cannot overlap | todo |
 | 2.8 | Add/remove balls, racks, undo/redo controls | U | 2.7 | Interaction test | todo |
