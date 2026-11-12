@@ -1,0 +1,122 @@
+.shot-panel h2 {
+  margin: 1rem 0 0.4rem;
+}
+
+.shot-group {
+  margin: 0.75rem 0;
+}
+
+.shot-group > label,
+.shot-label {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.shot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.editor-panels .shot-angle {
+  width: 6.5rem;
+  background: #22362c;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-panels .shot-steps button {
+  padding: 0.3rem 0.45rem;
+  min-height: 2.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-panels .shot-steps button[aria-pressed="true"] {
+  background: #2f7d5b;
+  border-color: #3f9a72;
+}
+
+.editor-panels button.shot-primary {
+  background: #2f7d5b;
+  border-color: #3f9a72;
+  font-weight: 600;
+}
+
+.shot-hint {
+  margin: 0.3rem 0;
+  color: #a9bcb1;
+  font-size: 0.82rem;
+}
+
+.shot-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shot-face {
+  width: 7rem;
+  height: 7rem;
+  flex: none;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.shot-face-ball {
+  fill: #fbfaf2;
+  stroke: #36503f;
+  stroke-width: 1;
+}
+
+.shot-face-limit {
+  fill: none;
+  stroke: #9aa7a0;
+  stroke-width: 0.8;
+  stroke-dasharray: 3 3;
+}
+
+.shot-face-cross {
+  stroke: #c9d2cd;
+  stroke-width: 0.6;
+}
+
+.shot-face-tip {
+  fill: #2a6fdb;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.shot-readout {
+  margin: 0 0 0.4rem;
+}
+
+.shot-panel input[type="range"] {
+  display: block;
+  width: 100%;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.shot-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shot-result {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.shot-result dt {
+  color: #a9bcb1;
+}
+
+.shot-result dd {
+  margin: 0;
+}

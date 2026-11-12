@@ -1,7 +1,7 @@
 import { sanitizeLayout } from "@baize/tables";
 import type { BallKind, ClothSpec, Layout } from "@baize/tables";
 import { resolveDoc } from "./resolve";
-import type { DiagramDoc, DocBall, DocBallSet, DocShot, DocTable } from "./types";
+import type { DiagramDoc, DiagramStyle, DocBall, DocBallSet, DocShot, DocTable } from "./types";
 
 /**
  * Document operations: pure functions from a document to a new document.
@@ -224,4 +224,18 @@ export function setBallSet(doc: DiagramDoc, ballSet: DocBallSet): DiagramDoc {
 
 export function setCloth(doc: DiagramDoc, cloth: ClothSpec): DiagramDoc {
   return { ...doc, cloth };
+}
+
+/** Changes how the diagram is drawn (not what it contains). */
+export function setStyle(doc: DiagramDoc, patch: DiagramStyle): DiagramDoc {
+  const style: DiagramStyle = { ...doc.style, ...patch };
+  // Keep the document minimal: a style that is all defaults is left out.
+  if (style.showAllPaths !== true) delete style.showAllPaths;
+  if (Object.keys(style).length === 0) {
+    if (!doc.style) return doc;
+    const { style: _dropped, ...rest } = doc;
+    void _dropped;
+    return rest;
+  }
+  return { ...doc, style };
 }

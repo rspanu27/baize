@@ -1,0 +1,27 @@
+.aim-line {
+  stroke: #ffe27a;
+  stroke-linecap: round;
+}
+
+.aim-ghost {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: #ffe27a;
+}
+
+.aim-handle {
+  fill: #ffe27a;
+  fill-opacity: 0.35;
+  stroke: #ffe27a;
+  cursor: grab;
+  touch-action: none;
+}
+
+.aim-handle:active {
+  cursor: grabbing;
+}
+
+.aim-handle:focus-visible {
+  outline: none;
+  fill-opacity: 0.8;
+  stroke: #ffffff;
+}

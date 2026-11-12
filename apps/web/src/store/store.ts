@@ -10,11 +10,12 @@ import {
   setBallSet,
   setCloth,
   setShot,
+  setStyle,
   setTable,
 } from "../doc/ops";
 import type { LoadLayoutOptions } from "../doc/ops";
 import { newDoc } from "../doc/resolve";
-import type { DiagramDoc, DocBallSet, DocShot, DocTable } from "../doc/types";
+import type { DiagramDoc, DiagramStyle, DocBallSet, DocShot, DocTable } from "../doc/types";
 import { commit, createHistory, endGesture, live, redo, undo } from "./history";
 import type { History } from "./history";
 
@@ -55,6 +56,7 @@ export interface EditorState {
   setTable: (table: DocTable, ballSet?: DocBallSet) => void;
   setBallSet: (ballSet: DocBallSet) => void;
   setCloth: (cloth: ClothSpec, mode?: ChangeMode) => void;
+  setStyle: (patch: DiagramStyle) => void;
 
   select: (id: string | undefined) => void;
   setTool: (tool: Tool) => void;
@@ -134,6 +136,9 @@ export const useEditor = create<EditorState>((set) => {
     },
     setCloth: (cloth, mode) => {
       change((doc) => setCloth(doc, cloth), mode);
+    },
+    setStyle: (patch) => {
+      change((doc) => setStyle(doc, patch));
     },
 
     select: (id) => {

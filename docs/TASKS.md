@@ -54,14 +54,14 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 | 2.3 | Unit formatting and parsing (metric/imperial) | I | 0.3 | Unit tests | done |
 | 2.4 | Aim geometry: ghost ball, cut angle, line angles, distances | I | 0.3 | Unit tests with known angles | done |
 | 2.5 | Table SVG: cloth, cushions and jaws from engine geometry, pockets, markings, view transform | U | 2.1, 1.5, 1.10 | Component test renders every preset and a custom table | done |
-| 2.6 | Ball rendering for all kinds, low-confidence marker | U | 2.5 | Component test | todo |
-| 2.7 | Drag, snap to spots, no-overlap placement | U | 2.6 | Interaction test: drag updates the doc, snaps, cannot overlap | todo |
-| 2.8 | Add/remove balls, racks, undo/redo controls | U | 2.7 | Interaction test | todo |
-| 2.9 | Setup panel: presets, custom dimensions with messages, jaw shape, ball set, cloth, units | U | 2.1, 2.3, 1.4 | Entering a custom table re-renders it; invalid input shows its message | todo |
+| 2.6 | Ball rendering for all kinds, low-confidence marker | U | 2.5 | Component test | done |
+| 2.7 | Drag, snap to spots, no-overlap placement | U | 2.6 | Interaction test: drag updates the doc, snaps, cannot overlap | done |
+| 2.8 | Add/remove balls, racks, undo/redo controls | U | 2.7 | Interaction test | done |
+| 2.9 | Setup panel: presets, custom dimensions with messages, jaw shape, ball set, cloth, units | U | 2.1, 2.3, 1.4 | Entering a custom table re-renders it; invalid input shows its message | done |
 | 2.10 | Simulation integration: frame-coalesced re-simulation, timing, path model | L | 2.1 | Unit tests for the path model; re-simulation time measured during a drag | done (no frame coalescing needed: a drag step costs well under a frame) |
-| 2.11 | Shot controls: aim drag and click, ghost ball, tip widget, speed slider with stops | U | 2.7, 2.4 | Interaction test updates the shot in the doc | todo |
-| 2.12 | Path drawing: emphasis rules, collision marks, final positions, show-all, "physics v1" note | U | 2.10 | Component test on a fixed shot | todo |
-| 2.13 | Share button and load from URL hash | U | 2.2 | A link reopens an identical doc | todo |
+| 2.11 | Shot controls: aim drag and click, ghost ball, tip widget, speed slider with stops | U | 2.7, 2.4 | Interaction test updates the shot in the doc | done |
+| 2.12 | Path drawing: emphasis rules, collision marks, final positions, show-all, "physics v1" note | U | 2.10 | Component test on a fixed shot | done |
+| 2.13 | Share button and load from URL hash | U | 2.2 | A link reopens an identical doc | done |
 | 2.14 | Measuring tool, cut-angle and travel readouts | U | 2.4, 2.12 | Readout matches helper output | todo |
 | 2.15 | SVG and PNG export | I | 2.12 | Exported SVG parses; PNG has the expected size | todo |
 | 2.16 | Mobile layout, portrait and landscape, touch drag | U | 2.9, 2.11 | Manual check at phone sizes | todo |

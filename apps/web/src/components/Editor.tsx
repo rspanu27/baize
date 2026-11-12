@@ -1,6 +1,7 @@
 import { useSimulation } from "../sim/useSimulation";
 import { useDoc } from "../store/store";
 import { useOrientation } from "../view/useOrientation";
+import { AimLayer } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
 import { PathsLayer } from "./PathsLayer";
@@ -27,6 +28,7 @@ export function Editor() {
           <TableView scene={scene} orientation={orientation}>
             <PathsLayer paths={paths} />
             <BallsLayer scene={scene} />
+            <AimLayer scene={scene} />
           </TableView>
         ) : (
           <p className="editor-problem">This diagram cannot be shown.</p>
