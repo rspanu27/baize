@@ -5,3 +5,5 @@ coverage
 docs/**/*.md
 CLAUDE.md
 .claude
+# Generated reference data
+packages/physics/test/fixtures

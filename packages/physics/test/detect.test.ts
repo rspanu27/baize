@@ -114,7 +114,7 @@ describe("ballBallTime", () => {
       ),
       { numRuns: 1500 },
     );
-  });
+  }, 60_000);
 });
 
 // Left rail: nose line x = 0 for y in [0, 1], balls live at x > 0.

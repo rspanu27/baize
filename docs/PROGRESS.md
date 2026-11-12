@@ -24,7 +24,7 @@ One short entry at the end of each phase, newest first.
 
 **Honest limits**
 
-- The cushion model is derived from first principles in Han's formulation; it has not been compared against the paper or pooltool.
+- The cushion model matches pooltool's Han 2005 implementation to rounding error (checked 2026-11-12 on 1,080 impacts). It has not been checked against Han's paper, which is paywalled. Against pooltool's more detailed Mathavan model it is typically within 2.4 % in rebound speed and 2.6 degrees in direction, and up to about 10 degrees off in the worst cases with the default cushion values; see the decisions log.
 - No published figures exist for pocket jaw shape, slate cut, or cushion bounce and grip on any preset; those are modelling choices. Snooker 6 ft, bar-box and blackball pocket openings are assumptions. Details and open questions: `docs/research/table-presets.md`.
 - Rack arrangements and the masses of the smaller ball sets were not checked against sources (web access was rate-limited) and are marked `UNVERIFIED` in the code.
 - Simultaneous multi-ball contacts are resolved in a fixed order; results near pocket jaws are approximate; there is no throw, squirt, swerve or nap yet (Phase 3).

@@ -71,6 +71,7 @@ Metres, seconds, kilograms, radians. The origin is the baulk/head-end left corne
 - Balls slower than 1 cm/s after a collision are put to rest (they would move less than a millimetre). Closing speeds below 1 cm/s do not rebound.
 - When several balls touch at exactly the same instant, contacts are resolved one pair at a time in a fixed order. This is deterministic and never adds energy, but it is not the unique physical answer.
 - Results very close to the pocket jaws are approximate: there is no slate-edge or shelf physics.
+- The cushion model is the closed-form Han (2005) type. It agrees with pooltool's implementation of that model to rounding error. Compared with the more detailed Mathavan (2010) model it is typically within about 2.5 % in rebound speed and 3 degrees in direction, and can be around 10 degrees off for steep impacts with backspin or heavy check side.
 - Invalid input throws `SimInputError` with a `code`. Hitting `maxEvents` or `maxTimeS` does not throw.
 
 See `docs/ARCHITECTURE.md` in the repository for the design and the reasoning behind it.
