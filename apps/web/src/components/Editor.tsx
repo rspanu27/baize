@@ -5,6 +5,7 @@ import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
 import { PathsLayer } from "./PathsLayer";
 import { SetupPanel } from "./SetupPanel";
+import { SharePanel } from "./SharePanel";
 import { ShotPanel } from "./ShotPanel";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
@@ -43,6 +44,7 @@ export function Editor() {
         ) : null}
         <SetupPanel />
         <ShotPanel />
+        <SharePanel />
         <p className="editor-note">Physics v1: no throw, squirt, swerve or nap yet.</p>
       </aside>
     </div>
