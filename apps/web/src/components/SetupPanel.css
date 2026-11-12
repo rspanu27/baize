@@ -1,0 +1,125 @@
+.setup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setup-group {
+  margin: 0;
+  padding: 0.5rem 0.65rem 0.65rem;
+  border: 1px solid #2a3d33;
+  border-radius: 0.4rem;
+  min-width: 0;
+}
+
+.setup-group > legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.setup-field {
+  margin-top: 0.5rem;
+}
+
+.setup-field > label,
+.setup-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #c9d6ce;
+}
+
+.editor-panels .setup-field input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  background: #22362c;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.editor-panels .setup-field input[aria-invalid="true"] {
+  border-color: #ff8a80;
+}
+
+.editor-panels .setup-group select {
+  min-height: 2.5rem;
+}
+
+.setup-note {
+  margin: 0.3rem 0 0;
+  color: #b5c4ba;
+  font-size: 0.85rem;
+}
+
+.setup-msg {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.setup-error {
+  color: #ff9d94;
+}
+
+.setup-warning {
+  color: #ffc857;
+}
+
+.setup-advanced {
+  margin-top: 0.5rem;
+}
+
+.setup-advanced > summary {
+  cursor: pointer;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  color: #c9d6ce;
+}
+
+.setup-segmented {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.editor-panels .setup-segmented button {
+  flex: 1;
+  min-height: 2.5rem;
+}
+
+.editor-panels .setup-segmented button[aria-pressed="true"],
+.editor-panels .setup-swatch[aria-pressed="true"] {
+  background: #2f6b4d;
+  border-color: #9fe0b8;
+}
+
+.setup-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.editor-panels .setup-swatch {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #36503f;
+}
+
+.editor-panels .setup-swatch[aria-pressed="true"] {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #2f6b4d;
+}
+
+.editor-panels .setup-colour-input {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 2px solid #36503f;
+  border-radius: 0.35rem;
+  background: none;
+}
