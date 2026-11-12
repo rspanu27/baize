@@ -1,4 +1,4 @@
-# Baize task board
+﻿# Baize task board
 
 Status: `todo`, `doing`, `done`, `blocked`. Update a task's status when it starts and when it finishes.
 
@@ -49,7 +49,7 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
-| 2.1 | `DiagramDoc`, `resolveDoc`, store with undo/redo, `loadLayout` | L | 1.16, 1.6 | Store unit tests: undo/redo; loadLayout is one step | todo |
+| 2.1 | `DiagramDoc`, `resolveDoc`, store with undo/redo, `loadLayout` | L | 1.16, 1.6 | Store unit tests: undo/redo; loadLayout is one step | done |
 | 2.2 | URL codec and migration scaffold | I | 2.1 | Round-trip property test; bad input gives a clear error | todo |
 | 2.3 | Unit formatting and parsing (metric/imperial) | I | 0.3 | Unit tests | todo |
 | 2.4 | Aim geometry: ghost ball, cut angle, line angles, distances | I | 0.3 | Unit tests with known angles | todo |
@@ -71,3 +71,8 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 Parallel groups: (2.2, 2.3, 2.4, 2.5) after 2.1; (2.9, 2.10) alongside 2.6 to 2.8; (2.13, 2.14, 2.15) after 2.12.
 
 Slip first if the week runs short: 2.14, 2.15, 2.16.
+
+### Notes from the project owner for Phase 2
+
+- **Aiming must be smooth (for 2.11).** In the playground the aim slider jumps by about 0.7 degrees per step because a 360 degree range is squeezed into a short slider. The editor needs aiming that can reach any angle: drag on the table without rounding, plus a fine adjustment (arrow keys or a fine-tune control) down to at least 0.01 degrees. Reported 2026-11-12.
+
