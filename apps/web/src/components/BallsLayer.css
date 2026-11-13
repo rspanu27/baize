@@ -9,13 +9,13 @@
 
 .ball-selection {
   fill: none;
-  stroke: #ffffff;
+  stroke: var(--baize-selection, #ffffff);
   stroke-opacity: 0.9;
 }
 
 .ball-focus {
   fill: none;
-  stroke: #7fd1ff;
+  stroke: var(--baize-focus, #7fd1ff);
   opacity: 0;
 }
 
@@ -25,12 +25,12 @@
 
 .ball-uncertain-ring {
   fill: none;
-  stroke: #ffb020;
+  stroke: var(--baize-uncertain, #ffb020);
   stroke-linecap: round;
 }
 
 .ball-uncertain-badge {
-  fill: #ffb020;
+  fill: var(--baize-uncertain, #ffb020);
   stroke: #3a2600;
 }
 

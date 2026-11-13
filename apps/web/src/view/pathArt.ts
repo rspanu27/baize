@@ -1,5 +1,6 @@
 import { pointOnPiece } from "../sim/pathModel";
 import type { PathMark, PathPiece, PathRole } from "../sim/pathModel";
+import type { PathLine, PathWeight } from "../doc/types";
 import type { Point, ViewTransform } from "./transform";
 
 /** Drawing constants for simulated paths. The svg viewBox is in metres, so these are metres. */
@@ -122,10 +123,49 @@ function luminance(hex: string): number {
   return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
 
-/** The stroke colour for a ball's path, given its ball colour. */
-export function pathColour(role: PathRole, ballColour: string): string {
-  if (role === "cue") return CUE_PATH_COLOUR;
-  return luminance(ballColour) < DARK_LUMINANCE ? DARK_BALL_PATH_COLOUR : ballColour;
+/** Colours with a relative luminance above this are replaced by `lightPath`, where a theme has one. */
+export const LIGHT_LUMINANCE = 0.18;
+
+export interface PathPalette {
+  cuePath: string;
+  darkPath?: string;
+  lightPath?: string;
+}
+
+const TABLE_PALETTE: PathPalette = { cuePath: CUE_PATH_COLOUR, darkPath: DARK_BALL_PATH_COLOUR };
+
+/** The stroke colour for a ball's path, given its ball colour (and the theme's palette). */
+export function pathColour(
+  role: PathRole,
+  ballColour: string,
+  palette: PathPalette = TABLE_PALETTE,
+): string {
+  if (role === "cue") return palette.cuePath;
+  const l = luminance(ballColour);
+  if (palette.darkPath !== undefined && l < DARK_LUMINANCE) return palette.darkPath;
+  if (palette.lightPath !== undefined && l > LIGHT_LUMINANCE) return palette.lightPath;
+  return ballColour;
+}
+
+/** How much the "thin" and "thick" path weights scale the stroke width. */
+export const WEIGHT_SCALE: Record<PathWeight, number> = { thin: 0.6, normal: 1, thick: 1.6 };
+
+/** Stroke width after the weight setting, rounded to a micrometre to keep the markup short. */
+export function weighted(widthM: number, weight: PathWeight): number {
+  if (weight === "normal") return widthM;
+  return Math.round(widthM * WEIGHT_SCALE[weight] * 1e6) / 1e6;
+}
+
+/**
+ * The dash pattern the path line setting asks for, in metres, or undefined for a solid line.
+ * It scales with the stroke so that thick lines keep a visible gap. Dots rely on the round
+ * line caps: a dash of almost no length is drawn as a dot as wide as the stroke.
+ */
+export function lineDash(line: PathLine, widthM: number): readonly [number, number] | undefined {
+  const f = (n: number): number => Math.round(n * 1e5) / 1e5;
+  if (line === "dashed") return [f(widthM * 5), f(widthM * 3.5)];
+  if (line === "dotted") return [0.0001, f(widthM * 2.4)];
+  return undefined;
 }
 
 export function dashArray(dash: readonly [number, number]): string {

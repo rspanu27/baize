@@ -1,11 +1,11 @@
 .aim-line {
-  stroke: #ffe27a;
+  stroke: var(--baize-aim, #ffe27a);
   stroke-linecap: round;
 }
 
 .aim-ghost {
-  fill: rgba(255, 255, 255, 0.12);
-  stroke: #ffe27a;
+  fill: var(--baize-ghost-fill, rgba(255, 255, 255, 0.12));
+  stroke: var(--baize-aim, #ffe27a);
 }
 
 .aim-surface {
@@ -24,12 +24,12 @@
 }
 
 .aim-handle-dot {
-  fill: #ffe27a;
+  fill: var(--baize-aim, #ffe27a);
   fill-opacity: 0.35;
-  stroke: #ffe27a;
+  stroke: var(--baize-aim, #ffe27a);
 }
 
 .aim-handle:focus-visible .aim-handle-dot {
   fill-opacity: 0.8;
-  stroke: #ffffff;
+  stroke: var(--baize-selection, #ffffff);
 }

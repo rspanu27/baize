@@ -1,4 +1,5 @@
 import { ballLook, stripePath } from "../view/ballLook";
+import { useDrawStyle } from "../view/drawStyleContext";
 
 /** Fraction of the radius the stripe band extends either side of the middle. */
 const STRIPE_HALF_BAND = 0.55;
@@ -16,11 +17,12 @@ export interface BallBodyProps {
 /** A ball seen from above, centred on the origin. Used on the table and in the palette. */
 export function BallBody({ kind, r }: BallBodyProps) {
   const look = ballLook(kind);
+  const { colours, ballLabels } = useDrawStyle();
   return (
     <g aria-hidden="true">
       <circle r={r} fill={look.striped ? "#fbfaf2" : look.colour} />
       {look.striped ? <path d={stripePath(r, r * STRIPE_HALF_BAND)} fill={look.colour} /> : null}
-      {look.label ? (
+      {look.label && ballLabels ? (
         <>
           <circle r={r * LABEL_DISC} fill="#fbfaf2" />
           {/* Drawn at a normal font size and scaled down: browsers clamp or misdraw the tiny
@@ -38,7 +40,13 @@ export function BallBody({ kind, r }: BallBodyProps) {
           </text>
         </>
       ) : null}
-      <circle r={r} fill="none" stroke="#000000" strokeOpacity={0.45} strokeWidth={r * 0.06} />
+      <circle
+        r={r}
+        fill="none"
+        stroke={colours.ballOutline}
+        strokeOpacity={colours.ballOutlineOpacity}
+        strokeWidth={r * colours.ballOutlineWidth}
+      />
       <circle cx={-r * 0.3} cy={-r * 0.35} r={r * 0.2} fill="#ffffff" fillOpacity={0.22} />
     </g>
   );

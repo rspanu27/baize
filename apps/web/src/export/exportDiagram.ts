@@ -3,6 +3,16 @@
  * that is on screen is copied, made self-contained, and handed to the browser as a download.
  */
 
+import { THEMES } from "../view/theme";
+import type { ThemeColours } from "../view/theme";
+
+/** The colours of the theme the live drawing says it uses ("table" when it says nothing). */
+function themeNamed(name: string | undefined): ThemeColours {
+  return name !== undefined && Object.hasOwn(THEMES, name)
+    ? THEMES[name as keyof typeof THEMES]
+    : THEMES.table;
+}
+
 /** Width of an exported PNG, in pixels, along the long side of the table. */
 export const PNG_LONG_SIDE_PX = 2000;
 
@@ -87,18 +97,21 @@ export function svgText(svg: SVGSVGElement, longSidePx = PNG_LONG_SIDE_PX, tuned
   copy.removeAttribute("class");
   copy.removeAttribute("style");
 
-  // The note sits on the bottom rail, drawn at a normal font size and scaled to the drawing.
+  // The note sits on the bottom rail (above the caption band, if there is one), drawn at a
+  // normal font size and scaled to the drawing, in the colour the theme gives rails.
+  const theme = themeNamed(svg.dataset.theme);
+  const band = Number(svg.dataset.captionBand ?? 0);
   const scale = Math.max(box.width, box.height) / 1400;
   const note = document.createElementNS("http://www.w3.org/2000/svg", "text");
   note.setAttribute(
     "transform",
-    `translate(${String(box.x + box.width - 0.03)} ${String(box.y + box.height - 0.02)}) scale(${String(scale)})`,
+    `translate(${String(box.x + box.width - 0.03)} ${String(box.y + box.height - (Number.isFinite(band) ? band : 0) - 0.02)}) scale(${String(scale)})`,
   );
   note.setAttribute("text-anchor", "end");
   note.setAttribute("font-size", "11");
   note.setAttribute("font-family", "system-ui, sans-serif");
-  note.setAttribute("fill", "#ffffff");
-  note.setAttribute("fill-opacity", "0.7");
+  note.setAttribute("fill", theme.note);
+  note.setAttribute("fill-opacity", String(theme.noteOpacity));
   note.textContent = tuned ? EXPORT_NOTE + EXPORT_TUNED_NOTE : EXPORT_NOTE;
   copy.appendChild(note);
 

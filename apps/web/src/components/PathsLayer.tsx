@@ -9,17 +9,19 @@ import {
   FINAL_OUTLINE_WIDTH_M,
   FIRST_CONTACT_RADIUS_M,
   FIRST_CONTACT_WIDTH_M,
-  MARK_COLOUR,
   POCKET_RING_RADIUS_M,
   POCKET_RING_WIDTH_M,
   SLIDING_DASH_M,
   dashArray,
+  lineDash,
   markVisible,
   pathColour,
   pathData,
   pathStyle,
   pieceRuns,
+  weighted,
 } from "../view/pathArt";
+import { useDrawStyle } from "../view/drawStyleContext";
 import { useViewTransform } from "../view/viewContext";
 
 function ballName(kind: string): string {
@@ -30,6 +32,7 @@ function ballName(kind: string): string {
 export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
   const doc = useDoc();
   const view = useViewTransform();
+  const { colours, pathLine, pathWeight } = useDrawStyle();
   if (!paths) return null;
 
   const showAll = doc.style?.showAllPaths === true;
@@ -42,8 +45,16 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
   const renderPath = (path: BallPath) => {
     const style = pathStyle(path.role, showAll);
     if (!style.visible) return null;
-    const colour = pathColour(path.role, ballLook(path.kind).colour);
-    const runs = style.emphasised ? pieceRuns(path.pieces) : [path.pieces];
+    const colour = pathColour(path.role, ballLook(path.kind).colour, colours);
+    const widthM = weighted(style.widthM, pathWeight);
+    // A dashed or dotted line is one run, so the pattern does not restart where the ball
+    // changes from sliding to rolling.
+    const patterned = lineDash(pathLine, widthM);
+    const runs = patterned
+      ? [path.pieces]
+      : style.emphasised
+        ? pieceRuns(path.pieces)
+        : [path.pieces];
     const title =
       path.role === "first-object"
         ? `${ballName(path.kind)} path (first ball hit)`
@@ -62,12 +73,16 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
             d={pathData(run, view)}
             fill="none"
             stroke={colour}
-            strokeWidth={style.widthM}
+            strokeWidth={widthM}
             strokeOpacity={style.opacity}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray={
-              style.emphasised && run[0]?.sliding ? dashArray(SLIDING_DASH_M) : undefined
+              patterned
+                ? dashArray(patterned)
+                : style.emphasised && run[0]?.sliding
+                  ? dashArray(SLIDING_DASH_M)
+                  : undefined
             }
           />
         ))}
@@ -96,7 +111,7 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
               cy={c.y}
               r={POCKET_RING_RADIUS_M}
               fill="none"
-              stroke={MARK_COLOUR}
+              stroke={colours.mark}
               strokeWidth={POCKET_RING_WIDTH_M}
             >
               <title>{`${ballName(kind)} potted`}</title>
@@ -112,7 +127,7 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
               cy={c.y}
               r={FIRST_CONTACT_RADIUS_M}
               fill="none"
-              stroke={MARK_COLOUR}
+              stroke={colours.mark}
               strokeWidth={FIRST_CONTACT_WIDTH_M}
             >
               <title>first contact</title>
@@ -126,7 +141,7 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
             cx={c.x}
             cy={c.y}
             r={m.kind === "cushion" ? CUSHION_DOT_RADIUS_M : CONTACT_DOT_RADIUS_M}
-            fill={MARK_COLOUR}
+            fill={colours.mark}
             fillOpacity={0.9}
           >
             <title>{m.kind === "cushion" ? "cushion contact" : "ball contact"}</title>
@@ -146,7 +161,7 @@ export function PathsLayer({ paths }: { paths: PathModel | undefined }) {
             cy={c.y}
             r={r}
             fill="none"
-            stroke={MARK_COLOUR}
+            stroke={colours.mark}
             strokeOpacity={0.85}
             strokeWidth={FINAL_OUTLINE_WIDTH_M}
             strokeDasharray={dashArray(FINAL_OUTLINE_DASH_M)}

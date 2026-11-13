@@ -1,10 +1,10 @@
 .measure-line {
-  stroke: #7fd1ff;
+  stroke: var(--baize-measure, #7fd1ff);
   stroke-linecap: round;
 }
 
 .measure-end {
-  fill: #7fd1ff;
+  fill: var(--baize-measure, #7fd1ff);
 }
 
 .measure-draft {
@@ -12,8 +12,8 @@
 }
 
 .measure-label {
-  fill: #ffffff;
-  stroke: #0b1612;
+  fill: var(--baize-measure-label, #ffffff);
+  stroke: var(--baize-measure-label-outline, #0b1612);
   stroke-width: 3.5;
   paint-order: stroke;
   stroke-linejoin: round;

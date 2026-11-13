@@ -6,6 +6,7 @@ import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
 import { DebugPanel } from "./DebugPanel";
 import { ExportPanel } from "./ExportPanel";
+import { LookPanel } from "./LookPanel";
 import { MeasureLayer } from "./MeasureLayer";
 import { MeasurePanel } from "./MeasurePanel";
 import { PathsLayer } from "./PathsLayer";
@@ -50,7 +51,7 @@ export function Editor() {
           }}
         />
         {scene ? (
-          <TableView scene={scene} orientation="landscape">
+          <TableView scene={scene} orientation="landscape" style={doc.style}>
             {result && playingAt !== undefined ? (
               <>
                 <PathsLayer paths={paths} />
@@ -84,6 +85,7 @@ export function Editor() {
         <SetupPanel />
         <ShotPanel />
         <MeasurePanel />
+        <LookPanel />
         <SharePanel />
         <ExportPanel />
         <DebugPanel />

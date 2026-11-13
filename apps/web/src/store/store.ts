@@ -62,7 +62,7 @@ export interface EditorState {
   setTable: (table: DocTable, ballSet?: DocBallSet) => void;
   setBallSet: (ballSet: DocBallSet) => void;
   setCloth: (cloth: ClothSpec, mode?: ChangeMode) => void;
-  setStyle: (patch: DiagramStyle) => void;
+  setStyle: (patch: DiagramStyle, mode?: ChangeMode) => void;
 
   /** How far along the aim line the aim handle sits, in metres (not part of the document). */
   aimHandleM: number;
@@ -156,8 +156,8 @@ export const useEditor = create<EditorState>((set) => {
     setCloth: (cloth, mode) => {
       change((doc) => setCloth(doc, cloth), mode);
     },
-    setStyle: (patch) => {
-      change((doc) => setStyle(doc, patch));
+    setStyle: (patch, mode) => {
+      change((doc) => setStyle(doc, patch), mode);
     },
 
     aimHandleM: 0.35,
