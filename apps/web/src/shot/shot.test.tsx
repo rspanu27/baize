@@ -13,8 +13,10 @@ import {
   aimAt,
   aimGuide,
   aimKeyStep,
+  aimReadout,
   angleToDegrees,
   clampTip,
+  departureAngle,
   describeTip,
   nudgeAngle,
   rollInTableLengths,
@@ -186,5 +188,112 @@ describe("ShotPanelView", () => {
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Aim at the selected ball/);
     expect(html).toMatch(/type="checkbox"[^>]*checked=""/);
     expect(setStyle(doc, { showAllPaths: false }).style).toBeUndefined();
+  });
+});
+
+describe("squirt in the aim guide", () => {
+  /** Cue ball and one object ball 1.2 m up the table, dead straight, aimed full ball. */
+  function straightIn(side: number, speedMps = 2): DiagramDoc {
+    const base = loadLayout(
+      newDoc("pool-9@1"),
+      {
+        balls: [
+          { kind: "cue", x: 0.6, y: 0.4 },
+          { kind: "3", x: 0.6, y: 1.6 },
+        ],
+      },
+      { source: "manual", mode: "replace" },
+    );
+    return setShot(base, {
+      aimAngleRad: Math.PI / 2,
+      speedMps,
+      tipOffset: { side, vertical: 0 },
+    });
+  }
+  const sceneOf = (doc: DiagramDoc) => must(simulateDoc(doc).scene, "scene");
+
+  test("without side the cue ball leaves along the aim line exactly", () => {
+    const scene = sceneOf(straightIn(0));
+    expect(departureAngle(scene)).toBe(Math.PI / 2);
+    const guide = must(aimGuide(scene), "guide");
+    expect(guide.departureAngleRad).toBe(Math.PI / 2);
+    expect(guide.to).toEqual(guide.ghost);
+    expect(must(aimReadout(scene), "readout").cutAngleRad).toBeCloseTo(0, 9);
+  });
+
+  test("with right-hand side it leaves to the left of the aim line, by a degree or two", () => {
+    const scene = sceneOf(straightIn(0.5));
+    const off = must(departureAngle(scene), "angle") - Math.PI / 2;
+    // Counter-clockwise is to the left of the direction of the shot.
+    expect(off / DEG).toBeGreaterThan(1);
+    expect(off / DEG).toBeLessThan(3);
+    // Left-hand side: the mirror image.
+    const left = must(departureAngle(sceneOf(straightIn(-0.5))), "angle") - Math.PI / 2;
+    expect(left).toBeCloseTo(-off, 12);
+  });
+
+  test("a lighter cue end squirts less", () => {
+    const scene = sceneOf(straightIn(0.5));
+    const usual = must(departureAngle(scene), "angle") - Math.PI / 2;
+    const light = must(departureAngle(scene, 200), "angle") - Math.PI / 2;
+    expect(light).toBeGreaterThan(0);
+    expect(light).toBeLessThan(usual / 3);
+  });
+
+  test("the ghost ball is where the simulated cue ball is at first contact, off the aim line", () => {
+    const doc = straightIn(0.5);
+    const simulation = simulateDoc(doc);
+    const scene = must(simulation.scene, "scene");
+    const guide = must(aimGuide(scene), "guide");
+    const ghost = must(guide.ghost, "ghost");
+    // Aimed straight up the table from x = 0.6: the ghost ball is to the left of that line.
+    expect(ghost.x).toBeLessThan(0.6 - 0.01);
+    // The aim line itself still runs straight up the table, as far as the ball travels.
+    expect(guide.to.x).toBeCloseTo(0.6, 12);
+    expect(guide.to.y - guide.from.y).toBeCloseTo(Math.hypot(ghost.x - 0.6, ghost.y - 0.4), 12);
+    // The simulation agrees about where the first contact is.
+    const result = must(simulation.outcome.result, "result");
+    const hit = must(
+      result.events.find((e) => e.type === "ball-ball"),
+      "contact",
+    );
+    const cueTrack = must(
+      result.tracks.find((t) => t.id === scene.shot?.cueBallId),
+      "track",
+    );
+    const seg = must(
+      [...cueTrack.segments].reverse().find((s) => s.t0 < hit.t),
+      "segment",
+    );
+    const tau = hit.t - seg.t0;
+    const at = {
+      x: seg.r0.x + tau * (seg.v0.x + 0.5 * seg.a.x * tau),
+      y: seg.r0.y + tau * (seg.v0.y + 0.5 * seg.a.y * tau),
+    };
+    expect(Math.hypot(at.x - ghost.x, at.y - ghost.y)).toBeLessThan(1e-6);
+  });
+
+  test("the cut angle is that of the squirted line, not of the aim line", () => {
+    // Aimed full ball; the squirt turns it into a cut.
+    const readout = must(aimReadout(sceneOf(straightIn(0.5))), "readout");
+    expect(readout.cutAngleRad / DEG).toBeGreaterThan(20);
+    expect(must(aimReadout(sceneOf(straightIn(0))), "readout").cutAngleRad).toBeCloseTo(0, 9);
+  });
+
+  test("when squirt takes the cue ball past the ball it was aimed at, there is no ghost ball", () => {
+    // A thin cut on the left edge of the ball, with right-hand side: the ball squirts further
+    // left and misses.
+    const base = straightIn(0.5);
+    const thin = Math.PI / 2 + Math.asin((2 * 0.028575 - 0.0005) / 1.2);
+    const noSide = sceneOf(
+      setShot(base, { aimAngleRad: thin, tipOffset: { side: 0, vertical: 0 } }),
+    );
+    expect(aimGuide(noSide)?.ghost).toBeDefined();
+    const withSide = must(aimGuide(sceneOf(setShot(base, { aimAngleRad: thin }))), "guide");
+    expect(withSide.ghost).toBeUndefined();
+    expect(withSide.targetBallId).toBeUndefined();
+    expect(
+      Math.hypot(withSide.to.x - withSide.from.x, withSide.to.y - withSide.from.y),
+    ).toBeCloseTo(0.6, 12);
   });
 });

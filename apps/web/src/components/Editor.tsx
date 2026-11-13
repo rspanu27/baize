@@ -88,8 +88,9 @@ export function Editor() {
         <ExportPanel />
         <DebugPanel />
         <p className="editor-note">
-          Physics v2: throw, squirt and nap are modelled; swerve is not. The yellow aim line is
-          where the cue points; with side the ball leaves slightly off it.
+          Physics v2: throw, squirt and nap are modelled; swerve is not. The dashed yellow line is
+          where the cue points; with side the ball leaves slightly off it, and the ghost ball shows
+          where it really arrives.
         </p>
       </aside>
     </div>

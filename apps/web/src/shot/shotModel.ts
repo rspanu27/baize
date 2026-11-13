@@ -1,3 +1,5 @@
+import { strike } from "@baize/physics";
+import { BALL_TO_CUE_END_MASS_RATIO } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 import { firstBallOnLine } from "../geometry/aim";
 import type { Point } from "../geometry/aim";
@@ -108,34 +110,93 @@ export function rollInTableLengths(speedMps: number, scene: Scene): number {
 export interface AimGuide {
   /** Cue ball centre. */
   from: Point;
-  /** Where the aim line is drawn to: the ghost ball, or a point along the line. */
+  /**
+   * Where the aim line is drawn to. The aim line is where the cue points; it is as long as
+   * the cue ball's run to its first ball, or a fixed length when there is none.
+   */
   to: Point;
-  /** Cue ball centre at first contact with a ball, if the line meets one before a cushion. */
+  /**
+   * Direction the cue ball actually leaves in. With side it is a little off the aim line,
+   * away from the side that was hit (squirt); without side it is the aim direction exactly.
+   */
+  departureAngleRad: number;
+  /** Cue ball centre at first contact with a ball, if its line meets one before a cushion. */
   ghost: Point | undefined;
-  /** Id of the ball the line meets first. */
+  /** Id of the ball the cue ball meets first. */
   targetBallId: string | undefined;
 }
 
-/** Length of the aim line when it meets no ball, metres. */
+/** Length of the aim line when the cue ball meets no ball, metres. */
 const FREE_AIM_LENGTH_M = 0.6;
 
-/** The straight aim line from the cue ball, up to the first ball on it. */
-export function aimGuide(scene: Scene): AimGuide | undefined {
+/**
+ * The direction the cue ball leaves in: the aim direction turned by the squirt that the
+ * physics gives this hit. `endMassRatio` is ball mass over cue end mass.
+ */
+export function departureAngle(
+  scene: Scene,
+  endMassRatio: number = BALL_TO_CUE_END_MASS_RATIO,
+): number | undefined {
   const shot = scene.shot;
   const cue = shot ? scene.balls.find((b) => b.id === shot.cueBallId) : undefined;
   if (!shot || !cue) return undefined;
+  if (shot.tipOffset.side === 0) return shot.aimAngleRad;
+  try {
+    const v = strike(
+      cue.radiusM,
+      {
+        ballId: cue.id,
+        aimAngleRad: shot.aimAngleRad,
+        speedMps: shot.speedMps,
+        tipOffset: shot.tipOffset,
+        cueEndMassKg: cue.massKg / endMassRatio,
+      },
+      cue.massKg,
+    ).velocity;
+    const turned = Math.atan2(v.y, v.x) - shot.aimAngleRad;
+    // The squirt itself, as a small angle either side of zero, added to the stored aim.
+    return shot.aimAngleRad + Math.atan2(Math.sin(turned), Math.cos(turned));
+  } catch {
+    // A shot the physics refuses (a miscue) has no departure line of its own.
+    return shot.aimAngleRad;
+  }
+}
+
+/**
+ * The aim line from the cue ball, and the first ball the cue ball meets on the line it
+ * actually leaves along (see `departureAngle`). Curving after the strike is not modelled, so
+ * that line is straight.
+ */
+export function aimGuide(
+  scene: Scene,
+  endMassRatio: number = BALL_TO_CUE_END_MASS_RATIO,
+): AimGuide | undefined {
+  const shot = scene.shot;
+  const cue = shot ? scene.balls.find((b) => b.id === shot.cueBallId) : undefined;
+  const departureAngleRad = departureAngle(scene, endMassRatio);
+  if (!shot || !cue || departureAngleRad === undefined) return undefined;
   const others = scene.balls.filter((b) => b.id !== cue.id);
-  const hit = firstBallOnLine(cue, shot.aimAngleRad, cue.radiusM, others);
+  const hit = firstBallOnLine(cue, departureAngleRad, cue.radiusM, others);
   const from = { x: cue.x, y: cue.y };
-  if (hit) return { from, to: hit.ghost, ghost: hit.ghost, targetBallId: hit.id };
+  const squirted = departureAngleRad !== shot.aimAngleRad;
+  if (hit && !squirted) {
+    return { from, to: hit.ghost, departureAngleRad, ghost: hit.ghost, targetBallId: hit.id };
+  }
+  const length = hit
+    ? Math.sqrt(
+        (hit.ghost.x - cue.x) * (hit.ghost.x - cue.x) +
+          (hit.ghost.y - cue.y) * (hit.ghost.y - cue.y),
+      )
+    : FREE_AIM_LENGTH_M;
   return {
     from,
     to: {
-      x: cue.x + FREE_AIM_LENGTH_M * Math.cos(shot.aimAngleRad),
-      y: cue.y + FREE_AIM_LENGTH_M * Math.sin(shot.aimAngleRad),
+      x: cue.x + length * Math.cos(shot.aimAngleRad),
+      y: cue.y + length * Math.sin(shot.aimAngleRad),
     },
-    ghost: undefined,
-    targetBallId: undefined,
+    departureAngleRad,
+    ghost: hit?.ghost,
+    targetBallId: hit?.id,
   };
 }
 
@@ -179,15 +240,21 @@ export interface AimReadout {
   targetBallId: string;
 }
 
-/** The cut angle and distance of the straight shot along the aim line, if it meets a ball. */
-export function aimReadout(scene: Scene): AimReadout | undefined {
-  const guide = aimGuide(scene);
+/**
+ * The cut angle and distance of the shot along the line the cue ball leaves on (the aim line
+ * turned by squirt), if it meets a ball.
+ */
+export function aimReadout(
+  scene: Scene,
+  endMassRatio: number = BALL_TO_CUE_END_MASS_RATIO,
+): AimReadout | undefined {
+  const guide = aimGuide(scene, endMassRatio);
   const shot = scene.shot;
   if (!guide?.ghost || guide.targetBallId === undefined || !shot) return undefined;
   const target = scene.balls.find((b) => b.id === guide.targetBallId);
   if (!target) return undefined;
-  const tx = Math.cos(shot.aimAngleRad);
-  const ty = Math.sin(shot.aimAngleRad);
+  const tx = Math.cos(guide.departureAngleRad);
+  const ty = Math.sin(guide.departureAngleRad);
   const cx = target.x - guide.ghost.x;
   const cy = target.y - guide.ghost.y;
   const dx = guide.ghost.x - guide.from.x;

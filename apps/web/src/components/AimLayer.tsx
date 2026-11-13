@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import type { Scene } from "../doc/resolve";
 import { aimAt, aimGuide, aimKeyStep, angleToDegrees, nudgeAngle } from "../shot/shotModel";
+import { useTuning } from "../sim/tuning";
 import { useEditor } from "../store/store";
 import { RAIL_WIDTH_M } from "../view/constants";
 import { clientToScreen } from "../view/pointer";
@@ -117,6 +118,10 @@ export function AimSurface({ scene }: { scene: Scene }) {
 /**
  * The aim line, the ghost ball and the aim handle.
  *
+ * The dashed aim line is where the cue points. The ghost ball is where the cue ball will
+ * really be at first contact: with side the ball squirts a little off the aim line, so the
+ * ghost ball then sits beside the line, not on it.
+ *
  * Dragging the handle (or the cloth) points the shot exactly at the pointer. The handle stays
  * at the distance it was dragged to, so pulling it further from the cue ball gives finer
  * control: at one metre, a millimetre of movement is about 0.06 degrees. With the handle
@@ -133,7 +138,8 @@ export function AimLayer({ scene }: { scene: Scene }) {
   );
   const drag = useAimDrag(scene);
 
-  const guide = aimGuide(scene);
+  const endMassRatio = useTuning().cueEndMassRatio;
+  const guide = aimGuide(scene, endMassRatio);
   const shot = scene.shot;
   if (!guide || !shot) return null;
 

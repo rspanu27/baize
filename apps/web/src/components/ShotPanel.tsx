@@ -3,6 +3,7 @@ import type { PointerEvent } from "react";
 import type { Scene } from "../doc/resolve";
 import type { DiagramDoc, DocShot } from "../doc/types";
 import type { PathModel } from "../sim/pathModel";
+import { currentTuning } from "../sim/tuning";
 import { simulationFor } from "../sim/useSimulation";
 import {
   AIM_STEPS_DEG,
@@ -112,7 +113,7 @@ export function ShotPanelView({
   const first = paths?.firstObjectBallId
     ? scene.balls.find((b) => b.id === paths.firstObjectBallId)
     : undefined;
-  const readout = aimReadout(scene);
+  const readout = aimReadout(scene, currentTuning().cueEndMassRatio);
   const potted = paths?.finals.filter((f) => f.pocketed) ?? [];
 
   return (
