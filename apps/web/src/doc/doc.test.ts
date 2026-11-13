@@ -326,10 +326,8 @@ describe("setStyle (schema version 2 fields)", () => {
 
   test("a caption is kept to one clean line of limited length", () => {
     const doc = newDoc("pool-9@1");
-    expect(setStyle(doc, { caption: "  Stop
- shot	 drill" }).style?.caption).toBe(
-      "Stop shot drill",
-    );
+    const messy = ["  Stop", " shot", " drill"].join(String.fromCharCode(10, 9));
+    expect(setStyle(doc, { caption: messy }).style?.caption).toBe("Stop shot drill");
     expect(setStyle(doc, { caption: "x".repeat(500) }).style?.caption).toHaveLength(140);
     const cleared = setStyle(setStyle(doc, { caption: "A" }), { caption: "   " });
     expect("style" in cleared).toBe(false);
@@ -337,4 +335,3 @@ describe("setStyle (schema version 2 fields)", () => {
     expect(setStyle(doc, { caption: "Stop " }).style?.caption).toBe("Stop ");
   });
 });
-
