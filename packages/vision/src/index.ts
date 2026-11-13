@@ -9,6 +9,8 @@ export {
   tableToImage,
 } from "./geometry/homography";
 export { importPhoto } from "./importPhoto";
+export { describeSummary, quantile, scorePhoto, summarise } from "./evaluate";
+export type { PhotoScore, PlacedBall, SetSummary } from "./evaluate";
 export { ballInPhoto, findBalls } from "./balls/findBalls";
 export type { FoundBall } from "./balls/findBalls";
 export { findTable } from "./table/findTable";
