@@ -1,10 +1,12 @@
+import { CUSHION_TOP_DEPTH_M } from "@baize/tables";
+
 /**
  * Drawing constants for the table, in metres. These are about how the table is painted, not
  * about its physics; the playing area and pockets always come from the table spec.
  */
 
-/** How far the cushion rubber is drawn behind the nose line. */
-export const CUSHION_DEPTH_M = 0.05;
+/** How far the cushion is drawn behind the nose line: the value the photo import also uses. */
+export const CUSHION_DEPTH_M = CUSHION_TOP_DEPTH_M;
 
 /** Width of the wooden rail beyond the cushion rubber. */
 export const RAIL_WOOD_M = 0.12;

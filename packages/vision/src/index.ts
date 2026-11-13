@@ -8,6 +8,9 @@ export {
   invertHomography,
   tableToImage,
 } from "./geometry/homography";
+export { findTable } from "./table/findTable";
+export type { FoundTable } from "./table/findTable";
+export type { ClothModel } from "./table/clothModel";
 export {
   ASSUMED_FOCAL_PER_LONG_SIDE,
   apparentRadiusPx,

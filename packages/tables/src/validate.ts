@@ -12,6 +12,16 @@ import type {
  * UNVERIFIED are modelling choices for which no published figure was found; they are listed
  * in the task report and should be revisited when better data turns up.
  */
+/**
+ * Distance from the cushion nose back to where the cloth-covered cushion meets the top of
+ * the wooden rail, seen from above, metres. The photo import needs it: in a photo the area of
+ * cloth colour ends at the rail, not at the nose, and the playing area is this much inside.
+ * UNVERIFIED: about 2 in (50 mm), from the K-66 pool profile (1 3/16 in of rubber) plus the
+ * cloth-covered strip behind it; no maker's drawing was consulted, and snooker cushions and
+ * individual tables differ by a centimetre or more. The corners can always be placed by hand.
+ */
+export const CUSHION_TOP_DEPTH_M = 0.05;
+
 export const TABLE_DEFAULTS = {
   /**
    * Accepted ball diameter range, metres. This is a Baize design bound, not a published

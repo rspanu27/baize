@@ -16,6 +16,7 @@ export {
 } from "./presets/cloth";
 export type { ClothColour, ClothCoefficients } from "./presets/cloth";
 export {
+  CUSHION_TOP_DEPTH_M,
   TABLE_DEFAULTS,
   pocketCutBackM,
   pocketDropCircles,

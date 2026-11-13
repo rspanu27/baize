@@ -62,6 +62,7 @@ export function cameraOf(pose: Pose): Camera {
   return {
     focalPx: pose.focalPx,
     focalSource: "estimated",
+    focalMisfit: 0,
     centre: { u: pose.widthPx / 2, v: pose.heightPx / 2 },
     rotation,
     position: pose.position,

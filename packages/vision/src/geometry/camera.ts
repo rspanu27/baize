@@ -78,9 +78,17 @@ export function cameraFromHomography(
   const tilt = (c1 * c1 + c2 * c2) * longSide * longSide;
   let focalSq = (n1 * d1 + n2 * d2) / (d1 * d1 + d2 * d2);
   let focalSource: Camera["focalSource"] = "estimated";
-  if (!(tilt > FOCAL_DEGENERATE * inPlane) || !(focalSq > 0) || !Number.isFinite(focalSq)) {
+  // Residual of the two equations at the least-squares answer, relative to their size.
+  const e1 = n1 - focalSq * d1;
+  const e2 = n2 - focalSq * d2;
+  let focalMisfit = Math.sqrt((e1 * e1 + e2 * e2) / (n1 * n1 + n2 * n2 + 1e-300));
+  const determined = tilt > FOCAL_DEGENERATE * inPlane;
+  if (!determined || !(focalSq > 0) || !Number.isFinite(focalSq)) {
     focalSq = ASSUMED_FOCAL_PER_LONG_SIDE * longSide * (ASSUMED_FOCAL_PER_LONG_SIDE * longSide);
     focalSource = "assumed";
+    // Looking straight down says nothing either way. A view that should determine the focal
+    // length but gives an impossible one means the corners are not those of this rectangle.
+    focalMisfit = determined ? 1 : 0;
   }
   const f = Math.sqrt(focalSq);
 
@@ -139,7 +147,7 @@ export function cameraFromHomography(
     r2[2] as number,
     r3[2],
   ];
-  return { focalPx: f, focalSource, centre: { u: cx, v: cy }, rotation, position };
+  return { focalPx: f, focalSource, focalMisfit, centre: { u: cx, v: cy }, rotation, position };
 }
 
 /** Where a point in space (table coordinates, `z` up from the cloth) appears in the photo. */

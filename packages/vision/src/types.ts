@@ -49,6 +49,13 @@ export interface Camera {
   focalPx: number;
   /** "estimated" from the corners, or "assumed" when the view does not determine it. */
   focalSource: "estimated" | "assumed";
+  /**
+   * How badly the two equations for the focal length disagree, from 0 (they agree: the
+   * corners are those of a rectangle of the stated size) towards 1. Used to tell which pair
+   * of sides of a found quadrilateral are the long ones. 0 when the camera looks straight
+   * down (nothing can be said), 1 when the corners give an impossible focal length.
+   */
+  focalMisfit: number;
   /** Principal point (the middle of the photo). */
   centre: ImagePoint;
   /** Rotation from table to camera coordinates (camera: x right, y down, z forward). */
