@@ -9,7 +9,7 @@ import { clientToScreen } from "../view/pointer";
 import { snapDistanceFor, snapPoint } from "../view/snap";
 import type { Point, ViewTransform } from "../view/transform";
 import { useViewTransform } from "../view/viewContext";
-import { BallBody } from "./BallBody";
+import { BallBody, LABEL_UNITS } from "./BallBody";
 import "./BallsLayer.css";
 
 interface BallItemProps {
@@ -125,11 +125,10 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
           />
           <text
             className="ball-uncertain-mark"
-            x={r * 1.1}
-            y={-r * 1.1}
+            transform={`translate(${String(r * 1.1)} ${String(-r * 1.1)}) scale(${String(r / LABEL_UNITS)})`}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={r * 0.75}
+            fontSize={LABEL_UNITS * 0.75}
           >
             ?
           </text>

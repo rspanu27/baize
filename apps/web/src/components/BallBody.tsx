@@ -4,6 +4,8 @@ import { ballLook, stripePath } from "../view/ballLook";
 const STRIPE_HALF_BAND = 0.55;
 /** Radius of the white number disc, as a fraction of the ball radius. */
 const LABEL_DISC = 0.46;
+/** The ball radius in the units the label text is drawn in, before it is scaled to size. */
+export const LABEL_UNITS = 32;
 
 export interface BallBodyProps {
   kind: string;
@@ -21,10 +23,13 @@ export function BallBody({ kind, r }: BallBodyProps) {
       {look.label ? (
         <>
           <circle r={r * LABEL_DISC} fill="#fbfaf2" />
+          {/* Drawn at a normal font size and scaled down: browsers clamp or misdraw the tiny
+              font sizes that a drawing in metres would need. */}
           <text
+            transform={`scale(${String(r / LABEL_UNITS)})`}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={r * (look.label.length > 1 ? 0.5 : 0.62)}
+            fontSize={LABEL_UNITS * (look.label.length > 1 ? 0.5 : 0.62)}
             fontWeight={700}
             fontFamily="system-ui, sans-serif"
             fill="#141414"

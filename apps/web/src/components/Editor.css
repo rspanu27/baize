@@ -1,19 +1,28 @@
+/* The page never scrolls: the table stays in view and the panels scroll on their own. */
 .editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20rem;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   padding: 1rem;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   box-sizing: border-box;
-  align-items: start;
+  overflow: hidden;
 }
 
 .editor-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   min-width: 0;
+  min-height: 0;
 }
 
 .editor-table .table-view {
-  max-height: calc(100vh - 2rem);
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
 }
 
 .editor-panels {
@@ -22,6 +31,9 @@
   border-radius: 0.5rem;
   padding: 1rem;
   font-size: 0.9rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .editor-title {
@@ -83,10 +95,12 @@
 @media (max-width: 800px) {
   .editor {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 56fr) minmax(0, 44fr);
+    gap: 0.5rem;
     padding: 0.5rem;
   }
 
-  .editor-table .table-view {
-    max-height: none;
+  .editor-table {
+    gap: 0.5rem;
   }
 }

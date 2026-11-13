@@ -57,6 +57,7 @@ export function TableView({ scene, orientation, children }: TableViewProps) {
       <svg
         className="table-view"
         viewBox={`${String(box.x)} ${String(box.y)} ${String(box.width)} ${String(box.height)}`}
+        preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label={`${table.name}, seen from above`}
       >

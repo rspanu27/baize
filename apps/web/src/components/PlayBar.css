@@ -1,0 +1,52 @@
+.play-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  background: #18261f;
+  border: 1px solid #2a3d33;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.play-bar button,
+.play-bar select {
+  font: inherit;
+  color: inherit;
+  background: #22362c;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  min-height: 2.5rem;
+}
+
+.play-bar button.play-main {
+  background: #2f7d5b;
+  border-color: #3f9a72;
+  font-weight: 600;
+  min-width: 7.5rem;
+}
+
+.play-bar button:focus-visible,
+.play-bar select:focus-visible {
+  outline: 2px solid #7fd1ff;
+  outline-offset: 2px;
+}
+
+.play-scrub {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+}
+
+.play-time {
+  font-variant-numeric: tabular-nums;
+  color: #a9bcb1;
+  white-space: nowrap;
+}
+
+.play-hint {
+  margin: 0;
+  color: #a9bcb1;
+}

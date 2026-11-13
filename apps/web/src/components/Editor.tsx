@@ -1,10 +1,13 @@
+import { usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
-import { useDoc } from "../store/store";
+import { useDoc, useEditor } from "../store/store";
 import { useOrientation } from "../view/useOrientation";
-import { AimLayer } from "./AimLayer";
+import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
 import { PathsLayer } from "./PathsLayer";
+import { PlayBar } from "./PlayBar";
+import { PlaybackLayer } from "./PlaybackLayer";
 import { SetupPanel } from "./SetupPanel";
 import { SharePanel } from "./SharePanel";
 import { ShotPanel } from "./ShotPanel";
@@ -12,23 +15,50 @@ import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
 
 /**
- * The editor shell: the table on one side, panels on the other. Each part is its own
- * component so that they can be built independently.
+ * The editor shell: the play bar and the table on one side, panels on the other. The page
+ * itself never scrolls: the table stays in view and the panels scroll on their own.
  */
 export function Editor() {
   const doc = useDoc();
+  const setShot = useEditor((s) => s.setShot);
+  const continueFromShot = useEditor((s) => s.continueFromShot);
   const simulation = useSimulation(doc);
   const orientation = useOrientation();
-  const { scene, problems, paths } = simulation;
+  const { scene, problems, paths, outcome } = simulation;
+  const result = outcome.result;
+  const playback = usePlayback(doc, result?.durationS ?? 0);
+  const playingAt = result ? playback.t : undefined;
 
   return (
     <div className="editor">
       <main className="editor-table">
+        <PlayBar
+          hasCueBall={scene?.balls.some((b) => b.kind === "cue") === true}
+          hasShot={scene?.shot !== undefined}
+          durationS={result?.durationS}
+          playback={playback}
+          onAddShot={() => {
+            setShot({});
+          }}
+          onContinue={() => {
+            if (paths) continueFromShot(paths.finals);
+          }}
+        />
         {scene ? (
           <TableView scene={scene} orientation={orientation}>
-            <PathsLayer paths={paths} />
-            <BallsLayer scene={scene} />
-            <AimLayer scene={scene} />
+            {result && playingAt !== undefined ? (
+              <>
+                <PathsLayer paths={paths} />
+                <PlaybackLayer scene={scene} result={result} t={playingAt} />
+              </>
+            ) : (
+              <>
+                <AimSurface scene={scene} />
+                <PathsLayer paths={paths} />
+                <BallsLayer scene={scene} />
+                <AimLayer scene={scene} />
+              </>
+            )}
           </TableView>
         ) : (
           <p className="editor-problem">This diagram cannot be shown.</p>

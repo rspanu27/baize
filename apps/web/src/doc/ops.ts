@@ -192,6 +192,40 @@ export function clearShot(doc: DiagramDoc): DiagramDoc {
   return rest;
 }
 
+/** Where a shot left one ball. */
+export interface ShotFinal {
+  ballId: string;
+  position: { x: number; y: number };
+  /** Set when the ball dropped into a pocket. */
+  pocketed?: string | undefined;
+}
+
+/**
+ * The table after a shot: every ball where the shot left it, potted balls gone. The shot
+ * settings are kept if the cue ball is still on the table, ready for the next shot.
+ */
+export function continueFromShot(doc: DiagramDoc, finals: readonly ShotFinal[]): DiagramDoc {
+  const end = new Map(finals.map((f) => [f.ballId, f]));
+  let changed = false;
+  const balls: DocBall[] = [];
+  for (const b of doc.balls) {
+    const f = end.get(b.id);
+    if (!f) {
+      balls.push(b);
+    } else if (f.pocketed !== undefined) {
+      changed = true;
+    } else if (!Number.isFinite(f.position.x) || !Number.isFinite(f.position.y)) {
+      balls.push(b);
+    } else if (f.position.x !== b.x || f.position.y !== b.y) {
+      changed = true;
+      balls.push({ ...b, x: f.position.x, y: f.position.y });
+    } else {
+      balls.push(b);
+    }
+  }
+  return changed ? settle({ ...doc, balls }) : doc;
+}
+
 /**
  * Changes the table. Ball positions are scaled with the playing area, so a layout keeps its
  * shape on a table of another size; balls that do not exist in the new ball set are dropped.

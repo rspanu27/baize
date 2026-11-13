@@ -8,20 +8,28 @@
   stroke: #ffe27a;
 }
 
+.aim-surface {
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .aim-handle {
-  fill: #ffe27a;
-  fill-opacity: 0.35;
-  stroke: #ffe27a;
   cursor: grab;
   touch-action: none;
+  outline: none;
 }
 
 .aim-handle:active {
   cursor: grabbing;
 }
 
-.aim-handle:focus-visible {
-  outline: none;
+.aim-handle-dot {
+  fill: #ffe27a;
+  fill-opacity: 0.35;
+  stroke: #ffe27a;
+}
+
+.aim-handle:focus-visible .aim-handle-dot {
   fill-opacity: 0.8;
   stroke: #ffffff;
 }

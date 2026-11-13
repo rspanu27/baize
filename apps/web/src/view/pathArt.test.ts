@@ -36,12 +36,12 @@ function piece(
 describe("pathData", () => {
   test("one straight piece, landscape: screen = (y, x)", () => {
     const d = pathData([piece([0.5, 0.5], [0.5, 1], [0.5, 1.5])], landscape);
-    expect(d).toBe("M0.5 0.5 Q1 0.5 1.5 0.5");
+    expect(d).toBe("M0.5 0.5 L1.5 0.5");
   });
 
   test("one straight piece, portrait: screen = (x, length - y)", () => {
     const d = pathData([piece([0.5, 0.5], [0.5, 1], [0.5, 1.5])], portrait);
-    expect(d).toBe("M0.5 2.04 Q0.5 1.54 0.5 1.04");
+    expect(d).toBe("M0.5 2.04 L0.5 1.04");
   });
 
   test("contiguous pieces share one M; a gap starts a new one", () => {
@@ -50,7 +50,7 @@ describe("pathData", () => {
     const c = piece([0.4, 0.4], [0.4, 0.5], [0.4, 0.6]);
     expect(pathData([a, b], landscape).match(/M/g)).toHaveLength(1);
     expect(pathData([a, b, c], landscape).match(/M/g)).toHaveLength(2);
-    expect(pathData([a, b], landscape).match(/Q/g)).toHaveLength(2);
+    expect(pathData([a, b], landscape).match(/L/g)).toHaveLength(2);
   });
 
   test("no NaN, and coordinates are rounded to 0.1 mm", () => {
@@ -68,33 +68,41 @@ describe("pathData", () => {
     expect(pathData([], landscape)).toBe("");
   });
 
-  test("the transformed Bezier equals the transformed samples (exact in both orientations)", () => {
-    let seed = 7;
-    const rand = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
+  test("a curved piece is drawn as line steps that stay on the curve", () => {
     for (const view of [landscape, portrait]) {
-      for (let k = 0; k < 50; k++) {
-        const p = piece(
-          [rand() * 1.2, rand() * 2.5],
-          [rand() * 1.2, rand() * 2.5],
-          [rand() * 1.2, rand() * 2.5],
-        );
-        const f = view.toScreen(p.from);
-        const c = view.toScreen(p.control);
-        const e = view.toScreen(p.to);
-        for (const u of [0, 0.2, 0.5, 0.83, 1]) {
-          const a = (1 - u) * (1 - u);
-          const b = 2 * (1 - u) * u;
-          const d = u * u;
-          const bez = { x: a * f.x + b * c.x + d * e.x, y: a * f.y + b * c.y + d * e.y };
-          const want = view.toScreen(pointOnPiece(p, u));
-          expect(bez.x).toBeCloseTo(want.x, 12);
-          expect(bez.y).toBeCloseTo(want.y, 12);
-        }
-      }
+      const p = piece([0.2, 0.2], [0.9, 0.4], [0.3, 1.8]);
+      const d = pathData([p], view);
+      expect(d).not.toContain("Q");
+      const points = [...d.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map((m) => ({
+        x: Number(m[1]),
+        y: Number(m[2]),
+      }));
+      const n = points.length - 1;
+      expect(n).toBeGreaterThan(8);
+      points.forEach((q, i) => {
+        const want = view.toScreen(pointOnPiece(p, i / n));
+        expect(q.x).toBeCloseTo(want.x, 3);
+        expect(q.y).toBeCloseTo(want.y, 3);
+      });
     }
+  });
+
+  test("degenerate pieces draw nothing odd: no curves, no repeated points, no NaN", () => {
+    // A ball rolling to rest (control on the end), a piece too short to see, a hairpin that
+    // comes straight back, and a broken piece.
+    const rest = piece([0.5, 0.5], [0.5, 0.9], [0.5, 0.9]);
+    const tiny = piece([0.5, 0.9], [0.50001, 0.9], [0.5, 0.90001]);
+    const hairpin = piece([0.5, 0.9], [0.5, 1.4], [0.5, 0.9]);
+    const broken = piece([0.5, 0.9], [Number.NaN, 1], [0.6, 1]);
+    const d = pathData([rest, tiny, hairpin, broken], landscape);
+    expect(d).not.toMatch(/Q|NaN|Infinity/);
+    const points = d.split(" ");
+    for (let i = 1; i < points.length; i++) {
+      expect(points[i]?.slice(1)).not.toBe(points[i - 1]?.slice(1));
+    }
+    // The hairpin goes out a quarter of a metre and comes back.
+    expect(d).toContain("L1.15 0.5");
+    expect(d.endsWith("L0.9 0.5")).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   addBall,
   clearBalls,
   clearShot,
+  continueFromShot,
   loadLayout,
   placeBall,
   removeBall,
@@ -13,7 +14,7 @@ import {
   setStyle,
   setTable,
 } from "../doc/ops";
-import type { LoadLayoutOptions } from "../doc/ops";
+import type { LoadLayoutOptions, ShotFinal } from "../doc/ops";
 import { newDoc } from "../doc/resolve";
 import type { DiagramDoc, DiagramStyle, DocBallSet, DocShot, DocTable } from "../doc/types";
 import { commit, createHistory, endGesture, live, redo, undo } from "./history";
@@ -57,6 +58,12 @@ export interface EditorState {
   setBallSet: (ballSet: DocBallSet) => void;
   setCloth: (cloth: ClothSpec, mode?: ChangeMode) => void;
   setStyle: (patch: DiagramStyle) => void;
+
+  /** How far along the aim line the aim handle sits, in metres (not part of the document). */
+  aimHandleM: number;
+  setAimHandle: (distanceM: number) => void;
+  /** Replaces the layout with where a shot left the balls, as one undoable step. */
+  continueFromShot: (finals: readonly ShotFinal[]) => void;
 
   select: (id: string | undefined) => void;
   setTool: (tool: Tool) => void;
@@ -139,6 +146,14 @@ export const useEditor = create<EditorState>((set) => {
     },
     setStyle: (patch) => {
       change((doc) => setStyle(doc, patch));
+    },
+
+    aimHandleM: 0.35,
+    setAimHandle: (distanceM) => {
+      set({ aimHandleM: distanceM });
+    },
+    continueFromShot: (finals) => {
+      change((doc) => continueFromShot(doc, finals));
     },
 
     select: (id) => {

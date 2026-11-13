@@ -1,3 +1,4 @@
+import { pointOnPiece } from "../sim/pathModel";
 import type { PathMark, PathPiece, PathRole } from "../sim/pathModel";
 import type { Point, ViewTransform } from "./transform";
 
@@ -56,16 +57,44 @@ function samePoint(a: Point, b: Point): boolean {
   return Math.abs(a.x - b.x) < JOIN_TOLERANCE_M && Math.abs(a.y - b.y) < JOIN_TOLERANCE_M;
 }
 
+/** Largest distance between the drawn polyline and the true curve: 0.1 mm. */
+const FLATNESS_M = 1e-4;
+const MAX_STEPS = 64;
+
+function finitePiece(p: PathPiece): boolean {
+  return [p.from, p.control, p.to].every((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
+}
+
 /**
- * SVG path data for pieces in screen space. Both orientations are rotations, so each quadratic
- * Bezier stays an exact quadratic Bezier with transformed control points.
+ * SVG path data for pieces in screen space, as straight line steps.
+ *
+ * Each piece is an exact parabola, but it is drawn as a polyline that stays within 0.1 mm of
+ * it. Curve strokers in browsers can misdraw degenerate quadratics (a ball rolling to rest has
+ * its control point on its end point; a ball that spins back on itself makes a hairpin), and a
+ * polyline of distinct points has no such cases. Steps too short to see are dropped.
  */
 export function pathData(pieces: readonly PathPiece[], transform: ViewTransform): string {
   const parts: string[] = [];
   let end: Point | undefined;
+  let last: string | undefined;
+  const emit = (command: "M" | "L", p: Point): void => {
+    const s = pt(transform.toScreen(p));
+    if (s === last) return;
+    parts.push(`${command}${s}`);
+    last = s;
+  };
   for (const p of pieces) {
-    if (!end || !samePoint(end, p.from)) parts.push(`M${pt(transform.toScreen(p.from))}`);
-    parts.push(`Q${pt(transform.toScreen(p.control))} ${pt(transform.toScreen(p.to))}`);
+    if (!finitePiece(p)) continue;
+    if (!end || !samePoint(end, p.from)) {
+      last = undefined;
+      emit("M", p.from);
+    }
+    // For a quadratic, n equal steps stay within |from - 2 control + to| / (4 n^2) of it.
+    const bx = p.from.x - 2 * p.control.x + p.to.x;
+    const by = p.from.y - 2 * p.control.y + p.to.y;
+    const bend = Math.sqrt(bx * bx + by * by);
+    const n = Math.min(MAX_STEPS, Math.max(1, Math.ceil(Math.sqrt(bend / (4 * FLATNESS_M)))));
+    for (let i = 1; i <= n; i++) emit("L", pointOnPiece(p, i / n));
     end = p.to;
   }
   return parts.join(" ");

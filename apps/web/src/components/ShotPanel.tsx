@@ -160,7 +160,8 @@ export function ShotPanelView({
           ))}
         </div>
         <p id="shot-angle-help" className="shot-hint">
-          Drag the yellow handle on the table: the further from the cue ball, the finer the aim.
+          Drag anywhere on the cloth, or the yellow handle: the further from the cue ball, the finer
+          the aim.
         </p>
         <button
           type="button"
