@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { resolveDoc } from "../doc/resolve";
 import type { Scene } from "../doc/resolve";
+import { sameExceptStyle } from "../doc/types";
 import type { DiagramDoc } from "../doc/types";
 import { buildPathModel } from "./pathModel";
 import type { PathModel } from "./pathModel";
@@ -49,11 +50,20 @@ export function simulateDoc(
  */
 const cache = new WeakMap<DiagramDoc, { tuning: Tuning; simulation: Simulation }>();
 
+/** The document simulated last: a change of style alone reuses its simulation. */
+let latest: { doc: DiagramDoc; tuning: Tuning; simulation: Simulation } | undefined;
+
 export function simulationFor(doc: DiagramDoc, tuning: Tuning = currentTuning()): Simulation {
   const hit = cache.get(doc);
   if (hit && hit.tuning === tuning) return hit.simulation;
-  const simulation = simulateDoc(doc, mainThreadSimulator, tuning);
+  // Nothing the simulation reads is in the style, so typing a caption or changing the theme
+  // does not run the physics again.
+  const simulation =
+    latest && latest.tuning === tuning && sameExceptStyle(latest.doc, doc)
+      ? latest.simulation
+      : simulateDoc(doc, mainThreadSimulator, tuning);
   cache.set(doc, { tuning, simulation });
+  latest = { doc, tuning, simulation };
   return simulation;
 }
 

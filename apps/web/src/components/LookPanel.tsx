@@ -30,7 +30,8 @@ export interface LookPanelViewProps {
 export function LookPanelView({ style, onChange, onCaptionDone }: LookPanelViewProps) {
   const id = useId();
   const caption = style?.caption ?? "";
-  const length = [...caption].length;
+  // Counted as the limit is: in the units a text box's maxLength uses.
+  const length = caption.length;
   return (
     <section className="look-panel">
       <h2>Look</h2>
@@ -109,7 +110,12 @@ export function LookPanelView({ style, onChange, onCaptionDone }: LookPanelViewP
           onBlur={onCaptionDone}
         />
         <p id={`${id}-count`} className="look-count">
-          {length} / {CAPTION_MAX_LENGTH}
+          <span aria-hidden="true">
+            {length} / {CAPTION_MAX_LENGTH}
+          </span>
+          <span className="look-sr">
+            {length} of {CAPTION_MAX_LENGTH} characters
+          </span>
         </p>
       </div>
     </section>
@@ -120,5 +126,18 @@ export function LookPanel() {
   const doc = useDoc();
   const setStyle = useEditor((s) => s.setStyle);
   const endGesture = useEditor((s) => s.endGesture);
-  return <LookPanelView style={doc.style} onChange={setStyle} onCaptionDone={endGesture} />;
+  return (
+    <LookPanelView
+      style={doc.style}
+      onChange={setStyle}
+      onCaptionDone={() => {
+        // The space left by typing is dropped when the box is left, as part of the same step.
+        const caption = useEditor.getState().history.present.style?.caption;
+        if (caption !== undefined && caption !== caption.trimEnd()) {
+          setStyle({ caption: caption.trimEnd() }, "live");
+        }
+        endGesture();
+      }}
+    />
+  );
 }

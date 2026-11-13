@@ -5,10 +5,13 @@ import {
   NAP_FULL_DRIFT_RATIO,
 } from "@baize/tables";
 import { beforeEach, describe, expect, test } from "vitest";
-import { loadLayout, setShot } from "../doc/ops";
+import { drillLayout } from "@baize/tables";
+import { loadLayout, setShot, setStyle } from "../doc/ops";
 import { newDoc, resolveDoc } from "../doc/resolve";
 import type { Scene } from "../doc/resolve";
+import { sameExceptStyle } from "../doc/types";
 import type { DiagramDoc } from "../doc/types";
+import { useEditor } from "../store/store";
 import { withNap } from "../setup/cloth";
 import { shareLink } from "../share/shareLink";
 import { mainThreadSimulator } from "./simulator";
@@ -153,5 +156,47 @@ describe("tuning and the document", () => {
     const plain = shareLink(doc, "https://example.test/");
     useTuningStore.getState().setTuning({ ballFrictionA: 0.2, napFullRatio: 0.5 });
     expect(shareLink(doc, "https://example.test/")).toEqual(plain);
+  });
+});
+
+describe("style changes and the simulation", () => {
+  test("a change of style alone reuses the simulation; a change to the shot does not", () => {
+    const doc = cutShot();
+    const first = simulationFor(doc);
+    const themed = setStyle(doc, { theme: "print" });
+    const captioned = setStyle(themed, { caption: "Cut shot" });
+    expect(themed).not.toBe(doc);
+    expect(simulationFor(themed)).toBe(first);
+    expect(simulationFor(captioned)).toBe(first);
+    const faster = setShot(captioned, { speedMps: 3 });
+    expect(simulationFor(faster)).not.toBe(first);
+  });
+
+  test("sameExceptStyle is false as soon as anything but the style differs", () => {
+    const measured = { ...cutShot(), annotations: [] };
+    expect(sameExceptStyle(measured, { ...measured, annotations: [] })).toBe(false);
+    const doc = cutShot();
+    expect(sameExceptStyle(doc, setStyle(doc, { pathLine: "dashed" }))).toBe(true);
+    expect(sameExceptStyle(doc, setShot(doc, { speedMps: 1 }))).toBe(false);
+    expect(sameExceptStyle(doc, { ...doc, cloth: withNap(doc.cloth, "light") })).toBe(false);
+    expect(sameExceptStyle(doc, { ...doc, balls: [...doc.balls] })).toBe(false);
+  });
+});
+
+describe("drills through the store", () => {
+  test("putting a drill on the table replaces the balls in one undo step", () => {
+    const store = useEditor.getState();
+    store.openDoc(cutShot());
+    const before = useEditor.getState().history.present;
+    const scene = sceneOf(before);
+    const layout = drillLayout(scene.table, scene.ballSet, "snooker-line-up");
+    if (!layout) throw new Error("the line-up should fit a 12 ft table");
+    useEditor.getState().loadLayout(layout, { source: "template", mode: "replace" });
+    const after = useEditor.getState().history.present;
+    expect(after.balls).toHaveLength(layout.balls.length);
+    expect(after.balls.filter((b) => b.kind === "cue")).toHaveLength(1);
+    expect(after.balls.filter((b) => b.kind === "red")).toHaveLength(9);
+    useEditor.getState().undo();
+    expect(useEditor.getState().history.present).toBe(before);
   });
 });

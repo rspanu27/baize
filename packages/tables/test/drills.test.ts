@@ -174,3 +174,75 @@ describe("snooker line-up geometry", () => {
     expect(ys[0]).toBeCloseTo(pink.y + (black.y - pink.y) / 4, 12);
   });
 });
+
+describe("drill geometry", () => {
+  const pool = TABLE_PRESETS.find((t) => t.id === "pool-9@1");
+  const snooker = TABLE_PRESETS.find((t) => t.id === "snooker-12@1");
+  if (!pool || !snooker) throw new Error("missing presets");
+  const poolSet = getBallSet(pool.defaultBallSetId);
+  const snookerSet = getBallSet(snooker.defaultBallSetId);
+  if (!poolSet || !snookerSet) throw new Error("missing ball sets");
+
+  it("stop-shot ladder: every ball is on the straight line from the cue ball to the corner", () => {
+    const layout = drillLayout(pool, poolSet, "pool-stop-shot-ladder");
+    if (!layout) throw new Error("should fit");
+    const cue = layout.balls.find((b) => b.kind === "cue");
+    if (!cue) throw new Error("no cue ball");
+    const corner = { x: 0, y: pool.playingArea.lengthM };
+    const len = Math.hypot(corner.x - cue.x, corner.y - cue.y);
+    const distances: number[] = [];
+    for (const b of layout.balls.filter((x) => x.kind !== "cue")) {
+      // Distance off the line, and how far along it.
+      const off = ((b.x - cue.x) * (corner.y - cue.y) - (b.y - cue.y) * (corner.x - cue.x)) / len;
+      expect(Math.abs(off)).toBeLessThan(1e-9);
+      distances.push(Math.hypot(b.x - cue.x, b.y - cue.y));
+    }
+    expect(distances).toHaveLength(5);
+    for (let i = 1; i < distances.length; i++) {
+      expect((distances[i] as number) - (distances[i - 1] as number)).toBeCloseTo(
+        3 * poolSet.object.diameterM,
+        9,
+      );
+    }
+    // The description says how it is played, since the balls shield each other.
+    const text = DRILL_TEMPLATES.find((d) => d.id === "pool-stop-shot-ladder")?.description;
+    expect(text).toContain("one ball on the table at a time");
+  });
+
+  it.each([
+    ["the same size", undefined],
+    ["smaller", { diameterM: 0.0476, massKg: 0.1 }],
+  ])(
+    "black from the spot is a three-quarter-ball pot with a cue ball that is %s",
+    (_n, cueSize) => {
+      const set = { ...snookerSet, ...(cueSize ? { cue: cueSize } : {}) };
+      const layout = drillLayout(snooker, set, "snooker-black-from-spot");
+      if (!layout) throw new Error("should fit");
+      const cue = layout.balls.find((b) => b.kind === "cue");
+      const black = layout.balls.find((b) => b.kind === "black");
+      if (!cue || !black) throw new Error("missing balls");
+      const rCue = (cueSize?.diameterM ?? set.object.diameterM) / 2;
+      const rObj = set.object.diameterM / 2;
+      // Pot line: from the black to the corner of the table at the black end.
+      const px = 0 - black.x;
+      const py = snooker.playingArea.lengthM - black.y;
+      const pl = Math.hypot(px, py);
+      // Where the cue ball is at contact: touching the black, straight behind the pot line.
+      const ghost = {
+        x: black.x - ((rCue + rObj) * px) / pl,
+        y: black.y - ((rCue + rObj) * py) / pl,
+      };
+      // The cue ball's line of travel makes an angle with the pot line whose sine is 1/4.
+      const tx = ghost.x - cue.x;
+      const ty = ghost.y - cue.y;
+      const tl = Math.hypot(tx, ty);
+      const sine = Math.abs(tx * py - ty * px) / (tl * pl);
+      expect(sine).toBeCloseTo(0.25, 9);
+      expect(tl).toBeCloseTo(snooker.playingArea.widthM / 5, 9);
+    },
+  );
+
+  it("no description names a corner by where it is drawn", () => {
+    for (const d of DRILL_TEMPLATES) expect(d.description).not.toMatch(/top-left|top-right/);
+  });
+});

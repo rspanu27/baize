@@ -599,3 +599,60 @@ describe("schema version 2", () => {
     });
   });
 });
+
+describe("captions in links", () => {
+  const link = (caption: unknown): string => {
+    const json = JSON.stringify({
+      t: "pool-9@1",
+      s: "pool-57@1",
+      k: { c: "#1f6b3a", k: "medium" },
+      b: [],
+      y: { c: caption },
+    });
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return `v2.u.${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+  };
+
+  test("a caption the editor could not have written is refused", async () => {
+    const bad = [
+      "A" + String.fromCharCode(1) + "B",
+      "two" + String.fromCharCode(10) + "lines",
+      "tab" + String.fromCharCode(9) + "bed",
+      "   ",
+      " leading space",
+      "double  space",
+      "lone " + String.fromCharCode(0xd800),
+      "non-character " + String.fromCharCode(0xffff),
+      "x".repeat(141),
+    ];
+    for (const caption of bad) {
+      expect((await decodeDoc(link(caption))).ok, JSON.stringify(caption).slice(0, 40)).toBe(false);
+    }
+  });
+
+  test("ordinary text, accents, symbols and emoji are accepted as written", async () => {
+    for (const caption of ['Stop shot <3 & "draw"', "Übung für Anfänger", "Break 🎱 practice"]) {
+      const decoded = await decodeDoc(link(caption));
+      if (!decoded.ok) throw new Error(decoded.problem);
+      expect(decoded.doc.style?.caption).toBe(caption);
+    }
+  });
+
+  test("whatever a document holds, its link opens, without the space left by typing", async () => {
+    const messy: DiagramDoc = {
+      ...newDoc("pool-9@1"),
+      style: { caption: "  Typed " + String.fromCharCode(7) + " badly  " },
+    };
+    const decoded = await decodeDoc(await encodeDoc(messy, { compression: "off" }));
+    if (!decoded.ok) throw new Error(decoded.problem);
+    expect(decoded.doc.style?.caption).toBe("Typed badly");
+
+    const long: DiagramDoc = { ...newDoc("pool-9@1"), style: { caption: "🎱".repeat(100) } };
+    const back = await decodeDoc(await encodeDoc(long, { compression: "off" }));
+    if (!back.ok) throw new Error(back.problem);
+    // 70 whole emoji fit in 140 units; none is cut in half.
+    expect(back.doc.style?.caption).toBe("🎱".repeat(70));
+  });
+});

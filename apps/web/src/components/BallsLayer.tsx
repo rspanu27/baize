@@ -4,7 +4,6 @@ import type { KeyboardEvent, PointerEvent } from "react";
 import type { Scene, SceneBall } from "../doc/resolve";
 import { useEditor } from "../store/store";
 import { ballName, isLowConfidence } from "../view/ballLook";
-import { useDrawStyle } from "../view/drawStyleContext";
 import { arrowTarget, dragTarget, grabOffset, isRemoveKey } from "../view/drag";
 import { clientToScreen } from "../view/pointer";
 import { snapDistanceFor, snapPoint } from "../view/snap";
@@ -35,7 +34,6 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
   const removeBall = useEditor((s) => s.removeBall);
   const endGesture = useEditor((s) => s.endGesture);
   const grab = useRef<Grab | undefined>(undefined);
-  const { ballLabels } = useDrawStyle();
 
   const r = ball.radiusM;
   const c = view.toScreen(ball);
@@ -120,7 +118,7 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
       <BallBody kind={ball.kind} r={r} />
       {selected ? <circle className="ball-selection" r={r * 1.25} strokeWidth={r * 0.14} /> : null}
       <circle className="ball-focus" r={r * 1.55} strokeWidth={r * 0.12} />
-      {uncertain && ballLabels ? (
+      {uncertain ? (
         <g data-testid="uncertain">
           <title>uncertain position</title>
           <circle

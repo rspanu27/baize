@@ -50,3 +50,17 @@
   font-size: 0.85rem;
   text-align: right;
 }
+
+.look-count {
+  position: relative;
+}
+
+/* Read by screen readers only. */
+.look-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

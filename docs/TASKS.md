@@ -106,6 +106,6 @@ Playback itself (real time, half and quarter speed, scrubbing, continue from the
 | 4.3 | Drill templates in `packages/tables`: classic drills per game, placed from spots and table size so they fit any table | I | 1.5, 1.6 | Every drill on every preset and on random custom tables: no overlaps, all balls inside the cushions, or the drill reports that it does not fit | done |
 | 4.4 | Drills in the editor: pick one, it loads as one undo step | U | 4.3 | Interaction test; drills that do not fit are not offered | done |
 | 4.5 | Playback polish: tenth speed, space bar to play and pause, repeat | U | 2.13a | Component and hook tests | done |
-| 4.6 | Stretch: save the animation as a WebM video, in the browser only | I | 4.2, 4.5 | A file is produced in Chromium; unsupported browsers get a plain message | todo |
-| 4.7 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
+| 4.6 | Stretch: save the animation as a WebM video, in the browser only | I | 4.2, 4.5 | A file is produced in Chromium; unsupported browsers get a plain message | skipped: stretch item; works in some browsers only |
+| 4.7 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | done |
 

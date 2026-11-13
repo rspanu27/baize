@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sameExceptStyle } from "../doc/types";
 import type { DiagramDoc } from "../doc/types";
 
 /** Playback speeds on offer: real time and three slow motions. */
@@ -81,9 +82,12 @@ export function usePlayback(doc: DiagramDoc, durationS: number): Playback {
   const [state, setState] = useState<State | undefined>(undefined);
   const [rate, setRate] = useState(1);
   const [repeat, setRepeat] = useState(false);
-  // Any change to the document ends the playback for good: undo and redo bring back the very
-  // same document object, and must not bring a finished playback back with it.
-  if (state && state.doc !== doc) setState(undefined);
+  // Any change to the document's contents ends the playback for good: undo and redo bring
+  // back the very same document object, and must not bring a finished playback back with it.
+  // A change of style alone (theme, caption) is the same shot: it plays on.
+  if (state && state.doc !== doc) {
+    setState(sameExceptStyle(state.doc, doc) ? { ...state, doc } : undefined);
+  }
   const active = state?.doc === doc ? state : undefined;
   const running = active?.running === true;
 

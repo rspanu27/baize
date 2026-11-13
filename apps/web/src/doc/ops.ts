@@ -10,7 +10,7 @@ import type {
   DocShot,
   DocTable,
 } from "./types";
-import { CAPTION_MAX_LENGTH } from "./types";
+import { cleanCaption } from "./types";
 
 /**
  * Document operations: pure functions from a document to a new document.
@@ -315,12 +315,7 @@ export function setStyle(doc: DiagramDoc, patch: DiagramStyle): DiagramDoc {
   if (style.pathWeight === "normal") delete style.pathWeight;
   if (style.ballLabels !== false) delete style.ballLabels;
   if (style.caption !== undefined) {
-    // One line, no control characters, at most the length a link may carry.
-    const caption = [...style.caption.replace(/\s+/g, " ")]
-      .filter((ch) => ch >= " " && ch !== "\u007f")
-      .join("")
-      .trimStart()
-      .slice(0, CAPTION_MAX_LENGTH);
+    const caption = cleanCaption(style.caption);
     if (caption.trim() === "") delete style.caption;
     else style.caption = caption;
   }

@@ -61,7 +61,7 @@ const BLACK_RED_OFFSETS_D: readonly (readonly [number, number])[] = [
   [4, -6],
 ];
 
-/** Balls in the pool ladder, and the first and later distances from the cue ball in diameters. Design choice: 5 balls, first 4 diameters out, then every 3, so there is a clear ball between each. */
+/** Balls in the pool ladder, and the first and later distances from the cue ball in diameters. Design choice: 5 balls, first 4 diameters out, then every 3. The balls are on one line, so the drill is played with one of them on the table at a time. */
 const LADDER_BALLS = 5;
 const LADDER_FIRST_D = 4;
 const LADDER_STEP_D = 3;
@@ -102,21 +102,21 @@ export const DRILL_TEMPLATES: readonly DrillTemplate[] = [
     name: "Long pot",
     game: "snooker",
     description:
-      "A single red far up the table towards the top-left corner pocket. Pot it from the D, again and again.",
+      "A single red far up the table, in line with a corner pocket at the black end. Pot it from the D, again and again.",
   },
   {
     id: "snooker-black-from-spot",
     name: "Black from the spot",
     game: "snooker",
     description:
-      "Pot the black into the top-left corner with a three-quarter-ball hit, then play position on a red.",
+      "Pot the black into the corner pocket with a three-quarter-ball hit, then play position on a red.",
   },
   {
     id: "pool-stop-shot-ladder",
     name: "Stop-shot ladder",
     game: "pool",
     description:
-      "Five balls in a line towards the top-left corner pocket. Pot each one straight in and stop the cue ball dead.",
+      "The same straight pot into a corner pocket at five distances. Leave one ball on the table at a time, nearest first, and stop the cue ball dead.",
   },
   {
     id: "pool-l-drill",
@@ -219,6 +219,7 @@ function snookerTLineUp(table: TableSpec, ballSet: BallSetSpec): LayoutBall[] {
     balls.push(at("red", p.x, p.y));
   }
   // The bar of the T: reds across the table on the pink's line, either side of the pink.
+  // Design choice: two reds each side of the pink, at one and two spacings from it.
   for (const k of [-2, -1, 1, 2]) {
     balls.push(at("red", pink.x + k * CROSS_SPACING_D * d, pink.y));
   }
@@ -235,7 +236,7 @@ function snookerLongPot(table: TableSpec): LayoutBall[] {
   const dRadius = yellow.x - brown.x;
   const cue = { x: brown.x, y: brown.y - dRadius / 2 };
   // Red on the straight line from the cue ball to the top-left corner of the nose rectangle.
-  const red = between(cue, { x: 0, y: lengthM }, LONG_POT_RED_FRACTION * 10, 10);
+  const red = between(cue, { x: 0, y: lengthM }, LONG_POT_RED_FRACTION, 1);
   return [at("cue", cue.x, cue.y), at("red", red.x, red.y)];
 }
 
@@ -249,9 +250,11 @@ function snookerBlackFromSpot(table: TableSpec, ballSet: BallSetSpec): LayoutBal
   const vlen = Math.sqrt(vx * vx + vy * vy);
   const ux = vx / vlen;
   const uy = vy / vlen;
-  // Ghost ball: where the cue ball is at the moment of contact, one diameter behind the black.
-  const gx = black.x - d * ux;
-  const gy = black.y - d * uy;
+  // Ghost ball: where the cue ball is at the moment of contact, touching the black from behind
+  // (the two radii apart; one diameter when the cue ball is the same size).
+  const reach = d / 2 + ballSizeOf(ballSet, "cue").diameterM / 2;
+  const gx = black.x - reach * ux;
+  const gy = black.y - reach * uy;
   // The cue ball travels at an angle to the pot line with sin = offset fraction, rotated towards
   // the baulk end so the cue ball comes from the lower right.
   const s = THREE_QUARTER_OFFSET;

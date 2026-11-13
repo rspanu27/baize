@@ -58,8 +58,33 @@ export type DiagramTheme = "table" | "print" | "dark";
 export type PathLine = "solid" | "dashed" | "dotted";
 export type PathWeight = "thin" | "normal" | "thick";
 
-/** Longest caption a document may carry, in characters. */
+/** Longest caption a document may carry, in UTF-16 units (what a text box's maxLength counts). */
 export const CAPTION_MAX_LENGTH = 140;
+
+/**
+ * A caption as a document may hold it: one line (every run of white space becomes one space),
+ * no control characters, nothing that cannot be written in an SVG or XML file (lone
+ * surrogates, U+FFFE, U+FFFF), no leading space, and at most `CAPTION_MAX_LENGTH` units
+ * without cutting a character in half. A trailing space is kept, so that words can be typed.
+ */
+export function cleanCaption(text: string): string {
+  let out = "";
+  let started = false;
+  // `for of` walks code points; a lone surrogate comes through as a single unit.
+  for (const ch of text.replace(/\s+/g, " ")) {
+    const code = ch.codePointAt(0) ?? 0;
+    const isControl = code < 0x20 || (code >= 0x7f && code <= 0x9f);
+    const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+    const isNonCharacter = (code & 0xfffe) === 0xfffe;
+    if (isControl || isLoneSurrogate || isNonCharacter) continue;
+    // No space at the start, and never two in a row (a dropped character may sit between two).
+    if (ch === " " && (!started || out.endsWith(" "))) continue;
+    if (out.length + ch.length > CAPTION_MAX_LENGTH) break;
+    started = true;
+    out += ch;
+  }
+  return out;
+}
 
 /** How the diagram is drawn. Every field is optional; an absent field means the default. */
 export interface DiagramStyle {
@@ -75,6 +100,24 @@ export interface DiagramStyle {
   ballLabels?: boolean;
   /** A line of text shown with the diagram and in exports. (Since schema version 2.) */
   caption?: string;
+}
+
+/**
+ * True when two documents differ at most in their style (how they are drawn): every other
+ * field is the very same object. Documents are immutable and a style change keeps the other
+ * fields, so comparing them by identity is exact for style edits and never wrongly true.
+ */
+export function sameExceptStyle(a: DiagramDoc, b: DiagramDoc): boolean {
+  return (
+    a === b ||
+    (a.table === b.table &&
+      a.ballSet === b.ballSet &&
+      a.cloth === b.cloth &&
+      a.balls === b.balls &&
+      a.shot === b.shot &&
+      a.annotations === b.annotations &&
+      a.source === b.source)
+  );
 }
 
 export interface DiagramDoc {

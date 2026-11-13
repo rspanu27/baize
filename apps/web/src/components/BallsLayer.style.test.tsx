@@ -66,11 +66,11 @@ describe("BallsLayer style", () => {
     expect(off).not.toContain("<text");
   });
 
-  test("the uncertain mark goes with the labels, the name stays", () => {
+  test("the uncertain mark stays when numbers are off: it is a warning, not a label", () => {
     expect(renderLayer(undefined)).toContain("uncertain position</title>");
     const off = renderLayer({ ballLabels: false });
-    expect(off).not.toContain("ball-uncertain-ring");
-    expect(off).not.toContain(">?</text>");
+    expect(off).toContain("ball-uncertain-ring");
+    expect(off).toContain("uncertain position</title>");
     expect(off).toContain('aria-label="9 ball, uncertain position"');
     expect(off).not.toContain(">3</text>");
   });

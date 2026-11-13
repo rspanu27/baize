@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 /** The Look panel: theme, labels and caption change the drawing, and a caption is one undo step. */
@@ -23,6 +24,15 @@ test("look panel changes the diagram", async ({ page }) => {
   await expect(svg.locator("[data-caption] text")).toHaveText("Break shot");
   expect(await svg.getAttribute("viewBox")).not.toBe(before);
   await caption.blur();
+
+  // The saved picture carries the theme's white sheet, the caption and the note.
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  const saved = await readFile(await (await downloading).path(), "utf8");
+  expect(saved).toMatch(/<rect[^>]*data-sheet[^>]*fill[:=]\s*"?(#ffffff|rgb\(255, 255, 255\))/);
+  expect(saved).toContain(">Break shot</text>");
+  expect(saved).toContain("physics v2");
+  expect(saved).not.toMatch(/class=|tabindex=/);
 
   // One undo removes the whole caption.
   await page.getByRole("button", { name: /Undo/ }).click();

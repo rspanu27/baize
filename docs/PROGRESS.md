@@ -93,3 +93,24 @@ Known gaps carried forward:
 - Results near pocket jaws remain approximate, as before.
 - CI still has not run; the local checks are the gate.
 
+## Phase 4: playback and polish (finished 2026-11-13)
+
+Done: tasks 4.1 to 4.5 and 4.7. Task 4.6 (saving the animation as a video) is skipped: it is a stretch item and would work in some browsers only.
+
+What is new:
+- **Look:** three themes (table colours, print on white, dark), solid, dashed or dotted paths in three weights, numbers on balls on or off, and a caption under the table. Exports carry all of it.
+- **Drills:** nine drills (four snooker, four pool, one blackball) in `packages/tables`, placed from the table's spots and size; the editor offers the ones that fit and loads one as a single undo step.
+- **Playback:** tenth speed, repeat, and the space bar to play and pause.
+- **Link format:** `schemaVersion` 2 for the new style fields. Version 1 links open as the same diagram (a recorded one is a test fixture).
+
+Checks: `pnpm check` (tables 216, physics 401, web 522 tests) and three Playwright tests (the acceptance flow, the Look panel with a saved SVG, the phone layout).
+
+Independent review (4.7): no blockers and no hard-rule violations. Fixed from it: a link could carry a caption with characters that broke the exported file; the stop-shot ladder's description did not match how it can be played; turning ball numbers off also hid the marks on uncertain balls; every caption key press re-ran the physics and a theme change stopped playback; drill descriptions named a corner by a screen position that the editor draws elsewhere; missing tests for loading a drill and for the saved picture. Smaller ones: the caption counter and limit now count the same way, a trailing space is dropped when the box is left, and the three-quarter-ball drill is right for a cue ball of a different size.
+
+Known gaps carried forward:
+- Drill spacings are this project's own layout of the common drills; no coaching text was consulted.
+- In the print and dark themes some ball paths share a colour (for example yellow, orange and pink are the same grey in print).
+- Dashed and dotted paths do not show where a ball slides and where it rolls.
+- The repeat hold and the print-theme export were checked by tests and one look in the browser, not on a phone.
+- No video export. CI still has not run; the local checks are the gate.
+

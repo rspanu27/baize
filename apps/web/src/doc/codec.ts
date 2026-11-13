@@ -1,7 +1,7 @@
 import { CLOTH_SPEEDS } from "@baize/tables";
 import type { BallKind, ClothSpec, ClothSpeed, CustomTableFields, GameType } from "@baize/tables";
 import { migrate } from "./migrations";
-import { CAPTION_MAX_LENGTH, SCHEMA_VERSION } from "./types";
+import { SCHEMA_VERSION, cleanCaption } from "./types";
 import type { Annotation, DiagramDoc, DocBall, DocBallSet, DocShot, DocTable } from "./types";
 
 /**
@@ -226,7 +226,9 @@ function toCompact(doc: DiagramDoc): Record<string, unknown> {
     if (s.pathLine !== undefined && s.pathLine !== "solid") y.l = LINE_CODE[s.pathLine];
     if (s.pathWeight !== undefined && s.pathWeight !== "normal") y.w = WEIGHT_CODE[s.pathWeight];
     if (s.ballLabels === false) y.n = 0;
-    if (s.caption !== undefined && s.caption !== "") y.c = s.caption;
+    // Written as the reader accepts it, without the space left by typing.
+    const caption = s.caption === undefined ? "" : cleanCaption(s.caption).trimEnd();
+    if (caption !== "") y.c = caption;
     out.y = y;
   }
   return out;
@@ -382,7 +384,8 @@ function readStyle(v: unknown): NonNullable<DiagramDoc["style"]> {
     style.ballLabels = false;
   }
   if (v.c !== undefined) {
-    if (typeof v.c !== "string" || v.c === "" || v.c.length > CAPTION_MAX_LENGTH) return fail();
+    // Only what the editor itself could have written: clean, and with something in it.
+    if (typeof v.c !== "string" || v.c.trim() === "" || cleanCaption(v.c) !== v.c) return fail();
     style.caption = v.c;
   }
   return style;
