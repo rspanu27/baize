@@ -109,3 +109,33 @@ Playback itself (real time, half and quarter speed, scrubbing, continue from the
 | 4.6 | Stretch: save the animation as a WebM video, in the browser only | I | 4.2, 4.5 | A file is produced in Chromium; unsupported browsers get a plain message | skipped: stretch item; works in some browsers only |
 | 4.7 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | done |
 
+## Phase 5: photo to diagram
+
+Split in two stages. Stage A needs no training data and gives a usable import (the person may have to fix more balls by hand). Stage B adds the learned ball detector and needs the project's own labelled photos, which only the project owner can take.
+
+Fixed at kickoff: one photo through the system camera or file picker; automatic table detection needs all four corners, otherwise four corner handles that may sit off the image; position error at most 0.6 % of the table length at the median and 1.5 % at the 95th percentile; at most 3 s with WebGPU and 8 s without. The photo is processed in the browser only and is never uploaded, stored, or put in the document, the link or the undo history.
+
+### Stage A: no training data needed
+
+| ID | Task | Owner | Deps | Done-check | Status |
+|---|---|---|---|---|---|
+| 5.1 | `packages/vision`: scaffold with no runtime dependencies, the `importPhoto(image, table, ballSet)` contract and result types, lint rules as for physics (no network, no storage) | L | 1.1 | Typecheck and lint pass; a lint test proves `fetch`, `XMLHttpRequest`, `localStorage` and `indexedDB` are refused in the package | todo |
+| 5.2 | Geometry core: homography from four corners, camera position recovered from it, projection of a point at a height above the cloth, and height correction of a ball's seen centre | L | 5.1 | For random synthetic cameras and exact corners, ball positions are recovered within 1 mm; a stated error budget for corner error of a few pixels | todo |
+| 5.3 | Synthetic photo renderer for tests: a table and balls drawn through a known camera into a pixel buffer, with exact ground truth | I | 5.2 | Rendered corners and ball centres match the camera model to a pixel | todo |
+| 5.4 | Table finder: cloth-colour model that adapts to any cloth, the cloth region, and a four-corner fit; says so when it is not confident | L | 5.3 | Found on every synthetic photo with all four corners in view, for every cloth colour preset; refuses when a corner is cut off | todo |
+| 5.5 | Ball finder without a model: things on the cloth that are not cloth, sized against the known ball diameter, centred with height correction, named by colour against the ball set, each with a confidence; then `sanitizeLayout` | L | 5.2, 5.4 | On synthetic photos: recall, position error and identity reported per game; touching balls and balls on a cushion covered | todo |
+| 5.6 | Evaluation script and label format: position error as a share of table length (median, 95th percentile), recall, identity, time; runs on synthetic photos in `pnpm check` and on real labelled photos by hand | I | 5.5 | Script prints the table of metrics; a small synthetic subset runs in the test suite | todo |
+| 5.7 | Editor: "Import from photo" (camera on a phone, file picker on desktop), the guidance text, and the review screen: photo with the table outline and balls drawn over it, corner handles that can be dragged (also off the image), re-run when a corner moves | U | 5.5 | Component and browser tests with a synthetic photo; the photo is only in component state (test that the document, link and storage never hold it) | todo |
+| 5.8 | Review edits: change a ball's identity, add a missed ball, delete a false one; confirm loads the layout as one undo step with `source: photo` and confidences | U | 5.7 | Interaction test; uncertain balls are marked after confirming | todo |
+| 5.9 | Speed: downscaling, and a worker if the main thread is blocked too long | L | 5.7 | Time for a 12-megapixel photo measured and inside the 8 s limit on a throttled CPU | todo |
+
+### Stage B: needs the project's own photos
+
+| ID | Task | Owner | Deps | Done-check | Status |
+|---|---|---|---|---|---|
+| 5.10 | Capture protocol and the labelled set: what to photograph, how the true ball positions are known (balls on spots and racks, plus measured or top-down reference), the label file format | You, L | 5.6 | At least 100 photos across tables, cloth colours, lighting and angles, with labels | todo |
+| 5.11 | Measure stage A on the real set and decide what the learned detector must fix | L | 5.10 | Metrics table in PROGRESS; decision recorded | todo |
+| 5.12 | Train a small detector (YOLO family) on public data plus the project's photos; licences of data and code checked and recorded; export to ONNX. Training on free compute only | L, You | 5.10 | Model file with its training record; recall and identity on a held-out part of the set | todo |
+| 5.13 | Run the model in the browser with ONNX Runtime Web (WebGPU, falling back to WASM), loaded only when a photo is imported, served as a static file | I | 5.12 | Targets met or the shortfall stated; time limits met; the app works with the model missing | todo |
+| 5.14 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
+
