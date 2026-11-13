@@ -296,4 +296,33 @@ describe("squirt in the aim guide", () => {
       Math.hypot(withSide.to.x - withSide.from.x, withSide.to.y - withSide.from.y),
     ).toBeCloseTo(0.6, 12);
   });
+
+  test("a shot the physics refuses (a miscue) is drawn along the aim line", () => {
+    const scene = sceneOf(straightIn(0.5));
+    const shot = must(scene.shot, "shot");
+    const miscue = { ...scene, shot: { ...shot, tipOffset: { side: 0.9, vertical: 0 } } };
+    expect(departureAngle(miscue)).toBe(Math.PI / 2);
+    expect(aimGuide(miscue)?.departureAngleRad).toBe(Math.PI / 2);
+  });
+
+  test("the shot panel's cut angle uses the cue end mass it is given", () => {
+    const doc = straightIn(0.5);
+    const simulation = simulateDoc(doc);
+    const render = (endMassRatio?: number) =>
+      renderToStaticMarkup(
+        <ShotPanelView
+          doc={doc}
+          scene={simulation.scene}
+          paths={simulation.paths}
+          selectedBallId={undefined}
+          units="metric"
+          endMassRatio={endMassRatio}
+          actions={noop}
+        />,
+      );
+    const cut = (markup: string) =>
+      Number(must(/Cut angle<\/dt><dd>([\d.]+)/.exec(markup)?.[1], "cut angle"));
+    // A much lighter cue end squirts less, so the full-ball aim stays nearer to full ball.
+    expect(cut(render(400))).toBeLessThan(cut(render()) / 2);
+  });
 });

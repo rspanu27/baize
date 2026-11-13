@@ -65,14 +65,18 @@ export function strike(radiusM: number, shot: ShotInput, massKg?: number): Impul
   const v = shot.speedMps;
   const k = (2.5 * v) / radiusM;
   const endMass = shot.cueEndMassKg;
+  // Checked whenever it is given, not only on the shots where it changes the result.
+  if (endMass !== undefined && (!(endMass > 0) || !Number.isFinite(endMass))) {
+    throw new SimInputError("invalid-shot", "cue end mass must be greater than zero");
+  }
   if (endMass === undefined || massKg === undefined || side === 0) {
     return {
       velocity: { x: v * cos, y: v * sin },
       spin: { x: -k * vertical * sin, y: k * vertical * cos, z: k * side },
     };
   }
-  if (!(endMass > 0) || !Number.isFinite(endMass) || !(massKg > 0) || !Number.isFinite(massKg)) {
-    throw new SimInputError("invalid-shot", "cue end mass and ball mass must be greater than zero");
+  if (!(massKg > 0) || !Number.isFinite(massKg)) {
+    throw new SimInputError("invalid-shot", "ball mass must be greater than zero");
   }
   const c = Math.sqrt(Math.max(0, 1 - side * side - vertical * vertical));
   const tanAlpha = (2.5 * side * c) / (1 + massKg / endMass + 2.5 * c * c);

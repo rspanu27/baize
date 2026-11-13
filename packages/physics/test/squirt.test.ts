@@ -116,6 +116,13 @@ describe("squirt", () => {
       expect(code).toBe("invalid-shot");
     }
   });
+
+  test("it is refused on a centre-ball hit too, where it would not change the result", () => {
+    for (const bad of [0, -0.01, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => strike(R_POOL, shot({ cueEndMassKg: bad }), M_POOL)).toThrow(SimInputError);
+      expect(() => strike(R_POOL, shot({ cueEndMassKg: bad }))).toThrow(SimInputError);
+    }
+  });
 });
 
 describe("version 2 models in the simulator", () => {

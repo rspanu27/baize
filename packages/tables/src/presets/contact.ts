@@ -12,7 +12,8 @@
  * angle, speed, and spin on object ball throw"), as encoded in pooltool
  * (`AlciatoreBallBallFriction`, a = 9.951e-3, b = 0.108, c = 1.088:
  * https://github.com/ekiefl/pooltool/blob/main/pooltool/physics/resolve/ball_ball/friction.py).
- * The values were read from pooltool; the proof itself could not be fetched to check them.
+ * UNVERIFIED against the original: the values were read from pooltool; the proof itself could
+ * not be fetched to check them.
  * Measured for pool balls; used for every set because all are cast phenolic resin.
  */
 export const BALL_BALL_FRICTION: { readonly a: number; readonly b: number; readonly c: number } = {

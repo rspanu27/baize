@@ -3,7 +3,7 @@ import type { PointerEvent } from "react";
 import type { Scene } from "../doc/resolve";
 import type { DiagramDoc, DocShot } from "../doc/types";
 import type { PathModel } from "../sim/pathModel";
-import { currentTuning } from "../sim/tuning";
+import { useTuning } from "../sim/tuning";
 import { simulationFor } from "../sim/useSimulation";
 import {
   AIM_STEPS_DEG,
@@ -44,6 +44,8 @@ export interface ShotPanelViewProps {
   paths: PathModel | undefined;
   selectedBallId: string | undefined;
   units: UnitSystem;
+  /** Ball mass over cue end mass, when the debug panel has changed it. */
+  endMassRatio?: number | undefined;
   actions: ShotPanelActions;
 }
 
@@ -58,6 +60,7 @@ export function ShotPanelView({
   paths,
   selectedBallId,
   units,
+  endMassRatio,
   actions,
 }: ShotPanelViewProps) {
   // Text being typed in the angle box; undefined when the box shows the document's value.
@@ -113,7 +116,7 @@ export function ShotPanelView({
   const first = paths?.firstObjectBallId
     ? scene.balls.find((b) => b.id === paths.firstObjectBallId)
     : undefined;
-  const readout = aimReadout(scene, currentTuning().cueEndMassRatio);
+  const readout = aimReadout(scene, endMassRatio);
   const potted = paths?.finals.filter((f) => f.pocketed) ?? [];
 
   return (
@@ -363,7 +366,8 @@ export function ShotPanel() {
   const endGesture = useEditor((s) => s.endGesture);
   const setStyle = useEditor((s) => s.setStyle);
   const [units] = useUnitSystem();
-  const simulation = simulationFor(doc);
+  const tuning = useTuning();
+  const simulation = simulationFor(doc, tuning);
   return (
     <ShotPanelView
       doc={doc}
@@ -371,6 +375,7 @@ export function ShotPanel() {
       paths={simulation.paths}
       selectedBallId={selectedBallId}
       units={units}
+      endMassRatio={tuning.cueEndMassRatio}
       actions={{
         setShot,
         clearShot,

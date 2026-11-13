@@ -3,6 +3,7 @@ import {
   BALL_TO_CUE_END_MASS_RATIO,
   NAP_FULL_DRIFT_RATIO,
 } from "@baize/tables";
+import { NAP_LIMIT } from "@baize/physics";
 import { create } from "zustand";
 import type { Scene } from "../doc/resolve";
 
@@ -110,9 +111,10 @@ export const TUNING_FIELDS: readonly TuningField[] = [
   {
     key: "napFullRatio",
     label: "Heavy nap push",
-    hint: "Nap push at heavy strength, as a share of rolling resistance (0 to 0.8).",
+    hint: `Nap push at heavy strength, as a share of rolling resistance (0 to ${String(NAP_LIMIT)}).`,
     min: 0,
-    max: 0.8,
+    // The most the physics accepts.
+    max: NAP_LIMIT,
     step: 0.005,
     standard: () => NAP_FULL_DRIFT_RATIO,
   },

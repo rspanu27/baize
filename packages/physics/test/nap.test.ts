@@ -1,6 +1,6 @@
 import { napDrift } from "@baize/tables";
 import { describe, expect, test } from "vitest";
-import { SimInputError, sampleAt, simulate } from "../src/index";
+import { SimInputError, cushionContactDistance, sampleAt, simulate } from "../src/index";
 import type { BallInput, ClothInput, SimInput, SimResult, Vec2 } from "../src/index";
 import { MEDIUM, SNOOKER_12, SNOOKER_BALLS, checkInvariants, eventsOf } from "./helpers";
 import { snookerBreakOff } from "./scenes";
@@ -271,6 +271,50 @@ describe("nap: what it leaves alone", () => {
     const result = simulate(input);
     expect(result.events).toHaveLength(0);
     expect(restOf(result)).toEqual(START);
+  });
+});
+
+describe("nap: along a rail", () => {
+  const contact = cushionContactDistance(R, SNOOKER_12.cushion.noseHeightM);
+
+  test.each([
+    ["touching the rail", 0],
+    ["a millimetre off the rail", 1e-3],
+  ])(
+    "a ball rolling along a rail with the nap pushing into it stays one quiet roll (%s)",
+    (_n, off) => {
+      // Left rail, ball rolling up the table; nap runs towards the left rail.
+      const input = rollingScene({ x: 0, y: 0.3 }, cloth(0.03, Math.PI), {
+        x: contact + off,
+        y: 0.5,
+      });
+      const result = simulate(input);
+      expect(result.status).toBe("complete");
+      checkInvariants(result, input);
+      const track = result.tracks[0];
+      if (!track) throw new Error("no track");
+      // Never sliding: the roll is not broken up by the rail.
+      expect(track.segments.filter((s) => s.state === "sliding")).toHaveLength(0);
+      expect(eventsOf(result, "transition")).toHaveLength(1);
+      expect(eventsOf(result, "transition")[0]).toMatchObject({
+        from: "rolling",
+        to: "stationary",
+      });
+      // It ends on the rail, not behind it, having rolled about as far as on a plain cloth.
+      const end = restOf(result);
+      expect(end.x).toBeGreaterThan(contact - 2e-7);
+      expect(end.x).toBeLessThan(contact + off + 1e-9);
+      expect(end.y - 0.5).toBeGreaterThan(0.4);
+    },
+  );
+
+  test("the same on the strongest nap the engine accepts", () => {
+    const input = rollingScene({ x: 0, y: 0.3 }, cloth(0.8, Math.PI), { x: contact, y: 0.5 });
+    const result = simulate(input);
+    checkInvariants(result, input);
+    expect(result.tracks[0]?.segments.filter((s) => s.state === "sliding")).toHaveLength(0);
+    expect(eventsOf(result, "transition")).toHaveLength(1);
+    expect(result.stats.eventCount).toBeLessThan(200);
   });
 });
 

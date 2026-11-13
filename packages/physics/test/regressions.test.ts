@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { BALL_BALL_FRICTION } from "@baize/tables";
 import {
+  buildTableGeometry,
   cushionContactDistance,
   frictionalBallBall,
   kineticEnergy,
@@ -9,7 +10,7 @@ import {
   simulate,
 } from "../src/index";
 import type { SimInput } from "../src/index";
-import { BLACKBALL_6, POOL_9, checkInvariants, eventsOf } from "./helpers";
+import { BLACKBALL_6, POOL_9, SNOOKER_12, checkInvariants, eventsOf } from "./helpers";
 
 /**
  * Scenes that once broke an invariant, kept so that they cannot break again. Each was found
@@ -126,5 +127,78 @@ describe("regressions", () => {
     const cue = result.tracks[0];
     if (!cue) throw new Error("missing cue ball");
     for (const s of cue.segments) expect(s.r0.x).toBeGreaterThan(line - 1.5e-7);
+  });
+
+  test("a ball held on a rail is let go where the rail ends, at a pocket", () => {
+    // Found in review. A ball runs up the left rail of a snooker table towards the middle
+    // pocket with spin that drives it into the rail. The rail takes that push, but only as
+    // far as the rail goes: the held segment used to last 0.15 s and carry the ball 6 cm
+    // straight across the mouth of the pocket with no friction pulling it in.
+    const radiusM = 0.02625;
+    const line = cushionContactDistance(radiusM, SNOOKER_12.cushion.noseHeightM);
+    const rail = buildTableGeometry(SNOOKER_12).segments.find((s) => s.id === "rail-left-lower");
+    if (!rail) throw new Error("missing rail");
+    const railEndY = Math.max(rail.a.y, rail.b.y);
+    const input: SimInput = {
+      table: SNOOKER_12,
+      cloth: { slidingFriction: 0.2, rollingResistance: 0.01, spinningFriction: 0.0127 },
+      balls: [
+        {
+          id: "b",
+          radiusM,
+          massKg: 0.142,
+          x: line + 1e-7,
+          y: railEndY - 0.06,
+          velocity: { x: 0, y: 0.8 },
+          spin: { x: 0, y: -40, z: 0 },
+        },
+      ],
+      ballRestitution: 0.92,
+    };
+    const result = simulate(input);
+    checkInvariants(result, input);
+    const track = result.tracks[0];
+    if (!track) throw new Error("missing track");
+    // While it is on the rail the ball is held: no acceleration across the table.
+    const first = track.segments[0];
+    expect(first?.state).toBe("sliding");
+    expect(first?.a.x).toBe(0);
+    // No held piece reaches beyond the end of the rail.
+    for (const s of track.segments) {
+      if (s.state !== "sliding" || s.a.x !== 0 || !Number.isFinite(s.duration)) continue;
+      const endY = s.r0.y + s.duration * (s.v0.y + 0.5 * s.a.y * s.duration);
+      expect(endY).toBeLessThan(railEndY + 1e-6);
+    }
+    // Past the rail, friction pulls it towards the pocket (-x here).
+    const after = track.segments.find((s) => s.r0.y >= railEndY - 1e-9 && s.state === "sliding");
+    expect(after?.a.x).toBeLessThan(-1);
+  });
+
+  test("a ball that starts on a rail, driven into it, is held from the start", () => {
+    // Found in review. Without the hold the ball sank 0.1 micrometres and a slow cushion
+    // contact was recorded 0.3 ms into the shot, which drew a cushion mark at its start.
+    const radiusM = 0.02625;
+    const line = cushionContactDistance(radiusM, SNOOKER_12.cushion.noseHeightM);
+    const input: SimInput = {
+      table: SNOOKER_12,
+      cloth: { slidingFriction: 0.2, rollingResistance: 0.01, spinningFriction: 0.0127 },
+      balls: [
+        {
+          id: "b",
+          radiusM,
+          massKg: 0.142,
+          x: line,
+          y: 0.6,
+          velocity: { x: 0, y: 0.8 },
+          spin: { x: 0, y: -40, z: 0 },
+        },
+      ],
+      ballRestitution: 0.92,
+    };
+    const result = simulate(input);
+    checkInvariants(result, input);
+    expect(result.tracks[0]?.segments[0]?.a.x).toBe(0);
+    expect(eventsOf(result, "ball-cushion").filter((e) => e.t < 0.01)).toHaveLength(0);
+    for (const s of result.tracks[0]?.segments ?? []) expect(s.r0.x).toBeGreaterThan(line - 1e-9);
   });
 });

@@ -21,6 +21,7 @@ import type {
   BallInput,
   BallTrack,
   CushionInput,
+  CushionSegment,
   Segment,
   SimEvent,
   SimInput,
@@ -108,6 +109,19 @@ export const INPUT_OVERLAP_TOL_M = 5e-5;
  */
 export const NAP_LIMIT = 0.8;
 
+/**
+ * A ball that would pass the end of a rail within this time (s) is treated as already past
+ * it. Design tolerance; it also keeps a held segment from being too short to advance time.
+ */
+const RAIL_EXIT_MIN_S = 1e-9;
+/** A ball within this distance (m) of the end of a rail is at the end. Design tolerance. */
+const RAIL_END_TOL_M = 1e-9;
+/**
+ * A ball held against a curved jaw keeps one hold while its line of contact turns by this
+ * angle (rad). Design tolerance: the error in direction of one hold.
+ */
+const JAW_HOLD_TURN = 0.1;
+
 const INF = Number.POSITIVE_INFINITY;
 
 const CushionKind = { None: 0, Segment: 1, Arc: 2, Pocket: 3 } as const;
@@ -143,6 +157,8 @@ interface Body {
    * re-classifying the ball from its actual state, never with `nextSegment`.
    */
   forced: boolean;
+  /** Id of the cushion the ball was last held on by a slow contact, if it still is. */
+  heldOn: string | undefined;
 }
 
 function fail(code: SimInputError["code"], message: string): never {
@@ -338,6 +354,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       cushionIndex: -1,
       partners: [],
       forced: false,
+      heldOn: undefined,
     });
   }
   // pairTime[i * n + j] for i < j: absolute time of the next collision between i and j.
@@ -508,12 +525,9 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     return along < 0 ? -speedSq / along : INF;
   };
 
-  /**
-   * The straight rails a ball at `r` is touching (at the nose, within the rail's length).
-   * Returns their normals.
-   */
-  const railsTouching = (b: Body, r: Vec2): Vec2[] => {
-    const out: Vec2[] = [];
+  /** The straight rails a ball at `r` is touching (at the nose, within the rail's length). */
+  const railsTouching = (b: Body, r: Vec2): CushionSegment[] => {
+    const out: CushionSegment[] = [];
     // Broad phase: well inside the rectangle there is nothing to touch.
     const reach = b.contactDist + CLUSTER_GAP_M;
     if (r.x > reach && r.x < W - reach && r.y > reach && r.y < L - reach) return out;
@@ -526,41 +540,104 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       const ey = s.b.y - s.a.y;
       const along = px * ex + py * ey;
       if (along < 0 || along > ex * ex + ey * ey) continue;
-      out.push(s.normal);
+      out.push(s);
     }
     return out;
+  };
+
+  /** Smallest t > 0 at which p + v t + a t^2 / 2 is zero, or Infinity. */
+  const firstZero = (p: number, v: number, a: number): number => {
+    if (a === 0) {
+      if (v === 0) return INF;
+      const t = -p / v;
+      return t > 0 ? t : INF;
+    }
+    const disc = v * v - 2 * a * p;
+    if (disc < 0) return INF;
+    const root = Math.sqrt(disc);
+    const t1 = (-v - root) / a;
+    const t2 = (-v + root) / a;
+    const lo = t1 < t2 ? t1 : t2;
+    const hi = t1 < t2 ? t2 : t1;
+    return lo > 0 ? lo : hi > 0 ? hi : INF;
+  };
+
+  /**
+   * Time until a ball running along a rail passes either end of it. A rail's normal is
+   * square to its length, so a hold on the rail does not change the motion along it.
+   */
+  const railExit = (s: CushionSegment, r: Vec2, v: Vec2, a: Vec2): number => {
+    const ex = s.b.x - s.a.x;
+    const ey = s.b.y - s.a.y;
+    const length = Math.sqrt(ex * ex + ey * ey);
+    // Position, speed and acceleration along the rail, in metres from its first end.
+    const p = ((r.x - s.a.x) * ex + (r.y - s.a.y) * ey) / length;
+    const vAlong = (v.x * ex + v.y * ey) / length;
+    const aAlong = (a.x * ex + a.y * ey) / length;
+    // Standing on an end and heading outwards: it is leaving now.
+    const outwards = vAlong !== 0 ? vAlong : aAlong;
+    if (p >= length - RAIL_END_TOL_M && outwards > 0) return 0;
+    if (p <= RAIL_END_TOL_M && outwards < 0) return 0;
+    const back = firstZero(p, vAlong, aAlong);
+    const front = firstZero(p - length, vAlong, aAlong);
+    return back < front ? back : front;
   };
 
   /**
    * A ball resting against a rail cannot be pushed into it. If the segment's acceleration
    * points into a rail the ball is touching, the rail takes that part (as it does after a
-   * slow cushion contact) and the ball runs along the nose. Returns the same segment when
-   * nothing had to change.
+   * slow cushion contact) and the ball runs along the nose. The held segment ends no later
+   * than the moment the ball passes the end of the rail, where nothing holds it any more.
+   * Returns the same segment when nothing had to change.
    */
   const holdOnRails = (b: Body, seg: Segment): Segment => {
     if (seg.state !== "sliding" && seg.state !== "rolling") return seg;
     let acc = seg.a;
-    for (const normal of railsTouching(b, seg.r0)) {
+    let exit = INF;
+    for (const rail of railsTouching(b, seg.r0)) {
+      const normal = rail.normal;
       // A ball moving off the rail is not resting on it.
       if (seg.v0.x * normal.x + seg.v0.y * normal.y > CLUSTER_SPEED_TOL) continue;
       const an = acc.x * normal.x + acc.y * normal.y;
-      if (an < -PRESSING_ACCEL_TOL) acc = { x: acc.x - an * normal.x, y: acc.y - an * normal.y };
+      if (!(an < -PRESSING_ACCEL_TOL)) continue;
+      // A ball that is at the very end of the rail and leaving it is not held at all.
+      const leaves = railExit(rail, seg.r0, seg.v0, seg.a);
+      if (leaves < RAIL_EXIT_MIN_S) continue;
+      if (leaves < exit) exit = leaves;
+      acc = { x: acc.x - an * normal.x, y: acc.y - an * normal.y };
     }
     if (acc === seg.a) return seg;
     const rev = timeToReverse(seg.v0, acc);
-    return { ...seg, a: acc, duration: rev < seg.duration ? rev : seg.duration };
+    let duration = rev < seg.duration ? rev : seg.duration;
+    if (exit < duration) duration = exit;
+    if (seg.state === "rolling") {
+      // A rolling ball keeps rolling: its spin follows the held acceleration.
+      return {
+        ...seg,
+        a: acc,
+        duration,
+        alpha: { x: -acc.y / b.radiusM, y: acc.x / b.radiusM, z: seg.alpha.z },
+      };
+    }
+    return { ...seg, a: acc, duration };
   };
 
   /**
    * New segment for a ball that has just been through a collision. A ball touching a rail
    * and left creeping into it (slower than `INELASTIC_SPEED`) has that creep stopped here,
-   * as a slow cushion contact would stop it.
+   * as a slow cushion contact would stop it; no cushion event is recorded for it.
    */
-  const restart = (b: Body, now: number, r: Vec2, vIn: Vec2, w: Vec3): void => {
+  const restart = (b: Body, now: number, r: Vec2, vIn: Vec2, wIn: Vec3): void => {
     let v = vIn;
-    for (const normal of railsTouching(b, r)) {
+    let w = wIn;
+    for (const rail of railsTouching(b, r)) {
+      const normal = rail.normal;
       const vn = v.x * normal.x + v.y * normal.y;
       if (vn < 0 && vn > -INELASTIC_SPEED) v = { x: v.x - vn * normal.x, y: v.y - vn * normal.y };
+    }
+    if (v !== vIn && classify(vIn, wIn, b.radiusM) === "rolling") {
+      // The ball was rolling: it still is, so its spin goes with the corrected velocity.
+      w = { x: -v.y / b.radiusM, y: v.x / b.radiusM, z: wIn.z };
     }
     const free = makeSegment(now, r, v, w, b.radiusM, motion, classify(v, w, b.radiusM));
     const seg = holdOnRails(b, free);
@@ -718,7 +795,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       return false;
     };
     // Rails that members touch: a rail takes any slow push into it, like a fixed ball.
-    const rails: Vec2[][] = [];
+    const rails: CushionSegment[][] = [];
     for (const i of members) rails[i] = railsTouching(bodies[i] as Body, pos[i] as Vec2);
     for (const i of members) classifyMember(i);
     for (let round = 0; round < 6; round++) {
@@ -743,7 +820,8 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
         }
         for (const i of members) {
           if (fixed[i]) continue;
-          for (const normal of rails[i] as Vec2[]) {
+          for (const rail of rails[i] as CushionSegment[]) {
+            const normal = rail.normal;
             const v = vel[i] as Vec2;
             const into = -(v.x * normal.x + v.y * normal.y);
             if (!(into > 0) || into >= INELASTIC_SPEED) continue;
@@ -818,7 +896,8 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
         if (!bj.partners.includes(c.i)) bj.partners.push(c.i);
       }
       for (const i of members) {
-        for (const normal of rails[i] as Vec2[]) {
+        for (const rail of rails[i] as CushionSegment[]) {
+          const normal = rail.normal;
           const vi = vel[i] as Vec2;
           // A ball moving off the rail is not resting on it.
           if (vi.x * normal.x + vi.y * normal.y > CLUSTER_SPEED_TOL) continue;
@@ -843,6 +922,11 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       const a2 = acc[i] as Vec2;
       const rev = timeToReverse(vel[i] as Vec2, a2);
       if (rev < shared) shared = rev;
+      // A ball held on a rail is released when it passes the end of the rail.
+      for (const rail of rails[i] as CushionSegment[]) {
+        const leaves = railExit(rail, pos[i] as Vec2, vel[i] as Vec2, a2);
+        if (leaves >= RAIL_EXIT_MIN_S && leaves < shared) shared = leaves;
+      }
       if (seg.state === "sliding") {
         // Slip changes at k = a' + (5/2) a_friction; it runs out when its component along the
         // starting slip direction reaches zero.
@@ -893,6 +977,16 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       throw new Error(`internal error: ball "${b.id}" left the table at (${r.x}, ${r.y})`);
     }
   };
+
+  // A ball that starts on a rail with friction driving it into the rail is held from the start.
+  for (const b of bodies) {
+    const held = holdOnRails(b, b.seg);
+    if (held === b.seg) continue;
+    b.seg = held;
+    b.track[0] = held;
+    b.end = held.duration;
+    b.forced = true;
+  }
 
   // --- initial event times -------------------------------------------------------------------
   const k0: Kinematics[] = bodies.map((b) => kinAt(b, 0));
@@ -1104,6 +1198,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       // into this cushion. It has already been re-started and re-scanned; nothing to resolve.
       continue;
     }
+    let continuing = false;
     if (closing < INELASTIC_SPEED) {
       // Too slow to rebound: just stop the motion into the cushion.
       const vn = va.x * normal.x + va.y * normal.y;
@@ -1121,15 +1216,35 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       // The ball now has no speed into the cushion. If friction would push it into the
       // cushion, the cushion holds it: remove that part of the acceleration so the ball runs
       // along the nose instead of re-touching it endlessly.
-      const an = seg.a.x * normal.x + seg.a.y * normal.y;
-      const held = an < -PRESSING_ACCEL_TOL;
-      if (held) {
-        const acc: Vec2 = { x: seg.a.x - an * normal.x, y: seg.a.y - an * normal.y };
-        const rev = timeToReverse(seg.v0, acc);
-        seg = { ...seg, a: acc, duration: rev < seg.duration ? rev : seg.duration };
+      let held: boolean;
+      if (hitKind === CushionKind.Segment) {
+        const free = seg;
+        seg = holdOnRails(a, free);
+        held = seg !== free;
+      } else {
+        // A jaw: the same along the normal at the point of contact. The jaw curves away, so
+        // the hold lasts only while the ball's line of contact turns by `JAW_HOLD_TURN`; then
+        // the ball is released and, if still pressed in, held again along the new normal.
+        const an = seg.a.x * normal.x + seg.a.y * normal.y;
+        held = an < -PRESSING_ACCEL_TOL;
+        if (held) {
+          const acc: Vec2 = { x: seg.a.x - an * normal.x, y: seg.a.y - an * normal.y };
+          const rev = timeToReverse(seg.v0, acc);
+          let duration = rev < seg.duration ? rev : seg.duration;
+          const arc = arcs[hitIndex] as (typeof arcs)[number];
+          const speed = Math.sqrt(seg.v0.x * seg.v0.x + seg.v0.y * seg.v0.y);
+          if (speed > REST_TOL) {
+            const turn = (JAW_HOLD_TURN * (arc.radiusM + a.contactDist)) / speed;
+            if (turn < duration) duration = turn;
+          }
+          seg = { ...seg, a: acc, duration };
+        }
       }
       setSegment(a, seg);
       a.forced = held;
+      // A ball that is still held on the same cushion is in one long contact: one event.
+      continuing = held && a.heldOn === cushionId;
+      a.heldOn = held ? cushionId : undefined;
     } else {
       const out = cushionModel.resolve(
         { radiusM: a.radiusM, massKg: a.massKg, velocity: va, spin: wa },
@@ -1139,8 +1254,11 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       );
       settle(a, out.velocity, out.spin);
       restart(a, now, ra, settled.v, settled.w);
+      a.heldOn = undefined;
     }
-    events.push({ type: "ball-cushion", t: now, ballId: a.id, cushionId, point: ra });
+    if (!continuing) {
+      events.push({ type: "ball-cushion", t: now, ballId: a.id, cushionId, point: ra });
+    }
     refresh(a, now);
   }
 

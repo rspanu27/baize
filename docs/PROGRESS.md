@@ -62,3 +62,34 @@ Known gaps carried forward:
 - CI has not run: GitHub Actions is unavailable on the account for now. The local checks above are the gate.
 - The playground page (`?playground`) still draws paths as curves.
 - Physics v1 limits are unchanged: no throw, squirt, swerve or nap; cushion model as measured in Phase 1.
+
+## Phase 3: physics v2 (finished 2026-11-13)
+
+Done: tasks 3.1 to 3.9 and 3.11. Task 3.10 (swerve) is skipped: the spec marks it optional and it needs cue elevation, which the editor has no control for and the engine rejects.
+
+What the editor now models:
+- **Throw:** friction between balls, stronger at low rubbing speed, with spin transfer.
+- **Squirt:** with side, the cue ball leaves off the aim line. The ghost ball, cut angle and distance follow the real line; the dashed aim line stays where the cue points.
+- **Cushions:** the Mathavan (2010) model, integrated through the impact. Against pooltool's implementation on 1,080 impacts: velocity within 0.06 % of the incoming speed at the median, 1.4 % at worst.
+- **Nap:** a constant push along the nap on rolling balls, followed in constant-acceleration pieces; within 1 % of the nap's effect against a fine integration of the exact equation.
+- **Debug panel ("Physics numbers"):** eight values can be changed live. They are never saved in the link.
+
+The version 2 models are opt-in in the engine, so no version 1 test or golden snapshot changed.
+
+Checks: `pnpm check` (tables 166, physics 401, web 453 tests), the Playwright smoke test, and a 6,000-run soak of the random-scene tests with all the new models.
+
+Engine bugs found by random runs and by the review, all fixed with regression tests:
+- A slow touch on a ball spinning on the spot wound its spin back up (energy rose).
+- A spinning ball squeezed between a rail and another ball sank into the rail 0.1 micrometres per cycle.
+- A hold on a rail outlasted the rail: a ball could cross a pocket mouth in a straight line.
+- On a napped cloth a ball rolling along a rail broke into hundreds of microscopic slides.
+
+Independent review (3.11): no blockers and no hard-rule violations. Besides the two rail findings above, fixed from it: balls starting on a rail were not held; the shot panel read the tuning store during render; the nap limit was written twice; `strike` checked the cue end mass only on shots with side; one unchecked value lacked its UNVERIFIED mark.
+
+Known gaps carried forward:
+- Three numbers are estimates with no measured source, marked UNVERIFIED in `packages/tables`: the cue end-mass ratio (squirt size), the nap push, and the slow/fast sliding friction offsets. The ball-ball friction fit was read from pooltool, not from the original proof.
+- Not modelled: swerve, and the effect of side spin on a napped cloth.
+- The playground page (`?playground`) still uses the version 1 models.
+- Results near pocket jaws remain approximate, as before.
+- CI still has not run; the local checks are the gate.
+
