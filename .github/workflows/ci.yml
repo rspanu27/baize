@@ -33,3 +33,8 @@ jobs:
       - run: pnpm check
 
       - run: pnpm --filter web build
+
+      # End-to-end smoke test of the editor in headless Chromium.
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - run: pnpm --filter web test:e2e

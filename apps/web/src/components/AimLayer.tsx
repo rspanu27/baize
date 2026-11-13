@@ -12,7 +12,7 @@ import "./AimLayer.css";
 const AIM_LINE_WIDTH_M = 0.004;
 const HANDLE_RADIUS_M = 0.022;
 /** A wider, invisible ring around the handle that is easier to grab. */
-const HANDLE_GRAB_RADIUS_M = 0.05;
+const HANDLE_GRAB_RADIUS_M = 0.07;
 const MIN_HANDLE_DISTANCE_M = 0.08;
 
 interface AimDrag {

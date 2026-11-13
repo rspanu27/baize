@@ -16,6 +16,27 @@ export async function shareUrl(doc: DiagramDoc, pageUrl: string): Promise<string
   return url.toString() + (await docToHash(doc));
 }
 
+export interface SharedLink {
+  url: string;
+  /**
+   * The diagram exactly as the link carries it. A link stores positions to a hundredth of a
+   * millimetre, and a hard shot into a pack is sensitive even to that, so the editor shows
+   * this document after sharing: what the sender sees is what the receiver will see.
+   */
+  doc: DiagramDoc;
+  /** True if `doc` differs from the document that was shared (it was rounded). */
+  rounded: boolean;
+}
+
+/** Makes the link for a document, and reads back the document that the link carries. */
+export async function shareLink(doc: DiagramDoc, pageUrl: string): Promise<SharedLink> {
+  const url = await shareUrl(doc, pageUrl);
+  const back = await docFromUrl(url);
+  if (!back?.ok) return { url, doc, rounded: false };
+  const rounded = JSON.stringify(back.doc) !== JSON.stringify(doc);
+  return { url, doc: rounded ? back.doc : doc, rounded };
+}
+
 /**
  * The document in a link, if it has one. Undefined means the link carries no diagram; a
  * result with `ok: false` means it carries one that cannot be opened, with the reason.

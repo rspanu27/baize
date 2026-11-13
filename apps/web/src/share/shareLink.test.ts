@@ -1,8 +1,8 @@
 import { getBallSet, getTablePreset, rackLayout } from "@baize/tables";
 import { describe, expect, test } from "vitest";
-import { loadLayout, setShot } from "../doc/ops";
+import { loadLayout, placeBall, setShot } from "../doc/ops";
 import { newDoc } from "../doc/resolve";
-import { docFromUrl, shareUrl } from "./shareLink";
+import { docFromUrl, shareLink, shareUrl } from "./shareLink";
 
 function racked() {
   const table = getTablePreset("pool-9@1");
@@ -50,5 +50,21 @@ describe("share links", () => {
     const damaged = await docFromUrl(url.slice(0, url.length - 25));
     expect(damaged?.ok).toBe(false);
     if (damaged && !damaged.ok) expect(damaged.problem.length).toBeGreaterThan(10);
+  });
+
+  test("sharing gives back the diagram as the link carries it, and that one is stable", async () => {
+    const page = "https://example.test/";
+    // A position finer than a link stores.
+    const doc = placeBall(racked(), "b1", { x: 0.4000001234, y: 0.6000004321 });
+    const first = await shareLink(doc, page);
+    expect(first.rounded).toBe(true);
+    expect(first.doc).not.toEqual(doc);
+    const opened = await docFromUrl(first.url);
+    expect(opened?.ok && opened.doc).toEqual(first.doc);
+    // Sharing what the link carries changes nothing further.
+    const second = await shareLink(first.doc, page);
+    expect(second.rounded).toBe(false);
+    expect(second.doc).toBe(first.doc);
+    expect(second.url).toBe(first.url);
   });
 });

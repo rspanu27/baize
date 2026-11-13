@@ -95,12 +95,25 @@
 @media (max-width: 800px) {
   .editor {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 56fr) minmax(0, 44fr);
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 0.5rem;
     padding: 0.5rem;
   }
 
   .editor-table {
     gap: 0.5rem;
+  }
+
+  /* The table takes the full width and the height that goes with it, but never so much
+     that the panels are squeezed out (a phone on its side). */
+  .editor-table .table-view {
+    flex: none;
+    max-height: 55vh;
+    max-height: 55dvh;
+  }
+
+  .play-bar {
+    padding: 0.35rem 0.5rem;
+    gap: 0.35rem;
   }
 }

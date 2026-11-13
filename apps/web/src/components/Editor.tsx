@@ -1,7 +1,6 @@
 import { usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
 import { useDoc, useEditor } from "../store/store";
-import { useOrientation } from "../view/useOrientation";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
@@ -20,13 +19,15 @@ import { Toolbar } from "./Toolbar";
 /**
  * The editor shell: the play bar and the table on one side, panels on the other. The page
  * itself never scrolls: the table stays in view and the panels scroll on their own.
+ *
+ * The table is always drawn lengthways. On a phone held upright that is also the larger
+ * drawing, because the table has the full width and the panels need the height below it.
  */
 export function Editor() {
   const doc = useDoc();
   const setShot = useEditor((s) => s.setShot);
   const continueFromShot = useEditor((s) => s.continueFromShot);
   const simulation = useSimulation(doc);
-  const orientation = useOrientation();
   const { scene, problems, paths, outcome } = simulation;
   const result = outcome.result;
   const playback = usePlayback(doc, result?.durationS ?? 0);
@@ -48,7 +49,7 @@ export function Editor() {
           }}
         />
         {scene ? (
-          <TableView scene={scene} orientation={orientation}>
+          <TableView scene={scene} orientation="landscape">
             {result && playingAt !== undefined ? (
               <>
                 <PathsLayer paths={paths} />

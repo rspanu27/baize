@@ -44,6 +44,8 @@ export interface EditorState {
 
   /** Replaces the document and clears the history (opening a link, starting a new diagram). */
   openDoc: (doc: DiagramDoc) => void;
+  /** Replaces the document as one undoable step (unlike `openDoc`, the history is kept). */
+  replaceDoc: (doc: DiagramDoc) => void;
   undo: () => void;
   redo: () => void;
   /** Ends a drag, so the next live change starts a new undo step. */
@@ -104,6 +106,9 @@ export const useEditor = create<EditorState>((set) => {
 
     openDoc: (doc) => {
       set({ history: createHistory(doc), selectedBallId: undefined });
+    },
+    replaceDoc: (doc) => {
+      change(() => doc);
     },
     undo: () => {
       set((state) => {

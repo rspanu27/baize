@@ -12,6 +12,9 @@ import { useViewTransform } from "../view/viewContext";
 import { BallBody, LABEL_UNITS } from "./BallBody";
 import "./BallsLayer.css";
 
+/** The area that picks a ball up, as a multiple of its radius. */
+const GRAB_SCALE = 1.6;
+
 interface BallItemProps {
   ball: SceneBall;
   view: ViewTransform;
@@ -104,6 +107,8 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
       onPointerCancel={onPointerEnd}
       onKeyDown={onKeyDown}
     >
+      {/* A wider invisible disc, so a ball can be picked up with a finger. */}
+      <circle className="ball-grab" r={r * GRAB_SCALE} fill="transparent" />
       <BallBody kind={ball.kind} r={r} />
       {selected ? <circle className="ball-selection" r={r * 1.25} strokeWidth={r * 0.14} /> : null}
       <circle className="ball-focus" r={r * 1.55} strokeWidth={r * 0.12} />

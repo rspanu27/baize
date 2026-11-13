@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { docFromUrl, shareUrl } from "../share/shareLink";
+import { docFromUrl, shareLink } from "../share/shareLink";
 import { useDoc, useEditor } from "../store/store";
 import "./SharePanel.css";
 
@@ -11,6 +11,7 @@ import "./SharePanel.css";
 export function SharePanel() {
   const doc = useDoc();
   const openDoc = useEditor((s) => s.openDoc);
+  const replaceDoc = useEditor((s) => s.replaceDoc);
   const [status, setStatus] = useState<{ kind: "idle" | "ok" | "problem"; text: string }>({
     kind: "idle",
     text: "",
@@ -40,7 +41,9 @@ export function SharePanel() {
   }, [openDoc]);
 
   const copy = (): void => {
-    void shareUrl(doc, window.location.href).then(async (url) => {
+    void shareLink(doc, window.location.href).then(async ({ url, doc: shared, rounded }) => {
+      // Show exactly what the link carries (one undo step), so both ends see the same shot.
+      if (rounded && useEditor.getState().history.present === doc) replaceDoc(shared);
       // Put the link in the address bar too, without adding a history entry.
       window.history.replaceState(null, "", url);
       try {
