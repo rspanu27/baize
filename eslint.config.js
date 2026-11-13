@@ -126,5 +126,53 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ["packages/vision/src/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ImportDeclaration[source.value=/^[^.]/][source.value!='@baize/tables'], ExportAllDeclaration[source.value=/^[^.]/], ExportNamedDeclaration[source.value=/^[^.]/]",
+          message:
+            "Vision may import only relative paths and @baize/tables: photos are processed in the browser with nothing else involved.",
+        },
+        {
+          selector: "ImportExpression:not([source.value=/^[.]/])",
+          message: "Vision may only dynamically import relative paths.",
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...[
+          "fetch",
+          "XMLHttpRequest",
+          "WebSocket",
+          "EventSource",
+          "navigator",
+          "localStorage",
+          "sessionStorage",
+          "indexedDB",
+          "caches",
+          "document",
+          "window",
+        ].map((name) => ({
+          name,
+          message: `${name} is banned in vision: a photo must never be uploaded or stored, and the package must not reach outside the pixels it is given.`,
+        })),
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["fetch", "localStorage", "sessionStorage", "indexedDB", "caches", "navigator"].flatMap(
+          (property) =>
+            ["globalThis", "self"].map((object) => ({
+              object,
+              property,
+              message: `${object}.${property} is banned in vision: a photo must never be uploaded or stored.`,
+            })),
+        ),
+      ],
+    },
+  },
   prettier,
 );
