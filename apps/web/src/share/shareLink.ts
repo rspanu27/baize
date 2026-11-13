@@ -16,6 +16,16 @@ export async function shareUrl(doc: DiagramDoc, pageUrl: string): Promise<string
   return url.toString() + (await docToHash(doc));
 }
 
+/** JSON with object keys in a fixed order and absent values left out, for comparing documents. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(v).sort()) sorted[k] = (v as Record<string, unknown>)[k];
+    return sorted;
+  });
+}
+
 export interface SharedLink {
   url: string;
   /**
@@ -33,7 +43,7 @@ export async function shareLink(doc: DiagramDoc, pageUrl: string): Promise<Share
   const url = await shareUrl(doc, pageUrl);
   const back = await docFromUrl(url);
   if (!back?.ok) return { url, doc, rounded: false };
-  const rounded = JSON.stringify(back.doc) !== JSON.stringify(doc);
+  const rounded = canonical(back.doc) !== canonical(doc);
   return { url, doc: rounded ? back.doc : doc, rounded };
 }
 

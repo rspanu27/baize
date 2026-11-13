@@ -58,7 +58,7 @@ export function TableView({ scene, orientation, children }: TableViewProps) {
         className="table-view"
         viewBox={`${String(box.x)} ${String(box.y)} ${String(box.width)} ${String(box.height)}`}
         preserveAspectRatio="xMidYMin meet"
-        role="img"
+        role="group"
         aria-label={`${table.name}, seen from above`}
       >
         <rect {...rails} rx={RAIL_CORNER_RADIUS_M} fill={RAIL_COLOUR} />

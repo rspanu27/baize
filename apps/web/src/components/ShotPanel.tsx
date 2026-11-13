@@ -12,12 +12,14 @@ import {
   SPEED_STOPS,
   aimAt,
   aimReadout,
+  clampTip,
   describeHit,
   angleToDegrees,
   describeTip,
   nudgeAngle,
   rollInTableLengths,
   speedName,
+  tipKeyStep,
   tipFromWidget,
 } from "../shot/shotModel";
 import { useDoc, useEditor } from "../store/store";
@@ -188,9 +190,23 @@ export function ShotPanelView({
           <svg
             viewBox={`0 0 ${String(FACE)} ${String(FACE)}`}
             className="shot-face"
-            role="img"
+            role="group"
+            tabIndex={0}
             aria-labelledby="shot-tip-label shot-tip-text"
+            aria-describedby="shot-tip-help"
+            onKeyDown={(e) => {
+              const step = tipKeyStep(e.key);
+              if (!step) return;
+              e.preventDefault();
+              actions.setShot({
+                tipOffset: clampTip(
+                  shot.tipOffset.side + step.side,
+                  shot.tipOffset.vertical + step.vertical,
+                ),
+              });
+            }}
             onPointerDown={(e) => {
+              if (e.pointerType === "mouse" && e.button !== 0) return;
               e.currentTarget.setPointerCapture(e.pointerId);
               draggingTip.current = true;
               actions.setShot({ tipOffset: tipFromEvent(e) }, "live");
@@ -233,6 +249,9 @@ export function ShotPanelView({
           <div>
             <p id="shot-tip-text" className="shot-readout">
               {describeTip(shot.tipOffset.side, shot.tipOffset.vertical)}
+            </p>
+            <p id="shot-tip-help" className="shot-hint">
+              Drag on the ball, or focus it and use the arrow keys.
             </p>
             <button
               type="button"

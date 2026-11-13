@@ -57,6 +57,11 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
   const onPointerMove = (e: PointerEvent<SVGGElement>) => {
     const g = grab.current;
     if (g?.pointerId !== e.pointerId) return;
+    // The button was let go somewhere the release could not be seen.
+    if (e.pointerType === "mouse" && e.buttons === 0) {
+      onPointerEnd(e);
+      return;
+    }
     const p = screenPoint(e);
     if (!p) return;
     const target = dragTarget(view, g.offset, p);
@@ -105,6 +110,7 @@ function BallItem({ ball, view, selected, spots }: BallItemProps) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
+      onLostPointerCapture={onPointerEnd}
       onKeyDown={onKeyDown}
     >
       {/* A wider invisible disc, so a ball can be picked up with a finger. */}

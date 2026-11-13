@@ -45,3 +45,20 @@ One short entry at the end of each phase, newest first.
 - Kickoff interview held; every open decision in SPEC section 10 is settled and recorded in the decisions log in [ARCHITECTURE.md](ARCHITECTURE.md).
 - Architecture written. Phases 0 to 2 broken into tasks in [TASKS.md](TASKS.md).
 - No code yet.
+
+## Phase 2: editor MVP (finished 2026-11-13)
+
+Done: every task 2.1 to 2.18. The editor at the site root sets up any preset or custom table, places and drags balls, racks, aims (drag on the cloth or the handle, to any angle), sets tip and speed, draws the simulated paths, plays the shot back, continues from the result, measures distances, shows the cut angle, exports PNG and SVG, and shares the whole diagram in a link.
+
+Checks: `pnpm check` (tables 162, physics 297, web 423 tests) and the Playwright smoke test (`pnpm --filter web test:e2e`: custom table, rack, aim, measure, play, export, share, reopen identical; phone layout).
+
+Found on first use by the project owner and fixed: the table replaced by a huge black and white shape at some aim angles in Chrome (paths are now polylines, labels use normal font sizes; confirmed gone), aim drags getting stuck, the table scrolling out of view, and no visible way to play a shot.
+
+Independent review (2.18): no blockers and no hard-rule violations. Fixed from it: playback returning after undo and redo; Copy link adding an empty undo step because documents were compared with field order; the table hiding its balls from screen readers (`role="img"`); no keyboard control for the tip position; exported labels losing their outline; stuck ball drags; aim slider values out of range; the aim handle drawn off a smaller table.
+
+Known gaps carried forward:
+- Clicking an object ball does not aim at it directly (select it, then "Aim at the selected ball").
+- Two quick link changes in the address bar can resolve out of order; the older one may win.
+- CI has not run: GitHub Actions is unavailable on the account for now. The local checks above are the gate.
+- The playground page (`?playground`) still draws paths as curves.
+- Physics v1 limits are unchanged: no throw, squirt, swerve or nap; cushion model as measured in Phase 1.

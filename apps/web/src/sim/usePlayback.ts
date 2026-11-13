@@ -41,6 +41,9 @@ export function advance(
 export function usePlayback(doc: DiagramDoc, durationS: number): Playback {
   const [state, setState] = useState<State | undefined>(undefined);
   const [rate, setRate] = useState(1);
+  // Any change to the document ends the playback for good: undo and redo bring back the very
+  // same document object, and must not bring a finished playback back with it.
+  if (state && state.doc !== doc) setState(undefined);
   const active = state?.doc === doc ? state : undefined;
   const running = active?.running === true;
 

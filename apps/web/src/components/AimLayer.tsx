@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import type { Scene } from "../doc/resolve";
-import { aimAt, aimGuide, aimKeyStep, nudgeAngle } from "../shot/shotModel";
+import { aimAt, aimGuide, aimKeyStep, angleToDegrees, nudgeAngle } from "../shot/shotModel";
 import { useEditor } from "../store/store";
 import { RAIL_WIDTH_M } from "../view/constants";
 import { clientToScreen } from "../view/pointer";
@@ -125,7 +125,12 @@ export function AimSurface({ scene }: { scene: Scene }) {
 export function AimLayer({ scene }: { scene: Scene }) {
   const view = useViewTransform();
   const setShot = useEditor((s) => s.setShot);
-  const handleDistance = useEditor((s) => s.aimHandleM);
+  const storedDistance = useEditor((s) => s.aimHandleM);
+  // The distance is kept across table changes; on a smaller table it must still be on it.
+  const handleDistance = Math.min(
+    storedDistance,
+    Math.sqrt(view.widthM * view.widthM + view.lengthM * view.lengthM),
+  );
   const drag = useAimDrag(scene);
 
   const guide = aimGuide(scene);
@@ -182,7 +187,8 @@ export function AimLayer({ scene }: { scene: Scene }) {
         aria-label="Aim direction. Drag, or use the left and right arrow keys."
         aria-valuemin={0}
         aria-valuemax={360}
-        aria-valuenow={Math.round(((shot.aimAngleRad * 180) / Math.PI) * 100) / 100}
+        aria-valuenow={Math.round(angleToDegrees(shot.aimAngleRad) * 100) / 100}
+        aria-valuetext={`${angleToDegrees(shot.aimAngleRad).toFixed(2)} degrees`}
         onPointerDown={(e) => {
           drag.begin(e, false);
           e.currentTarget.focus({ preventScroll: true });

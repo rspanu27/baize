@@ -52,6 +52,26 @@ describe("share links", () => {
     if (damaged && !damaged.ok) expect(damaged.problem.length).toBeGreaterThan(10);
   });
 
+  test("a diagram that needs no rounding is not replaced, whatever order its fields are in", async () => {
+    // setShot adds the shot after the other fields; a decoded document has it earlier.
+    const table = getTablePreset("pool-9@1");
+    const set = table ? getBallSet(table.defaultBallSetId) : undefined;
+    if (!table || !set) throw new Error("missing preset");
+    const doc = setShot(
+      loadLayout(newDoc("pool-9@1"), rackLayout(table, set, "pool-9ball"), {
+        source: "rack",
+        mode: "replace",
+      }),
+      { aimAngleRad: Math.PI / 2, speedMps: 4.5 },
+    );
+    const first = await shareLink(doc, "https://example.test/");
+    const again = await shareLink(first.doc, "https://example.test/");
+    expect(again.rounded).toBe(false);
+    expect(again.doc).toBe(first.doc);
+    // And if the first one was rounded at all, it was not because of field order.
+    if (first.rounded) expect(JSON.stringify(first.doc)).not.toBe(JSON.stringify(doc));
+  });
+
   test("sharing gives back the diagram as the link carries it, and that one is stable", async () => {
     const page = "https://example.test/";
     // A position finer than a link stores.

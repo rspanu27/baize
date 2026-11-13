@@ -139,6 +139,24 @@ export function aimGuide(scene: Scene): AimGuide | undefined {
   };
 }
 
+/** Arrow keys on the tip widget move the tip by a twentieth of the ball radius. */
+export const TIP_KEY_STEP = 0.05;
+
+export function tipKeyStep(key: string): { side: number; vertical: number } | undefined {
+  switch (key) {
+    case "ArrowLeft":
+      return { side: -TIP_KEY_STEP, vertical: 0 };
+    case "ArrowRight":
+      return { side: TIP_KEY_STEP, vertical: 0 };
+    case "ArrowUp":
+      return { side: 0, vertical: TIP_KEY_STEP };
+    case "ArrowDown":
+      return { side: 0, vertical: -TIP_KEY_STEP };
+    default:
+      return undefined;
+  }
+}
+
 /** A cut angle in the words players use for how much of the object ball is hit. */
 export function describeHit(cutAngleRad: number): string {
   const fraction = 1 - Math.sin(cutAngleRad);

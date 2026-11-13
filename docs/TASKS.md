@@ -67,7 +67,7 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 | 2.15 | SVG and PNG export | I | 2.12 | Exported SVG parses; PNG has the expected size | done |
 | 2.16 | Mobile layout, portrait and landscape, touch drag | U | 2.9, 2.11 | Manual check at phone sizes | done |
 | 2.17 | Playwright smoke test of the Phase 2 acceptance flow | I | 2.13 | Test passes in CI | done |
-| 2.18 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
+| 2.18 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | done |
 
 Parallel groups: (2.2, 2.3, 2.4, 2.5) after 2.1; (2.9, 2.10) alongside 2.6 to 2.8; (2.13, 2.14, 2.15) after 2.12.
 

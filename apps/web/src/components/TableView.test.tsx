@@ -32,7 +32,7 @@ describe.each(TABLE_PRESETS.map((t) => [t.id, t.game] as const))("%s", (id, game
 
     test("renders cleanly with the document's cloth colour", () => {
       expect(markup).not.toContain("NaN");
-      expect(markup).toContain('role="img"');
+      expect(markup).toContain('role="group"');
       expect(markup).toContain('aria-label="');
       expect(markup).toContain(`fill="${scene.cloth.colour}"`);
     });

@@ -19,6 +19,8 @@ const COPIED_STYLES = [
   "fill-opacity",
   "stroke",
   "stroke-opacity",
+  "stroke-width",
+  "stroke-dasharray",
   "stroke-linecap",
   "stroke-linejoin",
   "opacity",

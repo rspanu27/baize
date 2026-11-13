@@ -42,8 +42,10 @@ export function SharePanel() {
 
   const copy = (): void => {
     void shareLink(doc, window.location.href).then(async ({ url, doc: shared, rounded }) => {
+      // The diagram was changed while the link was being made: that link is already out of date.
+      if (useEditor.getState().history.present !== doc) return;
       // Show exactly what the link carries (one undo step), so both ends see the same shot.
-      if (rounded && useEditor.getState().history.present === doc) replaceDoc(shared);
+      if (rounded) replaceDoc(shared);
       // Put the link in the address bar too, without adding a history entry.
       window.history.replaceState(null, "", url);
       try {

@@ -91,11 +91,11 @@ export function MeasureLayer({ scene, interactive }: { scene: Scene; interactive
     return screen ? snapToBall(view.toTable(screen), scene.balls) : undefined;
   };
 
-  const finish = (commit: boolean): void => {
+  const finish = (releasedAt: Point | undefined): void => {
     if (pointer.current === undefined) return;
     pointer.current = undefined;
-    if (commit && draft && distance(draft.from, draft.to) >= MIN_MEASURE_M) {
-      addMeasure(draft.from, draft.to);
+    if (releasedAt && draft && distance(draft.from, releasedAt) >= MIN_MEASURE_M) {
+      addMeasure(draft.from, releasedAt);
     }
     setDraft(undefined);
   };
@@ -134,13 +134,13 @@ export function MeasureLayer({ scene, interactive }: { scene: Scene; interactive
             if (p) setDraft((d) => (d ? { from: d.from, to: p } : d));
           }}
           onPointerUp={(e) => {
-            if (pointer.current === e.pointerId) finish(true);
+            if (pointer.current === e.pointerId) finish(pointAt(e) ?? draft?.to);
           }}
           onPointerCancel={() => {
-            finish(false);
+            finish(undefined);
           }}
           onLostPointerCapture={() => {
-            finish(false);
+            finish(undefined);
           }}
         />
       ) : null}

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -73,6 +74,28 @@ test("custom table, diagram, play, share, reopen identical", async ({ page, brow
   await expect(page.locator("[data-playback-ball]").first()).toBeAttached();
   await page.getByRole("button", { name: "Back to setup" }).click();
   await expect(page.locator("[data-ball-id]")).toHaveCount(10);
+
+  // A playback does not come back with undo and redo: they return to the setup.
+  await page.getByRole("button", { name: /Play shot/ }).click();
+  await expect(page.getByRole("button", { name: "Back to setup" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(page.getByRole("button", { name: /Play shot/ })).toBeVisible();
+  await expect(page.locator("[data-playback-ball]")).toHaveCount(0);
+
+  // Save as SVG: a self-contained picture without the editor's controls.
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/^baize-.*\.svg$/);
+  const svg = await readFile(await download.path(), "utf8");
+  expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+  expect(svg).toContain("physics v1");
+  expect(svg).toMatch(/width="2000"/);
+  expect(svg).not.toMatch(/class=|tabindex=|role="slider"/);
+  // Ten balls, each with its outline, and the measuring label keeps its halo.
+  expect(svg.match(/data-ball-id=/g)).toHaveLength(10);
+  expect(svg).toMatch(/<text[^>]*stroke-width: 3\.5/);
 
   // Share, and open the link in a fresh browser context.
   await page.getByRole("button", { name: "Copy link" }).click();
