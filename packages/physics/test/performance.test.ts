@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { BALL_BALL_FRICTION } from "@baize/tables";
+import { BALL_BALL_FRICTION, napDrift } from "@baize/tables";
 import { frictionalBallBall, mathavanCushion, prepareTable, simulate } from "../src/index";
 import type { SimInput } from "../src/index";
 import { nineBallBreak, snookerBreakOff, snookerPackSplit } from "./scenes";
@@ -49,5 +49,24 @@ test.each([
   const result = simulate(input);
   expect(result.status).toBe("complete");
   // Measured on 2026-11-13: 1 to 3 ms.
+  expect(medianMs(input, 15)).toBeLessThan(50);
+});
+
+test.each([
+  ["snooker break-off", snookerBreakOff],
+  ["snooker pack split", snookerPackSplit],
+])("%s with the version 2 models on a heavy nap simulates in under 50 ms", (_name, make) => {
+  const base = make();
+  const drift = napDrift({
+    rollingResistance: base.cloth.rollingResistance,
+    nap: { directionRad: Math.PI / 2, strength: 1 },
+  });
+  const input: SimInput = {
+    ...base,
+    cloth: { ...base.cloth, ...(drift ? { napDrift: drift } : {}) },
+    models: { ballBall: frictionalBallBall(BALL_BALL_FRICTION), cushion: mathavanCushion },
+  };
+  const result = simulate(input);
+  expect(result.status).toBe("complete");
   expect(medianMs(input, 15)).toBeLessThan(50);
 });

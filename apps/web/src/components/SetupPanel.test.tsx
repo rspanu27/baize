@@ -115,7 +115,9 @@ describe("SetupPanel", () => {
 
   test("shows the nap note and the advanced coefficients", () => {
     const markup = render(newDoc("pool-9@1"));
-    expect(markup).toContain("Nap is saved with the diagram but does not affect paths yet.");
+    expect(markup).toContain(
+      "Nap runs from the baulk end to the top. Slow balls drift with it and run further that way.",
+    );
     expect(markup).toContain("Sliding friction");
     expect(markup).toContain("Rolling resistance");
     expect(markup).toContain("Spinning friction");

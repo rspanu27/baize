@@ -6,7 +6,7 @@ import {
   simulate,
 } from "@baize/physics";
 import type { PreparedTable, SimResult } from "@baize/physics";
-import { BALL_BALL_FRICTION, cueEndMassKg } from "@baize/tables";
+import { BALL_BALL_FRICTION, cueEndMassKg, napDrift } from "@baize/tables";
 import type { TableSpec } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 
@@ -66,11 +66,13 @@ export const mainThreadSimulator: Simulator = {
     const shot = scene.shot;
     if (!shot || scene.balls.length === 0) return { ms: 0 };
     const cue = scene.balls.find((b) => b.id === shot.cueBallId);
+    // Nap: the document stores a strength; the physics takes the push it stands for.
+    const drift = napDrift(scene.cloth);
     const started = performance.now();
     try {
       const result = simulate({
         table: preparedTable(scene.table),
-        cloth: scene.cloth,
+        cloth: drift ? { ...scene.cloth, napDrift: drift } : scene.cloth,
         balls: scene.balls,
         ballRestitution: scene.ballSet.restitution,
         shot: {

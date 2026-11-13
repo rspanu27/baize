@@ -7,7 +7,7 @@
 export const PNG_LONG_SIDE_PX = 2000;
 
 /** Printed on every export, so a diagram is not mistaken for more than the model gives. */
-export const EXPORT_NOTE = "Baize, physics v2: throw and squirt modelled; no swerve or nap";
+export const EXPORT_NOTE = "Baize, physics v2: throw, squirt and nap modelled; no swerve";
 
 /** Parts of the editor that are controls, not part of the diagram. */
 const CONTROL_SELECTOR =

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { CLOTH_COLOURS, CLOTH_SPEEDS, makeCloth } from "../src/presets/cloth";
+import {
+  CLOTH_COLOURS,
+  CLOTH_SPEEDS,
+  NAP_FULL_DRIFT_RATIO,
+  makeCloth,
+  napDrift,
+} from "../src/presets/cloth";
 import type { ClothSpeed } from "../src/types";
 
 const speeds: ClothSpeed[] = ["slow", "medium", "fast"];
@@ -68,5 +74,37 @@ describe("makeCloth", () => {
       ...CLOTH_SPEEDS[speed],
     });
     expect("nap" in cloth).toBe(false);
+  });
+});
+
+describe("napDrift", () => {
+  const cloth = makeCloth("#1f6b3a", "medium");
+
+  test("no nap, or zero strength, gives nothing", () => {
+    expect(napDrift(cloth)).toBeUndefined();
+    expect(napDrift({ ...cloth, nap: { directionRad: 1, strength: 0 } })).toBeUndefined();
+    expect(napDrift({ ...cloth, nap: { directionRad: 1, strength: -3 } })).toBeUndefined();
+    expect(napDrift({ ...cloth, nap: { directionRad: 1, strength: Number.NaN } })).toBeUndefined();
+  });
+
+  test("scales with strength and with the cloth's rolling resistance", () => {
+    const full = napDrift({ ...cloth, nap: { directionRad: 1.5, strength: 1 } });
+    expect(full).toEqual({
+      directionRad: 1.5,
+      coefficient: NAP_FULL_DRIFT_RATIO * cloth.rollingResistance,
+    });
+    const half = napDrift({ ...cloth, nap: { directionRad: 1.5, strength: 0.5 } });
+    expect(half?.coefficient).toBeCloseTo((full?.coefficient ?? 0) / 2, 15);
+    const slow = makeCloth("#1f6b3a", "slow");
+    const onSlow = napDrift({ ...slow, nap: { directionRad: 1.5, strength: 1 } });
+    expect(onSlow?.coefficient).toBeCloseTo(NAP_FULL_DRIFT_RATIO * slow.rollingResistance, 15);
+  });
+
+  test("a strength above 1 counts as 1, so the push stays far below the drag", () => {
+    const d = napDrift({ ...cloth, nap: { directionRad: 0, strength: 40 } });
+    expect(d?.coefficient).toBe(NAP_FULL_DRIFT_RATIO * cloth.rollingResistance);
+    // The physics accepts at most 0.8 of the rolling resistance.
+    expect(NAP_FULL_DRIFT_RATIO).toBeLessThan(0.8);
+    expect(NAP_FULL_DRIFT_RATIO).toBeGreaterThan(0);
   });
 });

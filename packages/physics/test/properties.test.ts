@@ -193,6 +193,37 @@ describe("random scenes", () => {
     );
   }, 900_000);
 
+  test("on a napped cloth, with the version 2 models, the same invariants hold", () => {
+    const models = {
+      ballBall: frictionalBallBall(BALL_BALL_FRICTION),
+      cushion: mathavanCushion,
+    };
+    fc.assert(
+      fc.property(
+        sceneArb,
+        fc.double({ min: 0, max: 6.283, noNaN: true }),
+        // Up to the engine's limit of 0.8 of the rolling resistance.
+        fc.double({ min: 0.001, max: 0.8, noNaN: true }),
+        (scene, directionRad, ratio) => {
+          fc.pre(scene !== undefined);
+          if (!scene) return;
+          const cloth: ClothInput = {
+            ...scene.input.cloth,
+            napDrift: { directionRad, coefficient: ratio * scene.input.cloth.rollingResistance },
+          };
+          const input: SimInput = { ...scene.input, cloth, models };
+          const result = simulate(input);
+          expect(result.status).toBe("complete");
+          // A roll on a napped cloth is followed in pieces, so there are more steps.
+          expect(result.stats.eventCount).toBeLessThan(15000);
+          expect(simulate(input)).toEqual(result);
+          checkInvariants(result, input);
+        },
+      ),
+      { numRuns: Math.ceil(RUNS / 2), endOnFailure: SOAK, ...SEED },
+    );
+  }, 900_000);
+
   test("momentum is conserved in every ordinary ball-ball collision", () => {
     fc.assert(
       fc.property(sceneArb, (scene) => {

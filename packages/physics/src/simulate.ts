@@ -4,6 +4,7 @@ import { buildTableGeometry, cushionContactDistance, isPreparedTable } from "./g
 import { frictionlessBallBall } from "./models/ballBall";
 import { noseImpulseCushion } from "./models/cushion";
 import {
+  REST_TOL,
   classify,
   makeSegment,
   nextSegment,
@@ -13,6 +14,7 @@ import {
   velocityAt,
 } from "./motion";
 import type { MotionParams } from "./motion";
+import { sinCos } from "./math/trig";
 import { strike } from "./strike";
 import { SimInputError } from "./types";
 import type {
@@ -100,6 +102,12 @@ export const REST_SPEED = 1e-2;
  */
 export const INPUT_OVERLAP_TOL_M = 5e-5;
 
+/**
+ * Largest nap push as a fraction of the rolling resistance. Design limit: the push must stay
+ * clearly below the drag, or a ball rolling with the nap would hardly slow down (or speed up).
+ */
+export const NAP_LIMIT = 0.8;
+
 const INF = Number.POSITIVE_INFINITY;
 
 const CushionKind = { None: 0, Segment: 1, Arc: 2, Pocket: 3 } as const;
@@ -156,6 +164,18 @@ function validate(input: SimInput, geometry: TableGeometry, cushion: CushionInpu
     !(cloth.spinningFriction > 0)
   ) {
     fail("invalid-cloth", "cloth friction coefficients must be positive numbers");
+  }
+  const nap = cloth.napDrift;
+  if (
+    nap &&
+    (!finite(nap.directionRad, nap.coefficient) ||
+      nap.coefficient < 0 ||
+      nap.coefficient > NAP_LIMIT * cloth.rollingResistance)
+  ) {
+    fail(
+      "invalid-cloth",
+      "the nap coefficient must be between 0 and 0.8 of the rolling resistance",
+    );
   }
   if (!(input.ballRestitution >= 0 && input.ballRestitution <= 1)) {
     fail("invalid-ball", "ball restitution must be between 0 and 1");
@@ -263,11 +283,19 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
   const cushion = tableInput.cushion;
   validate(input, geometry, cushion);
 
+  const napDrift = input.cloth.napDrift;
+  let napAccel: Vec2 | undefined;
+  if (napDrift && napDrift.coefficient > 0) {
+    const dir = sinCos(napDrift.directionRad);
+    const size = napDrift.coefficient * p.gravity;
+    napAccel = { x: size * dir.cos, y: size * dir.sin };
+  }
   const motion: MotionParams = {
     slidingFriction: input.cloth.slidingFriction,
     rollingResistance: input.cloth.rollingResistance,
     spinningFriction: input.cloth.spinningFriction,
     gravity: p.gravity,
+    ...(napAccel ? { nap: napAccel } : {}),
   };
   const ballBall = input.models?.ballBall ?? frictionlessBallBall;
   const cushionModel = input.models?.cushion ?? noseImpulseCushion;
@@ -470,9 +498,74 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     }
   };
 
-  /** New segment for a ball that has just been through a collision. */
-  const restart = (b: Body, now: number, r: Vec2, v: Vec2, w: Vec3): void => {
-    setSegment(b, makeSegment(now, r, v, w, b.radiusM, motion, classify(v, w, b.radiusM)));
+  /** Time until a ball that starts with velocity v and acceleration a stops moving along v. */
+  const timeToReverse = (v: Vec2, a: Vec2): number => {
+    const speedSq = v.x * v.x + v.y * v.y;
+    // A velocity that is only rounding noise has no direction to reverse; without this, a
+    // held ball with a speed of 1e-36 m/s would be given segments 1e-17 s long, for ever.
+    if (speedSq <= REST_TOL * REST_TOL) return INF;
+    const along = a.x * v.x + a.y * v.y;
+    return along < 0 ? -speedSq / along : INF;
+  };
+
+  /**
+   * The straight rails a ball at `r` is touching (at the nose, within the rail's length).
+   * Returns their normals.
+   */
+  const railsTouching = (b: Body, r: Vec2): Vec2[] => {
+    const out: Vec2[] = [];
+    // Broad phase: well inside the rectangle there is nothing to touch.
+    const reach = b.contactDist + CLUSTER_GAP_M;
+    if (r.x > reach && r.x < W - reach && r.y > reach && r.y < L - reach) return out;
+    for (const s of segments) {
+      const px = r.x - s.a.x;
+      const py = r.y - s.a.y;
+      const gap = px * s.normal.x + py * s.normal.y - b.contactDist;
+      if (gap > CLUSTER_GAP_M || gap < -b.radiusM) continue;
+      const ex = s.b.x - s.a.x;
+      const ey = s.b.y - s.a.y;
+      const along = px * ex + py * ey;
+      if (along < 0 || along > ex * ex + ey * ey) continue;
+      out.push(s.normal);
+    }
+    return out;
+  };
+
+  /**
+   * A ball resting against a rail cannot be pushed into it. If the segment's acceleration
+   * points into a rail the ball is touching, the rail takes that part (as it does after a
+   * slow cushion contact) and the ball runs along the nose. Returns the same segment when
+   * nothing had to change.
+   */
+  const holdOnRails = (b: Body, seg: Segment): Segment => {
+    if (seg.state !== "sliding" && seg.state !== "rolling") return seg;
+    let acc = seg.a;
+    for (const normal of railsTouching(b, seg.r0)) {
+      // A ball moving off the rail is not resting on it.
+      if (seg.v0.x * normal.x + seg.v0.y * normal.y > CLUSTER_SPEED_TOL) continue;
+      const an = acc.x * normal.x + acc.y * normal.y;
+      if (an < -PRESSING_ACCEL_TOL) acc = { x: acc.x - an * normal.x, y: acc.y - an * normal.y };
+    }
+    if (acc === seg.a) return seg;
+    const rev = timeToReverse(seg.v0, acc);
+    return { ...seg, a: acc, duration: rev < seg.duration ? rev : seg.duration };
+  };
+
+  /**
+   * New segment for a ball that has just been through a collision. A ball touching a rail
+   * and left creeping into it (slower than `INELASTIC_SPEED`) has that creep stopped here,
+   * as a slow cushion contact would stop it.
+   */
+  const restart = (b: Body, now: number, r: Vec2, vIn: Vec2, w: Vec3): void => {
+    let v = vIn;
+    for (const normal of railsTouching(b, r)) {
+      const vn = v.x * normal.x + v.y * normal.y;
+      if (vn < 0 && vn > -INELASTIC_SPEED) v = { x: v.x - vn * normal.x, y: v.y - vn * normal.y };
+    }
+    const free = makeSegment(now, r, v, w, b.radiusM, motion, classify(v, w, b.radiusM));
+    const seg = holdOnRails(b, free);
+    setSegment(b, seg);
+    b.forced = seg !== free;
   };
 
   /**
@@ -516,12 +609,6 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       }
     }
     for (const b of group) refresh(b, now);
-  };
-
-  /** Time until a ball that starts with velocity v and acceleration a stops moving along v. */
-  const timeToReverse = (v: Vec2, a: Vec2): number => {
-    const along = a.x * v.x + a.y * v.y;
-    return along < 0 ? -(v.x * v.x + v.y * v.y) / along : INF;
   };
 
   /**
@@ -630,6 +717,9 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
       }
       return false;
     };
+    // Rails that members touch: a rail takes any slow push into it, like a fixed ball.
+    const rails: Vec2[][] = [];
+    for (const i of members) rails[i] = railsTouching(bodies[i] as Body, pos[i] as Vec2);
     for (const i of members) classifyMember(i);
     for (let round = 0; round < 6; round++) {
       for (let sweep = 0; sweep < CLUSTER_SWEEPS; sweep++) {
@@ -650,6 +740,16 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
           const sj = 1 - si;
           vel[c.i] = { x: vi.x - si * closing * c.nx, y: vi.y - si * closing * c.ny };
           vel[c.j] = { x: vj.x + sj * closing * c.nx, y: vj.y + sj * closing * c.ny };
+        }
+        for (const i of members) {
+          if (fixed[i]) continue;
+          for (const normal of rails[i] as Vec2[]) {
+            const v = vel[i] as Vec2;
+            const into = -(v.x * normal.x + v.y * normal.y);
+            if (!(into > 0) || into >= INELASTIC_SPEED) continue;
+            if (into > worst) worst = into;
+            vel[i] = { x: v.x + into * normal.x, y: v.y + into * normal.y };
+          }
         }
         if (worst < CLUSTER_SPEED_TOL) break;
       }
@@ -716,6 +816,19 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
         const bj = bodies[c.j] as Body;
         if (!bi.partners.includes(c.j)) bi.partners.push(c.j);
         if (!bj.partners.includes(c.i)) bj.partners.push(c.i);
+      }
+      for (const i of members) {
+        for (const normal of rails[i] as Vec2[]) {
+          const vi = vel[i] as Vec2;
+          // A ball moving off the rail is not resting on it.
+          if (vi.x * normal.x + vi.y * normal.y > CLUSTER_SPEED_TOL) continue;
+          const ai = acc[i] as Vec2;
+          const an = ai.x * normal.x + ai.y * normal.y;
+          if (!(an < -PRESSING_ACCEL_TOL)) continue;
+          if (-an > worst) worst = -an;
+          acc[i] = { x: ai.x - an * normal.x, y: ai.y - an * normal.y };
+          forced[i] = true;
+        }
       }
       if (worst < CLUSTER_ACCEL_TOL) break;
     }
@@ -859,10 +972,16 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     }
     if (kind === 3) {
       const from = a.seg.state;
-      setSegment(a, nextSegment(a.seg, a.radiusM, motion));
+      const free = nextSegment(a.seg, a.radiusM, motion);
+      const held = holdOnRails(a, free);
+      setSegment(a, held);
+      a.forced = held !== free;
       // The transition is stamped with the segment's own end time; keep the loop clock in step.
       now = a.seg.t0;
-      events.push({ type: "transition", t: now, ballId: a.id, from, to: a.seg.state });
+      // On a napped cloth a roll is followed in pieces; the next piece is not a change of state.
+      if (a.seg.state !== from) {
+        events.push({ type: "transition", t: now, ballId: a.id, from, to: a.seg.state });
+      }
       refresh(a, now);
       continue;
     }

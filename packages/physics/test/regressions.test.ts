@@ -1,7 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { kineticEnergy, sampleAt, simulate } from "../src/index";
+import { BALL_BALL_FRICTION } from "@baize/tables";
+import {
+  cushionContactDistance,
+  frictionalBallBall,
+  kineticEnergy,
+  mathavanCushion,
+  sampleAt,
+  simulate,
+} from "../src/index";
 import type { SimInput } from "../src/index";
-import { POOL_9, checkInvariants, eventsOf } from "./helpers";
+import { BLACKBALL_6, POOL_9, checkInvariants, eventsOf } from "./helpers";
 
 /**
  * Scenes that once broke an invariant, kept so that they cannot break again. Each was found
@@ -68,5 +76,55 @@ describe("regressions", () => {
     expect(kineticEnergy(result, last.t + 1e-9)).toBeLessThanOrEqual(
       kineticEnergy(result, last.t - 1e-9),
     );
+  });
+
+  test("a spinning ball squeezed between a rail and another ball does not creep into the rail", () => {
+    // Found with seed 2004746535 (the napped-cloth property; the nap plays no part). Five
+    // balls frozen in a line, the first 0.1 mm off the left rail, struck hard along the line.
+    // The cue ball comes back to the rail with no speed left but plenty of top spin, so cloth
+    // friction pushes it into the rail while the next ball keeps touching it. Every time the
+    // slow-contact solver or a release gave it a new segment, the rail's hold was forgotten
+    // and the ball sank another 0.1 micrometres before the rail was noticed again: over a
+    // micrometre in a tenth of a second. The slow-contact solver now treats a rail that a
+    // ball touches as a fixed contact, and a ball resting on a rail is held from the start of
+    // every new segment.
+    const y = 0.23278318092093614;
+    const xs = [
+      0.02455665218299512, 0.07535665218299512, 0.1261566521829951, 0.1769566521829951,
+      0.22775665218299512,
+    ];
+    const input: SimInput = {
+      table: BLACKBALL_6,
+      cloth: {
+        slidingFriction: 0.17085656009361513,
+        rollingResistance: 0.008823133601671274,
+        spinningFriction: 0.006715784967957485,
+      },
+      balls: xs.map((x, i) => ({
+        id: `b${i}`,
+        radiusM: 0.0254,
+        massKg: 0.11448010973936898,
+        x,
+        y,
+      })),
+      ballRestitution: 0.9999999999999992,
+      shot: {
+        ballId: "b0",
+        aimAngleRad: 5.794789024208769e-204,
+        speedMps: 8.999999999999973,
+        tipOffset: { side: 1.266818018105203e-162, vertical: 0 },
+      },
+      models: { ballBall: frictionalBallBall(BALL_BALL_FRICTION), cushion: mathavanCushion },
+    };
+    const result = simulate(input);
+    expect(result.status).toBe("complete");
+    checkInvariants(result, input);
+
+    // A slow touch on a rail is only noticed 0.1 micrometres past the line, so allow that
+    // much; before the fix the ball was over a micrometre past it and still sinking.
+    const line = cushionContactDistance(0.0254, BLACKBALL_6.cushion.noseHeightM);
+    const cue = result.tracks[0];
+    if (!cue) throw new Error("missing cue ball");
+    for (const s of cue.segments) expect(s.r0.x).toBeGreaterThan(line - 1.5e-7);
   });
 });

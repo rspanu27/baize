@@ -65,8 +65,20 @@ export interface ClothInput {
   readonly rollingResistance: number;
   /** Vertical-axis (spinning) friction coefficient. */
   readonly spinningFriction: number;
-  /** Stored from v1; ignored by the engine until nap is modelled. */
+  /**
+   * The nap setting as documents store it (a strength from 0 to 1). The engine does not read
+   * it: the physical effect is given by `napDrift`.
+   */
   readonly nap?: { readonly directionRad: number; readonly strength: number };
+  /**
+   * Nap: a rolling ball is pushed along the nap with an acceleration of `coefficient` times
+   * gravity, as if the bed sloped very slightly down in the direction the nap runs. A ball
+   * rolling with the nap runs further, one rolling against it stops sooner, and one crossing
+   * it drifts in the direction of the nap, more and more as it slows. Sliding balls and balls
+   * at rest are not affected. `directionRad` is counter-clockwise from +x. The coefficient
+   * must be at most 0.8 of the rolling resistance. Absent or 0: no nap.
+   */
+  readonly napDrift?: { readonly directionRad: number; readonly coefficient: number };
 }
 
 export interface BallInput {

@@ -78,3 +78,42 @@ export const makeCloth = (colourHex: string, speed: ClothSpeed): ClothSpec => ({
   rollingResistance: CLOTH_SPEEDS[speed].rollingResistance,
   spinningFriction: CLOTH_SPEEDS[speed].spinningFriction,
 });
+
+/**
+ * Nap push at full strength (a `nap.strength` of 1, "heavy" in the editor), as a fraction of
+ * the cloth's rolling resistance. The physics pushes a rolling ball along the nap with this
+ * fraction of the force that slows it down.
+ *
+ * What it means on the table: a ball rolled across the nap that comes to rest after a
+ * distance d has drifted by about ratio * d / 2 in the direction of the nap (2.2 cm in 1.5 m
+ * at 0.03), most of it in the last part of the roll, and a ball rolled with the nap runs
+ * (1 + ratio) / (1 - ratio) times as far as one rolled against it (6 % further at 0.03).
+ *
+ * UNVERIFIED: no measurement of nap drift was found. The direction of the effect follows
+ * snooker coaching notes: Frank Callan, "The Nap of the Cloth"
+ * (https://www.fcsnooker.co.uk/coaching/intermediate/the_nap/the_nap.htm), describes a slow
+ * ball played against the nap towards a middle pocket falling away towards the side cushion
+ * on a heavy nap, and the effect mattering only for slow balls. The size was chosen so that
+ * a ball rolled a metre and a half across a heavy nap misses its line by a little under half
+ * a ball.
+ */
+export const NAP_FULL_DRIFT_RATIO = 0.03;
+
+/**
+ * The nap of a cloth as the physics takes it (`ClothInput.napDrift` in `@baize/physics`), or
+ * undefined for a cloth with no nap. A strength outside 0 to 1 is taken as the nearer end.
+ */
+export function napDrift(
+  cloth: Pick<ClothSpec, "rollingResistance" | "nap">,
+): { directionRad: number; coefficient: number } | undefined {
+  const nap = cloth.nap;
+  if (!nap || !Number.isFinite(nap.strength) || !Number.isFinite(nap.directionRad)) {
+    return undefined;
+  }
+  const strength = nap.strength < 0 ? 0 : nap.strength > 1 ? 1 : nap.strength;
+  if (strength === 0) return undefined;
+  return {
+    directionRad: nap.directionRad,
+    coefficient: strength * NAP_FULL_DRIFT_RATIO * cloth.rollingResistance,
+  };
+}

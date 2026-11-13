@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import { loadLayout, placeBall, setShot } from "../doc/ops";
 import { newDoc, resolveDoc } from "../doc/resolve";
 import type { DiagramDoc } from "../doc/types";
+import { withNap } from "../setup/cloth";
 import { pointOnPiece } from "./pathModel";
 import { simulateDoc, simulationFor } from "./useSimulation";
 
@@ -182,5 +183,36 @@ describe("simulationFor", () => {
     // simulating a full break and building the path model.
     expect(perStep).toBeLessThan(8);
     expect(resolveDoc(doc).ok).toBe(true);
+  });
+});
+
+describe("nap", () => {
+  /** A lone cue ball rolled slowly across the table; where it stops, for a nap level. */
+  function restAt(level: "none" | "light" | "heavy"): { x: number; y: number } {
+    const base = loadLayout(
+      newDoc("pool-9@1"),
+      { balls: [{ kind: "cue", x: 0.2, y: 1.2 }] },
+      { source: "manual", mode: "replace" },
+    );
+    const doc = setShot(
+      { ...base, cloth: withNap(base.cloth, level) },
+      {
+        aimAngleRad: 0,
+        speedMps: 0.5,
+      },
+    );
+    const result = must(simulateDoc(doc).outcome.result, "result");
+    return must(sampleAt(result, result.durationS + 1)[0], "ball").position;
+  }
+
+  test("the nap setting moves where a slow ball stops: towards the top, more when heavy", () => {
+    const none = restAt("none");
+    const light = restAt("light");
+    const heavy = restAt("heavy");
+    expect(none.y).toBeCloseTo(1.2, 9);
+    expect(none.x).toBeGreaterThan(0.7);
+    expect(light.y).toBeGreaterThan(none.y + 0.002);
+    expect(heavy.y).toBeGreaterThan(light.y + 0.002);
+    expect(heavy.y).toBeLessThan(none.y + 0.03);
   });
 });

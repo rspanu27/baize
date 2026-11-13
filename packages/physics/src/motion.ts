@@ -15,6 +15,17 @@ import type { MotionState, Segment, Vec2, Vec3 } from "./types";
  *  - spinning: no translation, only vertical spin left.
  *  - Vertical spin decays at 5 mu_sp g / (2R) in every state and stops at zero. It does not
  *    affect translation in this model.
+ *
+ * Nap (optional). A rolling ball also gets a constant push b along the nap, so its true motion
+ * is v' = -mu_r g v_hat + b, which has no solution that is a polynomial in time: the drag
+ * turns with the ball. It is followed in pieces instead. Each rolling segment still has one
+ * constant acceleration, -mu_r g h + b, where h is the heading the ball is predicted to have
+ * half-way through the piece (a midpoint rule), and the piece ends when the heading has
+ * turned by `NAP_TURN_TAN` or the speed has fallen to `NAP_SPEED_KEEP` of what it was,
+ * whichever is first; the next piece starts from the velocity actually reached. The error of
+ * one piece is of second order in those bounds. Because the drag stays within the turn bound
+ * of the true heading and b is smaller than the drag, speed falls throughout every piece.
+ * When the ball has less than `NAP_END_DISTANCE_M` left to roll, the last piece is straight.
  */
 
 export interface MotionParams {
@@ -22,7 +33,16 @@ export interface MotionParams {
   readonly rollingResistance: number;
   readonly spinningFriction: number;
   readonly gravity: number;
+  /** Acceleration (m/s^2) that the nap gives every rolling ball. Absent: no nap. */
+  readonly nap?: Vec2;
 }
+
+/** Largest turn of heading within one rolling piece on a napped cloth (tangent of the angle). */
+export const NAP_TURN_TAN = 0.03;
+/** A rolling piece on a napped cloth ends when the speed has fallen to this fraction. */
+export const NAP_SPEED_KEEP = 0.85;
+/** A ball with less than this left to roll finishes in a straight line (nap ignored), m. */
+export const NAP_END_DISTANCE_M = 1e-5;
 
 /** Speeds (m/s, and rad/s for vertical spin) below this are treated as zero when classifying. */
 export const REST_TOL = 1e-10;
@@ -88,13 +108,45 @@ export function makeSegment(
   if (state === "rolling") {
     const vn = Math.sqrt(v.x * v.x + v.y * v.y);
     const k = (p.rollingResistance * g) / vn;
-    const ax = -k * v.x;
-    const ay = -k * v.y;
+    let ax = -k * v.x;
+    let ay = -k * v.y;
+    let duration = vn / (p.rollingResistance * g);
+    if (p.nap) {
+      const drag = p.rollingResistance * g;
+      const hx = v.x / vn;
+      const hy = v.y / vn;
+      // The nap's push, along the heading and across it.
+      const along = p.nap.x * hx + p.nap.y * hy;
+      const acrossSigned = p.nap.y * hx - p.nap.x * hy;
+      const across = acrossSigned < 0 ? -acrossSigned : acrossSigned;
+      // Deceleration along the heading; positive because the push is smaller than the drag.
+      const slowing = drag - along;
+      if (across === 0 || vn * vn <= 2 * slowing * NAP_END_DISTANCE_M) {
+        // Straight to rest: exact when the ball runs along the nap, and the last few
+        // micrometres otherwise.
+        ax = -slowing * hx;
+        ay = -slowing * hy;
+        duration = vn / slowing;
+      } else {
+        // First estimate with the drag along the present heading, to find how long the piece
+        // may last; then the drag along the heading predicted for the middle of the piece.
+        const ax1 = ax + p.nap.x;
+        const ay1 = ay + p.nap.y;
+        const turnTime = (NAP_TURN_TAN * vn) / (across + NAP_TURN_TAN * slowing);
+        const speedTime = ((1 - NAP_SPEED_KEEP) * vn) / slowing;
+        duration = turnTime < speedTime ? turnTime : speedTime;
+        const mx = v.x + 0.5 * duration * ax1;
+        const my = v.y + 0.5 * duration * ay1;
+        const mn = Math.sqrt(mx * mx + my * my);
+        ax = (-drag * mx) / mn + p.nap.x;
+        ay = (-drag * my) / mn + p.nap.y;
+      }
+    }
     // Rolling constraint u = 0 fixes the horizontal spin exactly.
     const omega0: Vec3 = { x: -v.y / radiusM, y: v.x / radiusM, z: w.z };
     return {
       t0,
-      duration: vn / (p.rollingResistance * g),
+      duration,
       state,
       r0: r,
       v0: v,
@@ -150,7 +202,8 @@ export function spinAt(s: Segment, tau: number): Vec3 {
 
 /**
  * The segment that follows `s` when it runs to its natural end (no collision):
- * sliding -> rolling, rolling -> spinning or stationary, spinning -> stationary.
+ * sliding -> rolling, rolling -> spinning or stationary (or, on a napped cloth, the next piece
+ * of the same roll), spinning -> stationary.
  * Values that are zero by definition at the transition are set to exactly zero.
  */
 export function nextSegment(s: Segment, radiusM: number, p: MotionParams): Segment {
@@ -167,6 +220,13 @@ export function nextSegment(s: Segment, radiusM: number, p: MotionParams): Segme
     return makeSegment(t, r, ZERO2, { x: 0, y: 0, z: w.z }, radiusM, p, restState(w.z));
   }
   if (s.state === "rolling") {
+    if (p.nap) {
+      // On a napped cloth a rolling segment may be one piece of a longer roll.
+      const v = velocityAt(s, tau);
+      if (v.x * v.x + v.y * v.y > REST_TOL * REST_TOL) {
+        return makeSegment(t, r, v, spinAt(s, tau), radiusM, p, "rolling");
+      }
+    }
     const wz = spinAt(s, tau).z;
     return makeSegment(t, r, ZERO2, { x: 0, y: 0, z: wz }, radiusM, p, restState(wz));
   }

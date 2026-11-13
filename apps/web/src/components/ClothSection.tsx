@@ -188,7 +188,9 @@ export function ClothSection({ cloth }: { cloth: ClothSpec }) {
             </option>
           ))}
         </select>
-        <p className="setup-note">Nap is saved with the diagram but does not affect paths yet.</p>
+        <p className="setup-note">
+          Nap runs from the baulk end to the top. Slow balls drift with it and run further that way.
+        </p>
       </div>
     </fieldset>
   );

@@ -106,7 +106,7 @@ export type ClothSpeed = "slow" | "medium" | "fast";
 export interface NapSpec {
   /** Direction the nap runs, counter-clockwise from +x. pi/2 = baulk to top. */
   directionRad: number;
-  /** 0 = none. Not used by the physics until Phase 3. */
+  /** 0 = none, 1 = heavy. `napDrift` turns it into the coefficient the physics uses. */
   strength: number;
 }
 

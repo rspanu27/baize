@@ -86,8 +86,8 @@ export function Editor() {
         <SharePanel />
         <ExportPanel />
         <p className="editor-note">
-          Physics v2 in progress: throw and squirt are modelled; swerve and nap are not yet. The
-          yellow aim line is where the cue points; with side the ball leaves slightly off it.
+          Physics v2: throw, squirt and nap are modelled; swerve is not. The yellow aim line is
+          where the cue points; with side the ball leaves slightly off it.
         </p>
       </aside>
     </div>
