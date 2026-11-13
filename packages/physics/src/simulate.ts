@@ -288,7 +288,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     let v: Vec2 = b.velocity ?? { x: 0, y: 0 };
     let w: Vec3 = b.spin ?? { x: 0, y: 0, z: 0 };
     if (input.shot && input.shot.ballId === b.id) {
-      const struck = strike(b.radiusM, input.shot);
+      const struck = strike(b.radiusM, input.shot, b.massKg);
       v = struck.velocity;
       w = struck.spin;
       events.push({ type: "strike", t: 0, ballId: b.id });
@@ -570,8 +570,10 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
     const spin: Vec3[] = [];
     for (const i of members) {
       const x = bodies[i] as Body;
-      const tau = x.moving ? now - x.seg.t0 : 0;
-      vel[i] = velocityAt(x.seg, tau);
+      const tau = now - x.seg.t0;
+      vel[i] = velocityAt(x.seg, x.moving ? tau : 0);
+      // A ball spinning on the spot is not "moving", but its spin has been decaying since its
+      // segment began: read it at the present time, not at the start of the segment.
       spin[i] = spinAt(x.seg, tau);
     }
 
