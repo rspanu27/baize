@@ -95,3 +95,17 @@ The version 2 models are opt-in in `packages/physics` (through `SimInput.models`
 | 3.10 | Swerve with cue elevation (optional in the spec) | L | 3.2 | Only if the rest is solid | skipped: needs cue elevation, which the editor has no control for and the engine rejects |
 | 3.11 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | done |
 
+## Phase 4: playback and polish
+
+Playback itself (real time, half and quarter speed, scrubbing, continue from the result) shipped in Phase 2; this phase polishes it and adds styling and drills.
+
+| ID | Task | Owner | Deps | Done-check | Status |
+|---|---|---|---|---|---|
+| 4.1 | Style in the document: theme, path line style, label options. `schemaVersion` 2 with a migration from 1 | L | 2.2 | Version 1 links open unchanged; round-trip property test covers the new fields | todo |
+| 4.2 | Drawing and exports follow the style; style panel in the editor | U | 4.1 | Component tests per theme and option; exported SVG carries the theme | todo |
+| 4.3 | Drill templates in `packages/tables`: classic drills per game, placed from spots and table size so they fit any table | I | 1.5, 1.6 | Every drill on every preset and on random custom tables: no overlaps, all balls inside the cushions, or the drill reports that it does not fit | todo |
+| 4.4 | Drills in the editor: pick one, it loads as one undo step | U | 4.3 | Interaction test; drills that do not fit are not offered | todo |
+| 4.5 | Playback polish: tenth speed, space bar to play and pause, repeat | U | 2.13a | Component and hook tests | todo |
+| 4.6 | Stretch: save the animation as a WebM video, in the browser only | I | 4.2, 4.5 | A file is produced in Chromium; unsupported browsers get a plain message | todo |
+| 4.7 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
+
