@@ -38,6 +38,9 @@ importers:
       '@baize/tables':
         specifier: workspace:*
         version: link:../../packages/tables
+      '@baize/vision':
+        specifier: workspace:*
+        version: link:../../packages/vision
       react:
         specifier: 19.3.1
         version: 19.3.1
