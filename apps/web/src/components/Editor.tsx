@@ -1,4 +1,4 @@
-import { usePlayback } from "../sim/usePlayback";
+import { usePlayKey, usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
 import { useDoc, useEditor } from "../store/store";
 import { AimLayer, AimSurface } from "./AimLayer";
@@ -34,6 +34,7 @@ export function Editor() {
   const result = outcome.result;
   const playback = usePlayback(doc, result?.durationS ?? 0);
   const playingAt = result ? playback.t : undefined;
+  usePlayKey(playback, result !== undefined);
 
   return (
     <div className="editor">

@@ -104,8 +104,8 @@ Playback itself (real time, half and quarter speed, scrubbing, continue from the
 | 4.1 | Style in the document: theme, path line style, label options. `schemaVersion` 2 with a migration from 1 | L | 2.2 | Version 1 links open unchanged; round-trip property test covers the new fields | done |
 | 4.2 | Drawing and exports follow the style; style panel in the editor | U | 4.1 | Component tests per theme and option; exported SVG carries the theme | done |
 | 4.3 | Drill templates in `packages/tables`: classic drills per game, placed from spots and table size so they fit any table | I | 1.5, 1.6 | Every drill on every preset and on random custom tables: no overlaps, all balls inside the cushions, or the drill reports that it does not fit | done |
-| 4.4 | Drills in the editor: pick one, it loads as one undo step | U | 4.3 | Interaction test; drills that do not fit are not offered | todo |
-| 4.5 | Playback polish: tenth speed, space bar to play and pause, repeat | U | 2.13a | Component and hook tests | todo |
+| 4.4 | Drills in the editor: pick one, it loads as one undo step | U | 4.3 | Interaction test; drills that do not fit are not offered | done |
+| 4.5 | Playback polish: tenth speed, space bar to play and pause, repeat | U | 2.13a | Component and hook tests | done |
 | 4.6 | Stretch: save the animation as a WebM video, in the browser only | I | 4.2, 4.5 | A file is produced in Chromium; unsupported browsers get a plain message | todo |
 | 4.7 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
 

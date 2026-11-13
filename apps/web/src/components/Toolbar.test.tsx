@@ -25,6 +25,7 @@ function props(scene: Scene, over: Partial<ToolbarViewProps> = {}): ToolbarViewP
     onRemoveSelected: noop,
     onClear: noop,
     onRack: noop,
+    onDrill: noop,
     ...over,
   };
 }
@@ -97,5 +98,25 @@ describe("Toolbar", () => {
     const markup = renderToStaticMarkup(<Toolbar />);
     expect(button(markup, "Undo")).toContain("disabled");
     expect(markup).toContain("Add cue ball");
+  });
+});
+
+describe("drills in the toolbar", () => {
+  test("the drills of the table's game are offered, with nothing chosen at first", () => {
+    const pool = renderToStaticMarkup(<ToolbarView {...props(sceneFor(newDoc("pool-9@1")))} />);
+    expect(pool).toContain("<h2");
+    expect(pool).toContain("Drills");
+    expect(pool).toContain("Choose a drill");
+    expect(pool).toContain("Stop-shot ladder");
+    expect(pool).toContain("Wagon wheel");
+    expect(pool).not.toContain("T line-up");
+    // Nothing is put on the table until a drill is chosen.
+    expect(button(pool, "Put on the table")).toContain("disabled");
+
+    const snooker = renderToStaticMarkup(
+      <ToolbarView {...props(sceneFor(newDoc("snooker-12@1")))} />,
+    );
+    expect(snooker).toContain("T line-up");
+    expect(snooker).not.toContain("Wagon wheel");
   });
 });

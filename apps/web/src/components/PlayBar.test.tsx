@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { continueFromShot, loadLayout, placeBall, setShot } from "../doc/ops";
 import { newDoc } from "../doc/resolve";
 import type { DiagramDoc } from "../doc/types";
-import { advance } from "../sim/usePlayback";
+import { PLAYBACK_RATES, REPEAT_HOLD_S, advance, isPlayKey } from "../sim/usePlayback";
 import type { Playback } from "../sim/usePlayback";
 import { simulateDoc } from "../sim/useSimulation";
 import { makeViewTransform } from "../view/transform";
@@ -32,11 +32,13 @@ function playback(patch: Partial<Playback> = {}): Playback {
     t: undefined,
     running: false,
     rate: 1,
+    repeat: false,
     play: () => undefined,
     pause: () => undefined,
     stop: () => undefined,
     seek: () => undefined,
     setRate: () => undefined,
+    setRepeat: () => undefined,
     ...patch,
   };
 }
@@ -173,5 +175,68 @@ describe("continueFromShot", () => {
     expect(continueFromShot(moved, [{ ballId: cue, position: { x: Number.NaN, y: 1 } }])).toBe(
       moved,
     );
+  });
+});
+
+describe("playback polish", () => {
+  test("a tenth speed is on offer and named", () => {
+    expect(PLAYBACK_RATES).toEqual([1, 0.5, 0.25, 0.1]);
+    const doc = setShot(racked(), { aimAngleRad: Math.PI / 2, speedMps: 5 });
+    const simulation = simulateDoc(doc);
+    const markup = renderToStaticMarkup(
+      <PlayBar
+        hasCueBall
+        hasShot
+        durationS={simulation.outcome.result?.durationS}
+        playback={playback({ rate: 0.1, repeat: true })}
+        onAddShot={() => undefined}
+        onContinue={() => undefined}
+      />,
+    );
+    expect(markup).toContain("Tenth speed");
+    expect(markup).toMatch(/<input type="checkbox" checked=""[^>]*\/>Repeat/);
+    expect(markup).toContain('aria-keyshortcuts="Space"');
+  });
+
+  test("with repeat the shot is held at its end, then starts again", () => {
+    // Just past the end: still running, the clock keeps going while the result is shown.
+    expect(advance(5.9, 0.5, 1, 6, true)).toEqual({ t: 6.4, running: true });
+    // After the hold: back to the start.
+    expect(advance(6.4, REPEAT_HOLD_S, 1, 6, true)).toEqual({ t: 0, running: true });
+    // The hold is the same in real time at any speed.
+    const slow = advance(6, REPEAT_HOLD_S * 0.99, 0.1, 6, true);
+    expect(slow.t).toBeGreaterThan(6);
+    expect(advance(6, REPEAT_HOLD_S * 1.01, 0.1, 6, true)).toEqual({ t: 0, running: true });
+    // Without repeat nothing changed.
+    expect(advance(5.9, 0.5, 1, 6, false)).toEqual({ t: 6, running: false });
+  });
+
+  test("the time shown never runs past the end while the result is held", () => {
+    const markup = renderToStaticMarkup(
+      <PlayBar
+        hasCueBall
+        hasShot
+        durationS={6}
+        playback={playback({ t: 6.4, running: true, repeat: true })}
+        onAddShot={() => undefined}
+        onContinue={() => undefined}
+      />,
+    );
+    expect(markup).toContain("6.0 / 6.0 s");
+  });
+
+  test("the space bar plays and pauses, except while typing or on a control", () => {
+    const space = { key: " ", ctrlKey: false, metaKey: false, altKey: false };
+    expect(isPlayKey(space, null)).toBe(true);
+    expect(isPlayKey(space, { tagName: "DIV" })).toBe(true);
+    expect(isPlayKey(space, { tagName: "svg" })).toBe(true);
+    for (const tagName of ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A", "SUMMARY"]) {
+      expect(isPlayKey(space, { tagName }), tagName).toBe(false);
+    }
+    expect(isPlayKey(space, { tagName: "DIV", isContentEditable: true })).toBe(false);
+    expect(isPlayKey(space, { tagName: "g", getAttribute: () => "slider" })).toBe(false);
+    expect(isPlayKey({ ...space, ctrlKey: true }, null)).toBe(false);
+    expect(isPlayKey({ ...space, repeat: true }, null)).toBe(false);
+    expect(isPlayKey({ ...space, key: "Enter" }, null)).toBe(false);
   });
 });

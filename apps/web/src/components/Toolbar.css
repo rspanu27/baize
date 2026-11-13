@@ -41,3 +41,13 @@
   outline: 2px solid #7fd1ff;
   outline-offset: 2px;
 }
+
+.toolbar-note {
+  margin: 0.4rem 0 0;
+  color: #a9bcb1;
+  font-size: 0.85rem;
+}
+
+.toolbar-row select {
+  min-height: 2.5rem;
+}

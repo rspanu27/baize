@@ -14,7 +14,10 @@ export interface PlayBarProps {
 }
 
 function rateLabel(rate: number): string {
-  return rate === 1 ? "Full speed" : rate === 0.5 ? "Half speed" : "Quarter speed";
+  if (rate === 1) return "Full speed";
+  if (rate === 0.5) return "Half speed";
+  if (rate === 0.25) return "Quarter speed";
+  return "Tenth speed";
 }
 
 /** Playing the shot: always in view above the table. */
@@ -52,15 +55,28 @@ export function PlayBar({
   }
 
   const showing = playback.t !== undefined;
-  const t = playback.t ?? 0;
+  // With repeat on, the clock runs a little past the end while the result is held.
+  const t = Math.min(playback.t ?? 0, durationS);
   return (
     <div className="play-bar">
       {playback.running ? (
-        <button type="button" className="play-main" onClick={playback.pause}>
+        <button
+          type="button"
+          className="play-main"
+          onClick={playback.pause}
+          title="Space bar"
+          aria-keyshortcuts="Space"
+        >
           ❚❚ Pause
         </button>
       ) : (
-        <button type="button" className="play-main" onClick={playback.play}>
+        <button
+          type="button"
+          className="play-main"
+          onClick={playback.play}
+          title="Space bar"
+          aria-keyshortcuts="Space"
+        >
           ▶ {showing && t < durationS && t > 0 ? "Resume" : showing ? "Play again" : "Play shot"}
         </button>
       )}
@@ -93,6 +109,16 @@ export function PlayBar({
           </option>
         ))}
       </select>
+      <label className="play-repeat">
+        <input
+          type="checkbox"
+          checked={playback.repeat}
+          onChange={(e) => {
+            playback.setRepeat(e.target.checked);
+          }}
+        />
+        Repeat
+      </label>
       {showing ? (
         <button type="button" onClick={playback.stop}>
           Back to setup

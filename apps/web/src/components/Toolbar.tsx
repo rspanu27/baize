@@ -1,6 +1,6 @@
-import { rackLayout } from "@baize/tables";
+import { drillLayout, rackLayout } from "@baize/tables";
 import type { BallKind, RackKind } from "@baize/tables";
-import { useEffect } from "react";
+import { useEffect, useId, useState } from "react";
 import { nextBallId } from "../doc/ops";
 import type { Scene } from "../doc/resolve";
 import { simulationFor } from "../sim/useSimulation";
@@ -8,12 +8,14 @@ import { canRedo, canUndo } from "../store/history";
 import { useDoc, useEditor } from "../store/store";
 import { BallBody } from "./BallBody";
 import {
+  drillEntries,
   historyShortcut,
   isTypingTarget,
   paletteEntries,
   rackEntries,
   tableCentre,
 } from "./ToolbarModel";
+import type { DrillEntry } from "./ToolbarModel";
 import "./Toolbar.css";
 
 export interface ToolbarViewProps {
@@ -27,6 +29,58 @@ export interface ToolbarViewProps {
   onRemoveSelected: () => void;
   onClear: () => void;
   onRack: (rack: RackKind) => void;
+  onDrill: (drillId: string) => void;
+}
+
+/** Choosing a practice drill: its description is shown before it replaces the balls. */
+function DrillPicker({
+  drills,
+  onDrill,
+}: {
+  drills: readonly DrillEntry[];
+  onDrill: (drillId: string) => void;
+}) {
+  const id = useId();
+  const [chosen, setChosen] = useState("");
+  // The list changes with the table; a drill that is no longer offered is not kept.
+  const drill = drills.find((d) => d.id === chosen);
+  if (drills.length === 0) return null;
+  return (
+    <div className="toolbar-group">
+      <h2 id={`${id}-title`}>Drills</h2>
+      <div className="toolbar-row">
+        <select
+          aria-labelledby={`${id}-title`}
+          aria-describedby={drill ? `${id}-about` : undefined}
+          value={drill ? drill.id : ""}
+          onChange={(e) => {
+            setChosen(e.target.value);
+          }}
+        >
+          <option value="">Choose a drill</option>
+          {drills.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!drill}
+          onClick={() => {
+            if (drill) onDrill(drill.id);
+          }}
+        >
+          Put on the table
+        </button>
+      </div>
+      {drill ? (
+        <p id={`${id}-about`} className="toolbar-note">
+          {drill.description} Replaces the balls on the table; Undo brings them back.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /** The toolbar's markup; `Toolbar` connects it to the store. */
@@ -95,6 +149,7 @@ export function ToolbarView(props: ToolbarViewProps) {
               ))}
             </div>
           </div>
+          <DrillPicker drills={drillEntries(scene)} onDrill={props.onDrill} />
         </>
       ) : null}
     </div>
@@ -157,6 +212,12 @@ export function Toolbar() {
           source: "rack",
           mode: "replace",
         });
+      }}
+      onDrill={(drillId) => {
+        if (!scene) return;
+        const layout = drillLayout(scene.table, scene.ballSet, drillId);
+        if (!layout) return;
+        useEditor.getState().loadLayout(layout, { source: "template", mode: "replace" });
       }}
     />
   );

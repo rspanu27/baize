@@ -50,3 +50,10 @@
   margin: 0;
   color: #a9bcb1;
 }
+
+.play-repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+}

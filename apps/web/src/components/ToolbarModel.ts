@@ -1,4 +1,4 @@
-import { rackFits, racksFor } from "@baize/tables";
+import { drillFits, drillsFor, rackFits, racksFor } from "@baize/tables";
 import type { BallKind, RackKind } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 import { ballName } from "../view/ballLook";
@@ -50,6 +50,20 @@ export function rackEntries(scene: Scene): RackEntry[] {
       ...(fits ? {} : { reason: "Does not fit on this table with these balls." }),
     };
   });
+}
+
+export interface DrillEntry {
+  id: string;
+  name: string;
+  /** What to do, in a sentence or two. */
+  description: string;
+}
+
+/** The drills of the table's game that fit this table with these balls. */
+export function drillEntries(scene: Scene): DrillEntry[] {
+  return drillsFor(scene.table.game)
+    .filter((d) => drillFits(scene.table, scene.ballSet, d.id))
+    .map((d) => ({ id: d.id, name: d.name, description: d.description }));
 }
 
 /** The point balls are added at: the middle of the playing area. */

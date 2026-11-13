@@ -3,6 +3,7 @@ import { newDoc, resolveDoc } from "../doc/resolve";
 import type { Scene } from "../doc/resolve";
 import {
   RACK_LABELS,
+  drillEntries,
   historyShortcut,
   isTypingTarget,
   paletteEntries,
@@ -105,5 +106,29 @@ describe("shortcuts", () => {
     expect(isTypingTarget({ tagName: "DIV", isContentEditable: true })).toBe(true);
     expect(isTypingTarget({ tagName: "BUTTON" })).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
+  });
+});
+
+describe("drillEntries", () => {
+  test("every preset table offers the drills of its game, each with a description", () => {
+    const pool = drillEntries(sceneFor("pool-9@1"));
+    expect(pool.map((d) => d.id)).toEqual([
+      "pool-stop-shot-ladder",
+      "pool-l-drill",
+      "pool-wagon-wheel",
+      "pool-line-across",
+    ]);
+    for (const d of pool) expect(d.description.length).toBeGreaterThan(20);
+    expect(drillEntries(sceneFor("snooker-12@1")).map((d) => d.id)).toContain("snooker-line-up");
+  });
+
+  test("a drill that does not fit is not offered", () => {
+    // A 9-ball set has no balls numbered above 9; every pool drill here uses at most 7.
+    const scene = sceneFor("pool-9@1");
+    const few = {
+      ...scene,
+      ballSet: { ...scene.ballSet, kinds: scene.ballSet.kinds.filter((k) => k.kind === "cue") },
+    };
+    expect(drillEntries(few)).toEqual([]);
   });
 });
