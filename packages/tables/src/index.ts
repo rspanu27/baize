@@ -23,4 +23,5 @@ export {
 export type { DropCircle } from "./validate";
 export { markingsFor, spotsFor } from "./markings";
 export { rackFits, rackLayout, racksFor } from "./racks";
+export { DRILL_TEMPLATES, drillFits, drillLayout, drillsFor } from "./drills";
 export { TOUCH_TOLERANCE_M, ballSizeOf, noseContactDistanceM, sanitizeLayout } from "./layout";

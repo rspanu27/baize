@@ -136,6 +136,16 @@ export interface LayoutBall {
 export type RackKind =
   "snooker-15" | "snooker-10" | "snooker-6" | "pool-8ball" | "pool-9ball" | "pool-15" | "blackball";
 
+/** A built-in practice drill: a layout of balls only, no shot. Task 4.3. */
+export interface DrillTemplate {
+  /** Stable id, e.g. "snooker-line-up". Never changes once published. */
+  id: string;
+  name: string;
+  game: GameType;
+  /** One or two plain sentences: what to do. Shown to the user. */
+  description: string;
+}
+
 export interface Spot {
   /** Stable name, e.g. 'black', 'pink', 'blue', 'brown', 'green', 'yellow', 'foot', 'head'. */
   name: string;
