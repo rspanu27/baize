@@ -8,6 +8,7 @@ export {
   invertHomography,
   tableToImage,
 } from "./geometry/homography";
+export { importPhoto } from "./importPhoto";
 export { ballInPhoto, findBalls } from "./balls/findBalls";
 export type { FoundBall } from "./balls/findBalls";
 export { findTable } from "./table/findTable";
