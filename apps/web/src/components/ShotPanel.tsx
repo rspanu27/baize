@@ -11,6 +11,8 @@ import {
   SPEED_MIN,
   SPEED_STOPS,
   aimAt,
+  aimReadout,
+  describeHit,
   angleToDegrees,
   describeTip,
   nudgeAngle,
@@ -20,7 +22,7 @@ import {
 } from "../shot/shotModel";
 import { useDoc, useEditor } from "../store/store";
 import type { ChangeMode } from "../store/store";
-import { formatDistance, formatSpeed } from "../units/units";
+import { formatAngle, formatDistance, formatSpeed } from "../units/units";
 import type { UnitSystem } from "../units/units";
 import { useUnitSystem } from "../units/usePreference";
 import { ballName } from "../view/ballLook";
@@ -108,6 +110,7 @@ export function ShotPanelView({
   const first = paths?.firstObjectBallId
     ? scene.balls.find((b) => b.id === paths.firstObjectBallId)
     : undefined;
+  const readout = aimReadout(scene);
   const potted = paths?.finals.filter((f) => f.pocketed) ?? [];
 
   return (
@@ -299,6 +302,16 @@ export function ShotPanelView({
         <dl className="shot-result">
           <dt>First ball hit</dt>
           <dd>{first ? ballName(first.kind) : "none"}</dd>
+          {readout && readout.targetBallId === paths.firstObjectBallId ? (
+            <>
+              <dt>Cut angle</dt>
+              <dd>
+                {formatAngle(readout.cutAngleRad)} ({describeHit(readout.cutAngleRad)})
+              </dd>
+              <dt>Distance to it</dt>
+              <dd>{formatDistance(readout.distanceM, units)}</dd>
+            </>
+          ) : null}
           <dt>Cue ball travel</dt>
           <dd>{formatDistance(paths.cueTravelM, units)}</dd>
           <dt>Potted</dt>

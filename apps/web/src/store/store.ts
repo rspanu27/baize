@@ -2,6 +2,9 @@ import type { BallKind, ClothSpec, Layout } from "@baize/tables";
 import { create } from "zustand";
 import {
   addBall,
+  addMeasure,
+  clearAnnotations,
+  removeAnnotation,
   clearBalls,
   clearShot,
   continueFromShot,
@@ -64,6 +67,10 @@ export interface EditorState {
   setAimHandle: (distanceM: number) => void;
   /** Replaces the layout with where a shot left the balls, as one undoable step. */
   continueFromShot: (finals: readonly ShotFinal[]) => void;
+
+  addMeasure: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
+  removeAnnotation: (id: string) => void;
+  clearAnnotations: () => void;
 
   select: (id: string | undefined) => void;
   setTool: (tool: Tool) => void;
@@ -154,6 +161,16 @@ export const useEditor = create<EditorState>((set) => {
     },
     continueFromShot: (finals) => {
       change((doc) => continueFromShot(doc, finals));
+    },
+
+    addMeasure: (from, to) => {
+      change((doc) => addMeasure(doc, from, to));
+    },
+    removeAnnotation: (id) => {
+      change((doc) => removeAnnotation(doc, id));
+    },
+    clearAnnotations: () => {
+      change(clearAnnotations);
     },
 
     select: (id) => {

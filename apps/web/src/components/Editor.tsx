@@ -5,6 +5,9 @@ import { useOrientation } from "../view/useOrientation";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
+import { ExportPanel } from "./ExportPanel";
+import { MeasureLayer } from "./MeasureLayer";
+import { MeasurePanel } from "./MeasurePanel";
 import { PathsLayer } from "./PathsLayer";
 import { PlayBar } from "./PlayBar";
 import { PlaybackLayer } from "./PlaybackLayer";
@@ -50,6 +53,7 @@ export function Editor() {
               <>
                 <PathsLayer paths={paths} />
                 <PlaybackLayer scene={scene} result={result} t={playingAt} />
+                <MeasureLayer scene={scene} interactive={false} />
               </>
             ) : (
               <>
@@ -57,6 +61,7 @@ export function Editor() {
                 <PathsLayer paths={paths} />
                 <BallsLayer scene={scene} />
                 <AimLayer scene={scene} />
+                <MeasureLayer scene={scene} interactive />
               </>
             )}
           </TableView>
@@ -76,7 +81,9 @@ export function Editor() {
         ) : null}
         <SetupPanel />
         <ShotPanel />
+        <MeasurePanel />
         <SharePanel />
+        <ExportPanel />
         <p className="editor-note">Physics v1: no throw, squirt, swerve or nap yet.</p>
       </aside>
     </div>

@@ -1,7 +1,15 @@
 import { sanitizeLayout } from "@baize/tables";
 import type { BallKind, ClothSpec, Layout } from "@baize/tables";
 import { resolveDoc } from "./resolve";
-import type { DiagramDoc, DiagramStyle, DocBall, DocBallSet, DocShot, DocTable } from "./types";
+import type {
+  Annotation,
+  DiagramDoc,
+  DiagramStyle,
+  DocBall,
+  DocBallSet,
+  DocShot,
+  DocTable,
+} from "./types";
 
 /**
  * Document operations: pure functions from a document to a new document.
@@ -258,6 +266,42 @@ export function setBallSet(doc: DiagramDoc, ballSet: DocBallSet): DiagramDoc {
 
 export function setCloth(doc: DiagramDoc, cloth: ClothSpec): DiagramDoc {
   return { ...doc, cloth };
+}
+
+/** An annotation id not used in the document yet: "m1", "m2", ... */
+function nextAnnotationId(doc: DiagramDoc): string {
+  let max = 0;
+  for (const a of doc.annotations) {
+    const n = /^m(\d+)$/.exec(a.id);
+    if (n) max = Math.max(max, Number(n[1]));
+  }
+  return `m${String(max + 1)}`;
+}
+
+/** Adds a measuring line between two points on the table. */
+export function addMeasure(
+  doc: DiagramDoc,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): DiagramDoc {
+  if (![from.x, from.y, to.x, to.y].every((v) => Number.isFinite(v))) return doc;
+  if (from.x === to.x && from.y === to.y) return doc;
+  const line: Annotation = {
+    kind: "measure",
+    id: nextAnnotationId(doc),
+    from: { x: from.x, y: from.y },
+    to: { x: to.x, y: to.y },
+  };
+  return { ...doc, annotations: [...doc.annotations, line] };
+}
+
+export function removeAnnotation(doc: DiagramDoc, id: string): DiagramDoc {
+  if (!doc.annotations.some((a) => a.id === id)) return doc;
+  return { ...doc, annotations: doc.annotations.filter((a) => a.id !== id) };
+}
+
+export function clearAnnotations(doc: DiagramDoc): DiagramDoc {
+  return doc.annotations.length === 0 ? doc : { ...doc, annotations: [] };
 }
 
 /** Changes how the diagram is drawn (not what it contains). */

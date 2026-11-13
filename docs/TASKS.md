@@ -63,8 +63,8 @@ Parallel: the tables track (1.2, 1.3, 1.4, 1.5, then 1.6; one file each) runs al
 | 2.12 | Path drawing: emphasis rules, collision marks, final positions, show-all, "physics v1" note | U | 2.10 | Component test on a fixed shot | done |
 | 2.13 | Share button and load from URL hash | U | 2.2 | A link reopens an identical doc | done |
 | 2.13a | Bug fixes from first use: path drawing hardened, aim by dragging on the cloth, table always in view, play bar with playback and continue-from-result | L | 2.11 to 2.13 | `pnpm check`; browser check of play, scrub, continue, panel scroll | done |
-| 2.14 | Measuring tool, cut-angle and travel readouts | U | 2.4, 2.12 | Readout matches helper output | todo |
-| 2.15 | SVG and PNG export | I | 2.12 | Exported SVG parses; PNG has the expected size | todo |
+| 2.14 | Measuring tool, cut-angle and travel readouts | U | 2.4, 2.12 | Readout matches helper output | done |
+| 2.15 | SVG and PNG export | I | 2.12 | Exported SVG parses; PNG has the expected size | done |
 | 2.16 | Mobile layout, portrait and landscape, touch drag | U | 2.9, 2.11 | Manual check at phone sizes | todo |
 | 2.17 | Playwright smoke test of the Phase 2 acceptance flow | I | 2.13 | Test passes in CI | todo |
 | 2.18 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |

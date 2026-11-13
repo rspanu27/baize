@@ -139,6 +139,48 @@ export function aimGuide(scene: Scene): AimGuide | undefined {
   };
 }
 
+/** A cut angle in the words players use for how much of the object ball is hit. */
+export function describeHit(cutAngleRad: number): string {
+  const fraction = 1 - Math.sin(cutAngleRad);
+  if (fraction > 0.95) return "full ball";
+  if (fraction < 0.08) return "very thin";
+  const names: [number, string][] = [
+    [0.75, "three-quarter ball"],
+    [0.5, "half ball"],
+    [0.25, "quarter ball"],
+  ];
+  for (const [f, name] of names) if (Math.abs(fraction - f) < 0.06) return name;
+  return `${fraction.toFixed(2)} of the ball`;
+}
+
+export interface AimReadout {
+  /** Angle between the cue ball's line and the line of centres at contact, in [0, pi/2]. */
+  cutAngleRad: number;
+  /** How far the cue ball travels to the contact, metres. */
+  distanceM: number;
+  targetBallId: string;
+}
+
+/** The cut angle and distance of the straight shot along the aim line, if it meets a ball. */
+export function aimReadout(scene: Scene): AimReadout | undefined {
+  const guide = aimGuide(scene);
+  const shot = scene.shot;
+  if (!guide?.ghost || guide.targetBallId === undefined || !shot) return undefined;
+  const target = scene.balls.find((b) => b.id === guide.targetBallId);
+  if (!target) return undefined;
+  const tx = Math.cos(shot.aimAngleRad);
+  const ty = Math.sin(shot.aimAngleRad);
+  const cx = target.x - guide.ghost.x;
+  const cy = target.y - guide.ghost.y;
+  const dx = guide.ghost.x - guide.from.x;
+  const dy = guide.ghost.y - guide.from.y;
+  return {
+    cutAngleRad: Math.atan2(Math.abs(tx * cy - ty * cx), tx * cx + ty * cy),
+    distanceM: Math.sqrt(dx * dx + dy * dy),
+    targetBallId: guide.targetBallId,
+  };
+}
+
 /** Key presses on the aim handle: left and right turn the aim. Returns degrees, or undefined. */
 export function aimKeyStep(
   key: string,
