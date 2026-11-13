@@ -9,7 +9,7 @@ import type { BallKind, ClothSpec, CustomTableFields } from "@baize/tables";
  * The format is versioned. Any change to it needs a new `schemaVersion` and a migration in
  * `migrations.ts`, so that old links keep opening.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** A table preset by id (for example "pool-9@1"), or the measurements of a custom table. */
 export type DocTable = { preset: string } | { custom: CustomTableFields };
@@ -53,9 +53,28 @@ export type Annotation = {
   to: { x: number; y: number };
 };
 
+/** Colours of the drawing. "table" follows the cloth colour; the others are for print and slides. */
+export type DiagramTheme = "table" | "print" | "dark";
+export type PathLine = "solid" | "dashed" | "dotted";
+export type PathWeight = "thin" | "normal" | "thick";
+
+/** Longest caption a document may carry, in characters. */
+export const CAPTION_MAX_LENGTH = 140;
+
+/** How the diagram is drawn. Every field is optional; an absent field means the default. */
 export interface DiagramStyle {
   /** Draw every moving ball's path at full strength, not only the cue ball and first object ball. */
   showAllPaths?: boolean;
+  /** Default "table". (Since schema version 2.) */
+  theme?: DiagramTheme;
+  /** How ball paths are drawn. Default "solid". (Since schema version 2.) */
+  pathLine?: PathLine;
+  /** Default "normal". (Since schema version 2.) */
+  pathWeight?: PathWeight;
+  /** Numbers on pool balls and the marks on uncertain balls. Default true. (Since version 2.) */
+  ballLabels?: boolean;
+  /** A line of text shown with the diagram and in exports. (Since schema version 2.) */
+  caption?: string;
 }
 
 export interface DiagramDoc {

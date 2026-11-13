@@ -99,7 +99,7 @@ test("custom table, diagram, play, share, reopen identical", async ({ page, brow
 
   // Share, and open the link in a fresh browser context.
   await page.getByRole("button", { name: "Copy link" }).click();
-  await expect.poll(() => page.url()).toContain("#v1.");
+  await expect.poll(() => page.url()).toContain("#v2.");
   const original = await snapshot(page);
 
   const context = await browser.newContext();

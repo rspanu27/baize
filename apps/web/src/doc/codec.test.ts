@@ -126,7 +126,7 @@ describe("round trip", () => {
   test("an empty document", async () => {
     const doc = newDoc("pool-9@1");
     const text = await roundTrip(doc);
-    expect(text).toMatch(/^v1\.[cu]\.[A-Za-z0-9_-]+$/);
+    expect(text).toMatch(/^v2\.[cu]\.[A-Za-z0-9_-]+$/);
     expect((await decodeDoc(text)).ok && (await decodeDoc(text))).toMatchObject({ doc });
   });
 
@@ -180,12 +180,12 @@ describe("round trip", () => {
   test("the uncompressed fallback round trips and is marked u", async () => {
     for (const doc of [racked(), photoDoc(), customDoc()]) {
       const text = await encodeDoc(doc, { compression: "off" });
-      expect(text.startsWith("v1.u.")).toBe(true);
+      expect(text.startsWith("v2.u.")).toBe(true);
       const decoded = await decodeDoc(text);
       if (!decoded.ok) throw new Error(decoded.problem);
       expectRoundTrip(doc, decoded.doc);
     }
-    expect((await encodeDoc(racked())).startsWith("v1.c.")).toBe(true);
+    expect((await encodeDoc(racked())).startsWith("v2.c.")).toBe(true);
   });
 
   test("touching balls stay legal for the simulator after quantisation", async () => {
@@ -209,7 +209,7 @@ describe("hash helpers", () => {
   test("docToHash and docFromHash agree; unrelated hashes are ignored", async () => {
     const doc = racked();
     const hash = await docToHash(doc);
-    expect(hash.startsWith("#v1.")).toBe(true);
+    expect(hash.startsWith("#v2.")).toBe(true);
     const back = await docFromHash(hash);
     expect(back?.ok).toBe(true);
     expect(await docFromHash("")).toBeUndefined();
@@ -265,6 +265,21 @@ function randomDoc(rand: () => number): DiagramDoc {
     };
   }
   if (rand() < 0.3) doc = { ...doc, style: { showAllPaths: rand() < 0.5 } };
+  if (rand() < 0.4) {
+    doc = {
+      ...doc,
+      style: {
+        ...doc.style,
+        ...(rand() < 0.5 ? { theme: pick(["print", "dark"] as const) } : {}),
+        ...(rand() < 0.5 ? { pathLine: pick(["dashed", "dotted"] as const) } : {}),
+        ...(rand() < 0.5 ? { pathWeight: pick(["thin", "thick"] as const) } : {}),
+        ...(rand() < 0.5 ? { ballLabels: false } : {}),
+        ...(rand() < 0.5
+          ? { caption: `Drill ${String(Math.floor(rand() * 1000))}: "stun" & roll é` }
+          : {}),
+      },
+    };
+  }
   if (rand() < 0.3)
     doc = { ...doc, cloth: makeCloth("#336699", pick(["slow", "medium", "fast"] as const)) };
   return doc;
@@ -434,5 +449,153 @@ describe("migrations", () => {
     expect(runMigrations(table, 4, 3, {}).ok).toBe(false);
     expect(runMigrations(table, 4, 0, {}).ok).toBe(false);
     expect(runMigrations(table, 4, 1.5, {}).ok).toBe(false);
+  });
+});
+
+describe("schema version 2", () => {
+  // Written by the version 1 encoder (commit fa54b71) for the document below.
+  const V1_PLAIN =
+    "v1.u.eyJ0Ijoic25vb2tlci0xMkAxIiwicyI6InNub29rZXItNTJAMSIsImsiOnsiYyI6IiMyYTZmOWUiLCJrIjpbMC4yMSwwLjAxMjMsMC4wMTExXSwibiI6WzEuNTcwNzk2MzI2Nzk0ODk2NiwwLjVdfSwiYiI6W1siYjEiLCJjdWUiLDUwMDAwLDUwMDAwXSxbImIyIiwicmVkIiw4MDAwMCwxNTAwMDAsMC40XSxbImIzIiwiYmxhY2siLDYwMDAwLDIxMDAwMF1dLCJoIjpbImIxIiwxLjIzNDUsMC4yNSwtMC4xLDIuNV0sImEiOltbIm0iLCJtMSIsNDAwMDAsNjAwMDAsOTEyMzQsMTcwMDAwXV0sIm8iOjEsInkiOnsiYSI6dHJ1ZX19";
+  const V1_PACKED =
+    "v1.c.TY_BasMwEET_ZXqdiN21JMc69T-ED7arUnATg5McSvC_l0gUetmFecxb9ok7Em7XbVvLflJ7VxC3f1Fo0Yr0xIKEN5vi51BalMWZUpyodXWpjsQVKasLvfRD7Cz2gz8PMVJcGA9iRsoZ80u6PAoYRETaHJkxG4i9fIDnCrRxcb7SDsT8PS0rGCswrc2R-EJqXnXW-UBxFngSpzQXRmKqhy8gLgr62m6OQa3z1P7PtCEp8fN6eUK6749yHL8";
+  const expected: DiagramDoc = {
+    schemaVersion: 2,
+    table: {
+      preset: "snooker-12@1",
+    },
+    ballSet: {
+      preset: "snooker-52@1",
+    },
+    cloth: {
+      colour: "#2a6f9e",
+      speedPreset: "custom",
+      slidingFriction: 0.21,
+      rollingResistance: 0.0123,
+      spinningFriction: 0.0111,
+      nap: {
+        directionRad: 1.5707963267948966,
+        strength: 0.5,
+      },
+    },
+    balls: [
+      {
+        id: "b1",
+        kind: "cue",
+        x: 0.5,
+        y: 0.5,
+      },
+      {
+        id: "b2",
+        kind: "red",
+        x: 0.8,
+        y: 1.5,
+        confidence: 0.4,
+      },
+      {
+        id: "b3",
+        kind: "black",
+        x: 0.6,
+        y: 2.1,
+      },
+    ],
+    annotations: [
+      {
+        kind: "measure",
+        id: "m1",
+        from: {
+          x: 0.4,
+          y: 0.6,
+        },
+        to: {
+          x: 0.91234,
+          y: 1.7,
+        },
+      },
+    ],
+    source: {
+      kind: "photo",
+    },
+    shot: {
+      cueBallId: "b1",
+      aimAngleRad: 1.2345,
+      tipOffset: {
+        side: 0.25,
+        vertical: -0.1,
+      },
+      speedMps: 2.5,
+    },
+    style: {
+      showAllPaths: true,
+    },
+  };
+
+  test("links made before version 2 open as the same document", async () => {
+    for (const link of [V1_PLAIN, V1_PACKED]) {
+      const decoded = await decodeDoc(link);
+      if (!decoded.ok) throw new Error(decoded.problem);
+      expectRoundTrip(expected, decoded.doc);
+      expect(decoded.doc.schemaVersion).toBe(2);
+      // Nothing was added to the style: it is drawn as it always was.
+      expect(decoded.doc.style).toEqual({ showAllPaths: true });
+    }
+  });
+
+  test("every style field round trips, and defaults are not written", async () => {
+    const styled: DiagramDoc = {
+      ...newDoc("pool-9@1"),
+      style: {
+        showAllPaths: true,
+        theme: "print",
+        pathLine: "dotted",
+        pathWeight: "thick",
+        ballLabels: false,
+        caption: "Stop shot: 3 ball to the corner",
+      },
+    };
+    const text = await encodeDoc(styled, { compression: "off" });
+    const decoded = await decodeDoc(text);
+    if (!decoded.ok) throw new Error(decoded.problem);
+    expect(decoded.doc.style).toEqual(styled.style);
+
+    const defaults: DiagramDoc = {
+      ...newDoc("pool-9@1"),
+      style: { theme: "table", pathLine: "solid", pathWeight: "normal", ballLabels: true },
+    };
+    const back = await decodeDoc(await encodeDoc(defaults, { compression: "off" }));
+    if (!back.ok) throw new Error(back.problem);
+    expect(back.doc.style).toEqual({});
+  });
+
+  test("unknown style codes and over-long captions are refused", async () => {
+    const link = (y: unknown): string => {
+      const json = JSON.stringify({
+        t: "pool-9@1",
+        s: "pool-57@1",
+        k: { c: "#1f6b3a", k: "medium" },
+        b: [],
+        y,
+      });
+      return `v2.u.${btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+    };
+    expect((await decodeDoc(link({ t: "p" }))).ok).toBe(true);
+    for (const y of [
+      { t: "x" },
+      { l: "solid" },
+      { w: 3 },
+      { n: 1 },
+      { c: "" },
+      { c: 7 },
+      { c: "x".repeat(141) },
+    ]) {
+      expect((await decodeDoc(link(y))).ok, JSON.stringify(y).slice(0, 30)).toBe(false);
+    }
+  });
+
+  test("a link from a later version is refused in plain words", async () => {
+    const decoded = await decodeDoc("v3.u.e30");
+    expect(decoded).toEqual({
+      ok: false,
+      problem: "This link was made by a newer version of Baize.",
+    });
   });
 });

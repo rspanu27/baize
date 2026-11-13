@@ -1,18 +1,18 @@
 import { CLOTH_SPEEDS } from "@baize/tables";
 import type { BallKind, ClothSpec, ClothSpeed, CustomTableFields, GameType } from "@baize/tables";
 import { migrate } from "./migrations";
-import { SCHEMA_VERSION } from "./types";
+import { CAPTION_MAX_LENGTH, SCHEMA_VERSION } from "./types";
 import type { Annotation, DiagramDoc, DocBall, DocBallSet, DocShot, DocTable } from "./types";
 
 /**
  * The shareable link: a document as text, small enough for a URL.
  *
- *   v1.<c|u>.<payload>
+ *   v2.<c|u>.<payload>
  *
- * `v1` is the schema version of the payload. `c` means the payload is deflate-raw compressed,
+ * `v2` is the schema version of the payload. `c` means the payload is deflate-raw compressed,
  * `u` that it is not. The payload is base64url (no padding) of the UTF-8 bytes of compact JSON.
  *
- * Compact JSON (version 1), default values omitted:
+ * Compact JSON (version 2), default values omitted:
  *   t  table: preset id string, or { g: game, l: length, w: width, c: corner mouth,
  *      m: middle mouth, j?: jaw style }
  *   s  ball set: preset id string, or { p: preset, d?: diameter, c?: cue diameter }
@@ -22,7 +22,11 @@ import type { Annotation, DiagramDoc, DocBall, DocBallSet, DocShot, DocTable } f
  *   h  shot: [cue ball id, aim angle, tip side, tip vertical, speed, elevation?]
  *   a  annotations: ["m", id, x1, y1, x2, y2] (measure), coordinates like ball positions
  *   o  source: absent = manual, 1 = photo, 0 = no source recorded
- *   y  style: { a?: show all paths }
+ *   y  style: { a?: show all paths, t?: theme "p" print | "d" dark, l?: path line "d" dashed
+ *      | "o" dotted, w?: path weight "n" thin | "k" thick, n?: 0 when ball labels are off,
+ *      c?: caption }
+ *
+ * Version 1 was the same without t, l, w, n and c in the style.
  */
 
 export type DecodeResult = { ok: true; doc: DiagramDoc } | { ok: false; problem: string };
@@ -215,7 +219,15 @@ function toCompact(doc: DiagramDoc): Record<string, unknown> {
   if (doc.source === undefined) out.o = 0;
   else if (doc.source.kind === "photo") out.o = 1;
   if (doc.style) {
-    out.y = doc.style.showAllPaths === undefined ? {} : { a: doc.style.showAllPaths };
+    const s = doc.style;
+    const y: Record<string, unknown> = {};
+    if (s.showAllPaths !== undefined) y.a = s.showAllPaths;
+    if (s.theme !== undefined && s.theme !== "table") y.t = THEME_CODE[s.theme];
+    if (s.pathLine !== undefined && s.pathLine !== "solid") y.l = LINE_CODE[s.pathLine];
+    if (s.pathWeight !== undefined && s.pathWeight !== "normal") y.w = WEIGHT_CODE[s.pathWeight];
+    if (s.ballLabels === false) y.n = 0;
+    if (s.caption !== undefined && s.caption !== "") y.c = s.caption;
+    out.y = y;
   }
   return out;
 }
@@ -339,10 +351,41 @@ function readAnnotation(v: unknown): Annotation {
   };
 }
 
+const THEME_CODE = { print: "p", dark: "d" } as const;
+const LINE_CODE = { dashed: "d", dotted: "o" } as const;
+const WEIGHT_CODE = { thin: "n", thick: "k" } as const;
+
 function readStyle(v: unknown): NonNullable<DiagramDoc["style"]> {
   if (!isObject(v)) return fail();
-  if (v.a === undefined) return {};
-  return typeof v.a === "boolean" ? { showAllPaths: v.a } : fail();
+  const style: NonNullable<DiagramDoc["style"]> = {};
+  if (v.a !== undefined) {
+    if (typeof v.a !== "boolean") return fail();
+    style.showAllPaths = v.a;
+  }
+  if (v.t !== undefined) {
+    if (v.t === "p") style.theme = "print";
+    else if (v.t === "d") style.theme = "dark";
+    else return fail();
+  }
+  if (v.l !== undefined) {
+    if (v.l === "d") style.pathLine = "dashed";
+    else if (v.l === "o") style.pathLine = "dotted";
+    else return fail();
+  }
+  if (v.w !== undefined) {
+    if (v.w === "n") style.pathWeight = "thin";
+    else if (v.w === "k") style.pathWeight = "thick";
+    else return fail();
+  }
+  if (v.n !== undefined) {
+    if (v.n !== 0) return fail();
+    style.ballLabels = false;
+  }
+  if (v.c !== undefined) {
+    if (typeof v.c !== "string" || v.c === "" || v.c.length > CAPTION_MAX_LENGTH) return fail();
+    style.caption = v.c;
+  }
+  return style;
 }
 
 function fromCompact(c: unknown): DiagramDoc {

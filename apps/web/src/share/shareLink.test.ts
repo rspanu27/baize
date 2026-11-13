@@ -19,7 +19,7 @@ describe("share links", () => {
   test("a link reopens as the same diagram", async () => {
     const doc = racked();
     const url = await shareUrl(doc, "https://example.test/baize/");
-    expect(url.startsWith("https://example.test/baize/#v1.")).toBe(true);
+    expect(url.startsWith("https://example.test/baize/#v2.")).toBe(true);
     const opened = await docFromUrl(url);
     expect(opened?.ok).toBe(true);
     if (!opened?.ok) return;
@@ -36,7 +36,7 @@ describe("share links", () => {
 
   test("the link replaces any old hash and drops the playground switch", async () => {
     const url = await shareUrl(racked(), "https://example.test/?playground=1&x=2#old");
-    expect(url.startsWith("https://example.test/?x=2#v1.")).toBe(true);
+    expect(url.startsWith("https://example.test/?x=2#v2.")).toBe(true);
   });
 
   test("a page address with no diagram, or an unrelated hash, opens nothing", async () => {

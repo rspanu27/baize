@@ -3,9 +3,9 @@ import { SCHEMA_VERSION } from "./types";
 /**
  * Upgrades the compact payload of an older link to the current format, one version at a time.
  *
- * Adding schema version 2 later means: bump SCHEMA_VERSION, change the encoder and decoder in
- * `codec.ts`, and add ONE function here under the key 1 that turns a version 1 payload into a
- * version 2 payload. Old links then keep opening.
+ * Adding a schema version means: bump SCHEMA_VERSION, change the encoder and decoder in
+ * `codec.ts`, and add ONE function here under the key of the old version that turns its
+ * payload into the next version's. Old links then keep opening.
  */
 
 export type MigrationResult = { ok: true; compact: unknown } | { ok: false; problem: string };
@@ -13,8 +13,14 @@ export type MigrationResult = { ok: true; compact: unknown } | { ok: false; prob
 /** `MIGRATIONS[n]` upgrades a version n payload to version n + 1. */
 export type MigrationTable = Readonly<Record<number, (compact: unknown) => unknown>>;
 
-/** Version 1 is the first format, so there is nothing to upgrade from yet. */
-export const MIGRATIONS: MigrationTable = {};
+/**
+ * 1 -> 2: version 2 added optional style fields (theme, path line and weight, ball labels,
+ * caption) under `y`. A version 1 payload has none of them and is already a valid version 2
+ * payload, so it passes through unchanged and is drawn with the defaults, as it always was.
+ */
+export const MIGRATIONS: MigrationTable = {
+  1: (compact) => compact,
+};
 
 const NEWER = "This link was made by a newer version of Baize.";
 const UNKNOWN = "This link was made by a version of Baize that is not recognised.";

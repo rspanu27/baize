@@ -10,6 +10,7 @@ import {
   removeBall,
   setBallSet,
   setShot,
+  setStyle,
   setTable,
 } from "./ops";
 import { newDoc, resolveBallSet, resolveDoc } from "./resolve";
@@ -43,7 +44,7 @@ describe("newDoc and resolveDoc", () => {
   test("a new document is empty, versioned, and resolves to its preset", () => {
     const doc = newDoc("pool-9@1");
     expect(doc).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       table: { preset: "pool-9@1" },
       ballSet: { preset: "pool-57@1" },
       balls: [],
@@ -308,3 +309,32 @@ describe("setTable and setBallSet", () => {
     expect(setBallSet(doc, { preset: "nope@1" })).toBe(doc);
   });
 });
+
+describe("setStyle (schema version 2 fields)", () => {
+  test("defaults are left out, so a default style leaves no style at all", () => {
+    const doc = newDoc("pool-9@1");
+    const styled = setStyle(doc, { theme: "print", pathLine: "dashed", ballLabels: false });
+    expect(styled.style).toEqual({ theme: "print", pathLine: "dashed", ballLabels: false });
+    const back = setStyle(styled, {
+      theme: "table",
+      pathLine: "solid",
+      pathWeight: "normal",
+      ballLabels: true,
+    });
+    expect("style" in back).toBe(false);
+  });
+
+  test("a caption is kept to one clean line of limited length", () => {
+    const doc = newDoc("pool-9@1");
+    expect(setStyle(doc, { caption: "  Stop
+ shot	 drill" }).style?.caption).toBe(
+      "Stop shot drill",
+    );
+    expect(setStyle(doc, { caption: "x".repeat(500) }).style?.caption).toHaveLength(140);
+    const cleared = setStyle(setStyle(doc, { caption: "A" }), { caption: "   " });
+    expect("style" in cleared).toBe(false);
+    // A trailing space is kept while typing, so words can be separated.
+    expect(setStyle(doc, { caption: "Stop " }).style?.caption).toBe("Stop ");
+  });
+});
+
