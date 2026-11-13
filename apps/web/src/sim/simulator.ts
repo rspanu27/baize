@@ -1,4 +1,10 @@
-import { SimInputError, frictionalBallBall, prepareTable, simulate } from "@baize/physics";
+import {
+  SimInputError,
+  frictionalBallBall,
+  mathavanCushion,
+  prepareTable,
+  simulate,
+} from "@baize/physics";
 import type { PreparedTable, SimResult } from "@baize/physics";
 import { BALL_BALL_FRICTION, cueEndMassKg } from "@baize/tables";
 import type { TableSpec } from "@baize/tables";
@@ -38,8 +44,14 @@ function preparedTable(table: TableSpec): PreparedTable {
   return p;
 }
 
-/** The collision models the editor simulates with: version 2, with friction between balls. */
-const PHYSICS_V2 = { ballBall: frictionalBallBall(BALL_BALL_FRICTION) };
+/**
+ * The collision models the editor simulates with: version 2, with friction between balls and
+ * the cushion impact integrated step by step.
+ */
+const PHYSICS_V2 = {
+  ballBall: frictionalBallBall(BALL_BALL_FRICTION),
+  cushion: mathavanCushion,
+};
 
 const PROBLEMS: Partial<Record<SimInputError["code"], string>> = {
   "balls-overlap": "Two balls overlap. Move one of them.",

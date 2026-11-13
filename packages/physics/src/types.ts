@@ -142,6 +142,8 @@ export interface CushionModel {
     /** Unit vector pointing from the cushion into the playing area. */
     normal: Vec2,
     cushion: CushionInput,
+    /** The cloth the ball is on; used by models that include friction against the bed. */
+    cloth?: { readonly slidingFriction: number },
   ): Impulsed;
 }
 

@@ -6,6 +6,7 @@ import {
   buildTableGeometry,
   cushionContactDistance,
   frictionalBallBall,
+  mathavanCushion,
   sampleAt,
   simulate,
 } from "../src/index";
@@ -166,8 +167,11 @@ describe("random scenes", () => {
     );
   }, 900_000);
 
-  test("with throw and squirt (version 2 models) the same invariants hold", () => {
-    const models = { ballBall: frictionalBallBall(BALL_BALL_FRICTION) };
+  test("with throw, squirt and the Mathavan cushion (version 2 models) the same invariants hold", () => {
+    const models = {
+      ballBall: frictionalBallBall(BALL_BALL_FRICTION),
+      cushion: mathavanCushion,
+    };
     fc.assert(
       fc.property(sceneArb, (scene) => {
         fc.pre(scene !== undefined);

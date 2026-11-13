@@ -9,5 +9,6 @@ export { kineticEnergy, sampleAt } from "./sample";
 export { MAX_TIP_OFFSET, strike } from "./strike";
 export { frictionlessBallBall } from "./models/ballBall";
 export { noseImpulseCushion } from "./models/cushion";
+export { mathavanCushion } from "./models/cushionMathavan";
 export { frictionalBallBall } from "./models/ballBallFriction";
 export type { BallBallFriction } from "./models/ballBallFriction";

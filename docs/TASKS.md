@@ -88,7 +88,7 @@ The version 2 models are opt-in in `packages/physics` (through `SimInput.models`
 | 3.3 | Contact values in `packages/tables` (ball-ball friction, cue end-mass ratio) with sources | L | 3.1, 3.2 | Every number has a source comment; unverified ones say so | done |
 | 3.4 | Random-scene invariants with the version 2 models; soak run | L | 3.1, 3.2 | 6000-scene soak passes | done |
 | 3.5 | Editor simulates with the version 2 models; notes updated | L | 3.1 to 3.3 | `pnpm check` and the smoke test pass | done |
-| 3.6 | Mathavan 2010 cushion model behind `CushionModel`, checked against pooltool's implementation | L | 1.13 | Reference fixture from pooltool matches within a stated tolerance; no energy gain over a sweep; deterministic | todo |
+| 3.6 | Mathavan 2010 cushion model behind `CushionModel`, checked against pooltool's implementation | L | 1.13 | Reference fixture from pooltool matches within a stated tolerance; no energy gain over a sweep; deterministic | done |
 | 3.7 | Nap: direction-dependent drift at low speed, as piecewise constant acceleration with re-evaluation events | L | 1.9, 1.14 | Drift in the known direction and rough size on snooker cloth; all invariants hold; decision recorded | todo |
 | 3.8 | Editor: nap setting takes effect; aim guide shows the squirted line | U | 3.2, 3.7 | Component tests | todo |
 | 3.9 | Debug panel to change coefficients live (cloth, ball-ball friction, cue end mass, cushion) | U | 3.5 | Changing a value re-simulates; values are not stored in the link | todo |

@@ -1016,6 +1016,7 @@ export function simulate(input: SimInput, params?: Partial<SimParams>): SimResul
         { radiusM: a.radiusM, massKg: a.massKg, velocity: va, spin: wa },
         normal,
         cushion,
+        input.cloth,
       );
       settle(a, out.velocity, out.spin);
       restart(a, now, ra, settled.v, settled.w);
