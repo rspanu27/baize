@@ -102,9 +102,11 @@ export const NAP_FULL_DRIFT_RATIO = 0.03;
 /**
  * The nap of a cloth as the physics takes it (`ClothInput.napDrift` in `@baize/physics`), or
  * undefined for a cloth with no nap. A strength outside 0 to 1 is taken as the nearer end.
+ * `fullRatio` replaces `NAP_FULL_DRIFT_RATIO` (for trying other values; never stored).
  */
 export function napDrift(
   cloth: Pick<ClothSpec, "rollingResistance" | "nap">,
+  fullRatio: number = NAP_FULL_DRIFT_RATIO,
 ): { directionRad: number; coefficient: number } | undefined {
   const nap = cloth.nap;
   if (!nap || !Number.isFinite(nap.strength) || !Number.isFinite(nap.directionRad)) {
@@ -114,6 +116,6 @@ export function napDrift(
   if (strength === 0) return undefined;
   return {
     directionRad: nap.directionRad,
-    coefficient: strength * NAP_FULL_DRIFT_RATIO * cloth.rollingResistance,
+    coefficient: strength * fullRatio * cloth.rollingResistance,
   };
 }

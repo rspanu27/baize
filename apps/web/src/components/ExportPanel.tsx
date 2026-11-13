@@ -7,6 +7,7 @@ import {
   pngBlob,
   svgText,
 } from "../export/exportDiagram";
+import { isTuned, useTuning } from "../sim/tuning";
 import { simulationFor } from "../sim/useSimulation";
 import { useDoc } from "../store/store";
 
@@ -17,6 +18,7 @@ function today(): string {
 /** Saving the diagram as a picture. Nothing leaves the browser. */
 export function ExportPanel() {
   const doc = useDoc();
+  const tuning = useTuning();
   const [problem, setProblem] = useState("");
   const tableName = simulationFor(doc).scene?.table.name ?? "diagram";
 
@@ -27,7 +29,7 @@ export function ExportPanel() {
       return;
     }
     setProblem("");
-    const text = svgText(svg);
+    const text = svgText(svg, PNG_LONG_SIDE_PX, isTuned(tuning));
     const name = exportFileName(tableName, today(), kind);
     if (kind === "svg") {
       download(new Blob([text], { type: "image/svg+xml" }), name);

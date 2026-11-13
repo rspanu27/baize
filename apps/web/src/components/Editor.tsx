@@ -4,6 +4,7 @@ import { useDoc, useEditor } from "../store/store";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
+import { DebugPanel } from "./DebugPanel";
 import { ExportPanel } from "./ExportPanel";
 import { MeasureLayer } from "./MeasureLayer";
 import { MeasurePanel } from "./MeasurePanel";
@@ -85,6 +86,7 @@ export function Editor() {
         <MeasurePanel />
         <SharePanel />
         <ExportPanel />
+        <DebugPanel />
         <p className="editor-note">
           Physics v2: throw, squirt and nap are modelled; swerve is not. The yellow aim line is
           where the cue points; with side the ball leaves slightly off it.

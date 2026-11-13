@@ -1,0 +1,59 @@
+.debug-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #2c3a33;
+  padding-top: 0.5rem;
+}
+
+.debug-panel > summary {
+  cursor: pointer;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  color: #c9d6ce;
+  font-weight: 600;
+}
+
+.debug-note,
+.debug-hint,
+.debug-stats {
+  margin: 0.3rem 0;
+  color: #a9bcb1;
+  font-size: 0.82rem;
+}
+
+.debug-warning {
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
+  border-left: 3px solid #e0b040;
+  background: #2f2a17;
+  color: #f1dfa6;
+  font-size: 0.85rem;
+}
+
+.debug-field {
+  margin: 0.6rem 0;
+}
+
+.debug-field > label {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.editor-panels .debug-field > input {
+  width: 8rem;
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  background: #22362c;
+  color: inherit;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.editor-panels .debug-field > input.debug-changed {
+  border-color: #e0b040;
+}
+
+.editor-panels .debug-field > input[aria-invalid="true"] {
+  border-color: #ff8a80;
+}

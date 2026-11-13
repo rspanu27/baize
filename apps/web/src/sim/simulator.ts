@@ -9,6 +9,8 @@ import type { PreparedTable, SimResult } from "@baize/physics";
 import { BALL_BALL_FRICTION, cueEndMassKg, napDrift } from "@baize/tables";
 import type { TableSpec } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
+import { NO_TUNING } from "./tuning";
+import type { Tuning } from "./tuning";
 
 /**
  * Runs the physics for a scene.
@@ -29,7 +31,8 @@ export interface SimOutcome {
 }
 
 export interface Simulator {
-  run(scene: Scene): SimOutcome;
+  /** `tuning` holds physics numbers changed in the debug panel; they are not in the scene. */
+  run(scene: Scene, tuning?: Tuning): SimOutcome;
 }
 
 // Table geometry is built once per table object and reused while that table is in use.
@@ -53,6 +56,31 @@ const PHYSICS_V2 = {
   cushion: mathavanCushion,
 };
 
+/** The prepared table with any changed cushion numbers; the geometry does not depend on them. */
+function tunedTable(table: PreparedTable, tuning: Tuning): PreparedTable {
+  const { cushionRestitution, cushionFriction } = tuning;
+  if (cushionRestitution === undefined && cushionFriction === undefined) return table;
+  const cushion = {
+    ...table.table.cushion,
+    ...(cushionRestitution === undefined ? {} : { restitution: cushionRestitution }),
+    ...(cushionFriction === undefined ? {} : { friction: cushionFriction }),
+  };
+  return { ...table, table: { ...table.table, cushion } };
+}
+
+function tunedModels(tuning: Tuning): typeof PHYSICS_V2 {
+  const { ballFrictionA: a, ballFrictionB: b, ballFrictionC: c } = tuning;
+  if (a === undefined && b === undefined && c === undefined) return PHYSICS_V2;
+  return {
+    ...PHYSICS_V2,
+    ballBall: frictionalBallBall({
+      a: a ?? BALL_BALL_FRICTION.a,
+      b: b ?? BALL_BALL_FRICTION.b,
+      c: c ?? BALL_BALL_FRICTION.c,
+    }),
+  };
+}
+
 const PROBLEMS: Partial<Record<SimInputError["code"], string>> = {
   "balls-overlap": "Two balls overlap. Move one of them.",
   "ball-outside-table": "A ball is outside the cushions. Move it back onto the table.",
@@ -62,29 +90,34 @@ const PROBLEMS: Partial<Record<SimInputError["code"], string>> = {
 };
 
 export const mainThreadSimulator: Simulator = {
-  run(scene: Scene): SimOutcome {
+  run(scene: Scene, tuning: Tuning = NO_TUNING): SimOutcome {
     const shot = scene.shot;
     if (!shot || scene.balls.length === 0) return { ms: 0 };
     const cue = scene.balls.find((b) => b.id === shot.cueBallId);
     // Nap: the document stores a strength; the physics takes the push it stands for.
-    const drift = napDrift(scene.cloth);
+    const drift = napDrift(scene.cloth, tuning.napFullRatio);
+    const endMassKg = cue
+      ? tuning.cueEndMassRatio === undefined
+        ? cueEndMassKg(cue.massKg)
+        : cue.massKg / tuning.cueEndMassRatio
+      : undefined;
     const started = performance.now();
     try {
       const result = simulate({
-        table: preparedTable(scene.table),
+        table: tunedTable(preparedTable(scene.table), tuning),
         cloth: drift ? { ...scene.cloth, napDrift: drift } : scene.cloth,
         balls: scene.balls,
-        ballRestitution: scene.ballSet.restitution,
+        ballRestitution: tuning.ballRestitution ?? scene.ballSet.restitution,
         shot: {
           ballId: shot.cueBallId,
           aimAngleRad: shot.aimAngleRad,
           speedMps: shot.speedMps,
           tipOffset: shot.tipOffset,
           // Squirt: the cue ball leaves a little off the aim line when hit with side.
-          ...(cue ? { cueEndMassKg: cueEndMassKg(cue.massKg) } : {}),
+          ...(endMassKg === undefined ? {} : { cueEndMassKg: endMassKg }),
         },
         // Throw: friction between the balls.
-        models: PHYSICS_V2,
+        models: tunedModels(tuning),
       });
       return { result, ms: performance.now() - started };
     } catch (e) {

@@ -8,6 +8,8 @@ export const PNG_LONG_SIDE_PX = 2000;
 
 /** Printed on every export, so a diagram is not mistaken for more than the model gives. */
 export const EXPORT_NOTE = "Baize, physics v2: throw, squirt and nap modelled; no swerve";
+/** Added to the note when the debug panel's numbers were changed for the picture. */
+export const EXPORT_TUNED_NOTE = "; non-standard physics numbers";
 
 /** Parts of the editor that are controls, not part of the diagram. */
 const CONTROL_SELECTOR =
@@ -54,7 +56,7 @@ export function exportFileName(tableName: string, date: string, extension: strin
  * A self-contained copy of the table drawing as SVG text: controls removed, styles from the
  * page written onto the elements, a pixel size set, and the physics note added.
  */
-export function svgText(svg: SVGSVGElement, longSidePx = PNG_LONG_SIDE_PX): string {
+export function svgText(svg: SVGSVGElement, longSidePx = PNG_LONG_SIDE_PX, tuned = false): string {
   const copy = svg.cloneNode(true) as SVGSVGElement;
   // Styles are read from the live elements, which are in the same order as the copies.
   const live = [...svg.querySelectorAll("*")];
@@ -97,7 +99,7 @@ export function svgText(svg: SVGSVGElement, longSidePx = PNG_LONG_SIDE_PX): stri
   note.setAttribute("font-family", "system-ui, sans-serif");
   note.setAttribute("fill", "#ffffff");
   note.setAttribute("fill-opacity", "0.7");
-  note.textContent = EXPORT_NOTE;
+  note.textContent = tuned ? EXPORT_NOTE + EXPORT_TUNED_NOTE : EXPORT_NOTE;
   copy.appendChild(note);
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(copy)}`;

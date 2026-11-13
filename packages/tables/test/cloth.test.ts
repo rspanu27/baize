@@ -107,4 +107,9 @@ describe("napDrift", () => {
     expect(NAP_FULL_DRIFT_RATIO).toBeLessThan(0.8);
     expect(NAP_FULL_DRIFT_RATIO).toBeGreaterThan(0);
   });
+
+  test("another full-strength ratio can be passed in", () => {
+    const d = napDrift({ ...cloth, nap: { directionRad: 0, strength: 0.5 } }, 0.2);
+    expect(d?.coefficient).toBeCloseTo(0.5 * 0.2 * cloth.rollingResistance, 15);
+  });
 });
