@@ -1,5 +1,6 @@
-import { SimInputError, prepareTable, simulate } from "@baize/physics";
+import { SimInputError, frictionalBallBall, prepareTable, simulate } from "@baize/physics";
 import type { PreparedTable, SimResult } from "@baize/physics";
+import { BALL_BALL_FRICTION, cueEndMassKg } from "@baize/tables";
 import type { TableSpec } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 
@@ -37,6 +38,9 @@ function preparedTable(table: TableSpec): PreparedTable {
   return p;
 }
 
+/** The collision models the editor simulates with: version 2, with friction between balls. */
+const PHYSICS_V2 = { ballBall: frictionalBallBall(BALL_BALL_FRICTION) };
+
 const PROBLEMS: Partial<Record<SimInputError["code"], string>> = {
   "balls-overlap": "Two balls overlap. Move one of them.",
   "ball-outside-table": "A ball is outside the cushions. Move it back onto the table.",
@@ -49,6 +53,7 @@ export const mainThreadSimulator: Simulator = {
   run(scene: Scene): SimOutcome {
     const shot = scene.shot;
     if (!shot || scene.balls.length === 0) return { ms: 0 };
+    const cue = scene.balls.find((b) => b.id === shot.cueBallId);
     const started = performance.now();
     try {
       const result = simulate({
@@ -61,7 +66,11 @@ export const mainThreadSimulator: Simulator = {
           aimAngleRad: shot.aimAngleRad,
           speedMps: shot.speedMps,
           tipOffset: shot.tipOffset,
+          // Squirt: the cue ball leaves a little off the aim line when hit with side.
+          ...(cue ? { cueEndMassKg: cueEndMassKg(cue.massKg) } : {}),
         },
+        // Throw: friction between the balls.
+        models: PHYSICS_V2,
       });
       return { result, ms: performance.now() - started };
     } catch (e) {

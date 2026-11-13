@@ -1,8 +1,14 @@
-import { resolveCustomTable, validateTable } from "@baize/tables";
+import { BALL_BALL_FRICTION, cueEndMassKg, resolveCustomTable, validateTable } from "@baize/tables";
 import type { CustomTableFields, TableSpec } from "@baize/tables";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import { buildTableGeometry, cushionContactDistance, sampleAt, simulate } from "../src/index";
+import {
+  buildTableGeometry,
+  cushionContactDistance,
+  frictionalBallBall,
+  sampleAt,
+  simulate,
+} from "../src/index";
 import type { BallInput, ClothInput, ShotInput, SimInput } from "../src/index";
 import { BLACKBALL_6, POOL_9, SNOOKER_12, checkInvariants, eventsOf } from "./helpers";
 
@@ -16,6 +22,11 @@ import { BLACKBALL_6, POOL_9, SNOOKER_12, checkInvariants, eventsOf } from "./he
 const RUNS = Number(process.env.BAIZE_PROPERTY_RUNS ?? 400);
 // In a soak run, report the first failure as found instead of spending minutes shrinking it.
 const SOAK = process.env.BAIZE_PROPERTY_RUNS !== undefined;
+// To replay a failure, pass the seed that fast-check reported: BAIZE_PROPERTY_SEED=-1565606891
+const SEED =
+  process.env.BAIZE_PROPERTY_SEED === undefined
+    ? {}
+    : { seed: Number(process.env.BAIZE_PROPERTY_SEED) };
 
 interface Scene {
   input: SimInput;
@@ -151,7 +162,30 @@ describe("random scenes", () => {
         expect(simulate(scene.input)).toEqual(result);
         checkInvariants(result, scene.input);
       }),
-      { numRuns: RUNS, endOnFailure: SOAK },
+      { numRuns: RUNS, endOnFailure: SOAK, ...SEED },
+    );
+  }, 900_000);
+
+  test("with throw and squirt (version 2 models) the same invariants hold", () => {
+    const models = { ballBall: frictionalBallBall(BALL_BALL_FRICTION) };
+    fc.assert(
+      fc.property(sceneArb, (scene) => {
+        fc.pre(scene !== undefined);
+        if (!scene?.input.shot) return;
+        const struck = scene.input.balls.find((b) => b.id === scene.input.shot?.ballId);
+        if (!struck) return;
+        const input: SimInput = {
+          ...scene.input,
+          models,
+          shot: { ...scene.input.shot, cueEndMassKg: cueEndMassKg(struck.massKg) },
+        };
+        const result = simulate(input);
+        expect(result.status).toBe("complete");
+        expect(result.stats.eventCount).toBeLessThan(3000);
+        expect(simulate(input)).toEqual(result);
+        checkInvariants(result, input);
+      }),
+      { numRuns: Math.ceil(RUNS / 2), endOnFailure: SOAK, ...SEED },
     );
   }, 900_000);
 
@@ -186,7 +220,7 @@ describe("random scenes", () => {
           expect(Math.sqrt(px * px + py * py)).toBeLessThan(scale * 0.021);
         }
       }),
-      { numRuns: Math.ceil(RUNS / 2), endOnFailure: SOAK },
+      { numRuns: Math.ceil(RUNS / 2), endOnFailure: SOAK, ...SEED },
     );
   }, 900_000);
 });

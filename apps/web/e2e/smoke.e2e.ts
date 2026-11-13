@@ -90,7 +90,7 @@ test("custom table, diagram, play, share, reopen identical", async ({ page, brow
   expect(download.suggestedFilename()).toMatch(/^baize-.*\.svg$/);
   const svg = await readFile(await download.path(), "utf8");
   expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
-  expect(svg).toContain("physics v1");
+  expect(svg).toContain("physics v2");
   expect(svg).toMatch(/width="2000"/);
   expect(svg).not.toMatch(/class=|tabindex=|role="slider"/);
   // Ten balls, each with its outline, and the measuring label keeps its halo.

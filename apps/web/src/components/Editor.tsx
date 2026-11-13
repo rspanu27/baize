@@ -85,7 +85,10 @@ export function Editor() {
         <MeasurePanel />
         <SharePanel />
         <ExportPanel />
-        <p className="editor-note">Physics v1: no throw, squirt, swerve or nap yet.</p>
+        <p className="editor-note">
+          Physics v2 in progress: throw and squirt are modelled; swerve and nap are not yet. The
+          yellow aim line is where the cue points; with side the ball leaves slightly off it.
+        </p>
       </aside>
     </div>
   );

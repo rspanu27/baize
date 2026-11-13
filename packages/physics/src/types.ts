@@ -96,6 +96,12 @@ export interface ShotInput {
   readonly tipOffset: { readonly side: number; readonly vertical: number };
   /** Reserved. Must be 0 or absent in v1. */
   readonly elevationRad?: number;
+  /**
+   * Effective mass of the tip end of the cue, kg. When given, a hit with side makes the ball
+   * leave slightly off the aim line, away from the side that was hit (squirt). Absent: the
+   * ball leaves exactly along the aim line, as in version 1.
+   */
+  readonly cueEndMassKg?: number;
 }
 
 /** Kinematic state of one ball at an instant. */
