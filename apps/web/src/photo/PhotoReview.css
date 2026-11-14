@@ -1,0 +1,219 @@
+.photo-import button {
+  min-height: 2.75rem;
+}
+
+.photo-error {
+  margin: 0.4rem 0 0;
+  color: #ffb4a8;
+  font-size: 0.85rem;
+}
+
+.photo-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(8, 14, 11, 0.85);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.photo-dialog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "header controls"
+    "frame controls";
+  gap: 0.5rem 1rem;
+  width: 100%;
+  max-width: 90rem;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  background: #18261f;
+  color: #e8f0eb;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.photo-header {
+  grid-area: header;
+}
+
+.photo-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.photo-summary {
+  margin: 0.15rem 0 0;
+}
+
+.photo-frame {
+  grid-area: frame;
+  min-height: 0;
+  min-width: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+.photo-stage {
+  position: relative;
+  background: #0b120e;
+}
+
+.photo-stage[data-busy="true"] .photo-img {
+  opacity: 0.6;
+}
+
+.photo-img {
+  position: absolute;
+  object-fit: fill;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.photo-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.photo-overlay[data-adding="true"] {
+  cursor: crosshair;
+}
+
+.photo-handle,
+.photo-ball {
+  cursor: pointer;
+  outline: none;
+}
+
+.photo-handle {
+  cursor: grab;
+}
+
+.photo-handle:focus-visible circle:nth-child(3),
+.photo-ball:focus-visible circle:nth-child(3) {
+  stroke: #7fd1ff;
+}
+
+.photo-controls {
+  grid-area: controls;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.photo-controls p {
+  margin: 0;
+}
+
+.photo-message {
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.35rem;
+  background: #2a3d33;
+}
+
+.photo-help {
+  color: #b5c4ba;
+  font-size: 0.85rem;
+}
+
+.photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.photo-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.photo-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+}
+
+.photo-panel label {
+  flex: 1 0 100%;
+  color: #c9d6ce;
+}
+
+.photo-panel select {
+  flex: 1 1 8rem;
+}
+
+.photo-add-hint {
+  flex: 1 0 100%;
+}
+
+.photo-dialog select,
+.photo-dialog button {
+  font: inherit;
+  color: inherit;
+  min-height: 2.75rem;
+  background: #22362c;
+  border: 1px solid #36503f;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.photo-dialog button:disabled {
+  opacity: 0.5;
+}
+
+.photo-dialog button[aria-pressed="true"] {
+  background: #35553f;
+  border-color: #7fd1ff;
+}
+
+.photo-dialog .photo-primary {
+  background: #2f6b46;
+  border-color: #4f9a6b;
+  font-weight: bold;
+}
+
+.photo-dialog button:focus-visible,
+.photo-dialog select:focus-visible {
+  outline: 2px solid #7fd1ff;
+  outline-offset: 2px;
+}
+
+.photo-actions {
+  margin-top: auto;
+}
+
+/* A phone held upright: the photo takes the height that is left, the controls scroll below it. */
+@media (max-width: 800px) {
+  .photo-dialog {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header"
+      "frame"
+      "controls";
+    gap: 0.4rem;
+    padding: 0.5rem;
+  }
+
+  .photo-controls {
+    max-height: 42dvh;
+  }
+}

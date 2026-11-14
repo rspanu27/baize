@@ -1,5 +1,6 @@
 import { usePlayKey, usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
+import { PhotoImport } from "../photo/PhotoImport";
 import { useDoc, useEditor } from "../store/store";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
@@ -76,6 +77,7 @@ export function Editor() {
       <aside className="editor-panels">
         <h1 className="editor-title">Baize</h1>
         <Toolbar />
+        <PhotoImport />
         {problems.length > 0 ? (
           <ul className="editor-problems" role="alert">
             {problems.map((p) => (
