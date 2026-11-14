@@ -80,7 +80,7 @@ function scene(index: number): {
         seed: index,
         brightness: 0.8 + rand() * 0.4,
       });
-      const result = importPhoto(photo.image, table, set);
+      const result = importPhoto(photo.image, table, set, { cornerHeightM: 0 });
       return scorePhoto(result.layout.balls, layout.balls, L, set.object.diameterM);
     },
   };

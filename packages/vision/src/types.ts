@@ -89,6 +89,12 @@ export interface ImportResult {
 export interface ImportOptions {
   /** Corners placed by the person; skips the automatic table finder. */
   corners?: TableCorners;
+  /**
+   * Height above the cloth of the corners (the cushion noses) and of the cushion tops and
+   * rails. Default: the nose height of the table. 0 is for pictures in which the cushions
+   * are drawn flat on the cloth, as the test renderer draws them.
+   */
+  cornerHeightM?: number;
 }
 
 /** The contract of the whole pipeline (implemented in later tasks). */

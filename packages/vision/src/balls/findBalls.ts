@@ -48,6 +48,18 @@ const MIN_FILL = 0.55;
 const RING = 0.45;
 /** How much a filled ring counts against a disc. */
 const RING_WEIGHT = 0.35;
+/** A taken ball explains the pixels within this multiple of its radius (its shadow too). */
+const CLAIM_REACH = 1.25;
+/** A ball needs at least this share of its disc left to judge. */
+const MIN_FREE = 0.45;
+/** A patch of not-cloth joined to the surround counts as surround from this length, in balls. */
+const SURROUND_MIN_LENGTH_BALLS = 3;
+/** How far in from the cushions such a patch is left out of the judging, metres. */
+const SURROUND_REACH_M = 0.06;
+/** Width of the strip of bed along each cushion that is left out of the judging, metres. */
+const NOSE_STRIP_M = 0.015;
+/** Pockets and their hardware: left out within this multiple of the drop radius. */
+const POCKET_ZONE = 1.6;
 /** Balls smaller than this in the working image cannot be judged, pixels. */
 const MIN_RADIUS_PX = 1.6;
 /** Two balls may be found this much closer than touching (pixels are coarse), as a share of 2R. */
@@ -83,21 +95,28 @@ function hexToYcc(hex: string): { y: number; cb: number; cr: number } {
   return { y, cb: 0.564 * (b - y), cr: 0.713 * (r - y) };
 }
 
-/** Share of the pixels of a disc (and of the ring around it) that are not cloth. */
+/**
+ * Share of the pixels of a disc (and of the ring around it) that are not cloth. Pixels in
+ * `skip` say nothing about this disc (they are explained by a ball already taken, or lie
+ * where cushions, their shadows and pockets are): they count neither for the disc nor
+ * against it, and `free` is the share of the disc that is left to judge.
+ */
 function coverage(
   mask: Uint8Array,
+  skip: Uint8Array,
   width: number,
   height: number,
   u: number,
   v: number,
   r: number,
-): { fill: number; ring: number; cu: number; cv: number } {
+): { fill: number; ring: number; cu: number; cv: number; free: number } {
   const outer = r * (1 + RING);
   const x0 = Math.max(0, Math.floor(u - outer));
   const x1 = Math.min(width - 1, Math.ceil(u + outer));
   const y0 = Math.max(0, Math.floor(v - outer));
   const y1 = Math.min(height - 1, Math.ceil(v + outer));
   let inAll = 0;
+  let inDisc = 0;
   let inSet = 0;
   let ringAll = 0;
   let ringSet = 0;
@@ -110,14 +129,17 @@ function coverage(
       const d2 = dx * dx + dy * dy;
       if (d2 > outer * outer) continue;
       const set = mask[y * width + x] === 1;
+      const skipped = skip[y * width + x] === 1;
       if (d2 <= r * r) {
+        inDisc++;
+        if (skipped) continue;
         inAll++;
         if (set) {
           inSet++;
           su += x + 0.5;
           sv += y + 0.5;
         }
-      } else {
+      } else if (!skipped) {
         ringAll++;
         if (set) ringSet++;
       }
@@ -128,19 +150,22 @@ function coverage(
     ring: ringAll > 0 ? ringSet / ringAll : 0,
     cu: inSet > 0 ? su / inSet : u,
     cv: inSet > 0 ? sv / inSet : v,
+    free: inDisc > 0 ? inAll / inDisc : 0,
   };
 }
 
 /**
  * Finds the balls on a table whose corners (and so its camera) are known. `camera` must be
- * the camera in the playing area's coordinates, as `findTable` returns it or as recovered
- * from corners placed by hand.
+ * the camera in table coordinates with heights measured from the cloth, as `findTable` and
+ * `cameraFromCorners` return it.
  */
 export function findBalls(
   image: PhotoImage,
   table: TableSpec,
   ballSet: BallSetSpec,
   camera: Camera,
+  /** Height above the cloth of the cushion tops and rails as seen; the nose height by default. */
+  surroundHeightM: number = table.cushion.noseHeightM,
 ): FoundBall[] {
   const img = toWorkImage(image, WORK_SIDE);
   const cloth = findClothModel(img);
@@ -162,9 +187,9 @@ export function findBalls(
     return true;
   };
 
-  // Where each pixel is on the plane of the cloth (as opposed to at the height of a ball).
+  // Where each pixel is if it shows the top of a cushion or a rail (as opposed to a ball).
   const onCloth = (u: number, v: number): { x: number; y: number } | undefined =>
-    imageToTableAtHeight(camera, { u: u * s, v: v * s }, 0);
+    imageToTableAtHeight(camera, { u: u * s, v: v * s }, surroundHeightM);
   const depth = CUSHION_TOP_DEPTH_M;
   /** How far outside the playing area a point of the cloth plane is (0 inside). */
   const outside = (p: { x: number; y: number }): number =>
@@ -207,6 +232,15 @@ export function findBalls(
   // dark of the pockets.
   const reach = margin - radiusM * 3;
   const mask = new Uint8Array(img.width * img.height);
+  // Pixels that cannot speak for a ball: the cushions and what lies beyond them, the strip
+  // of bed under a cushion's overhang (in a real room it is in deep shadow, which is not the
+  // colour of the cloth), and the pockets with their hardware. A ball standing there is
+  // judged by the rest of its disc. Balls taken later add the pixels they explain.
+  const skip = new Uint8Array(img.width * img.height);
+  // Everything that is not cloth near the table, rails included, and how far inside the
+  // cushions each such pixel is (negative: beyond them). Used below to find the surround.
+  const solid = new Uint8Array(img.width * img.height);
+  const insideM = new Float32Array(img.width * img.height);
   const candidates: number[] = [];
   for (let y = 0; y < img.height; y++) {
     for (let x = 0; x < img.width; x++) {
@@ -217,6 +251,15 @@ export function findBalls(
       if (p.x < reach || p.x > W - reach || p.y < reach || p.y > L - reach) continue;
       const flat = onCloth(x + 0.5, y + 0.5);
       if (flat) {
+        const inside = Math.min(flat.x, W - flat.x, flat.y, L - flat.y);
+        solid[at] = 1;
+        insideM[at] = inside;
+        if (
+          inside < NOSE_STRIP_M ||
+          pockets.some((c) => Math.hypot(flat.x - c.x, flat.y - c.y) < c.radiusM * POCKET_ZONE)
+        ) {
+          skip[at] = 1;
+        }
         if (outside(flat) > depth && isRail(at)) continue;
         const luma = img.y[at] as number;
         if (
@@ -231,6 +274,66 @@ export function findBalls(
     }
   }
 
+  // The surround. Where a cushion is not recognised as cloth (in shadow, under coloured
+  // light, or because a corner was placed a little off), it shows as a long band of
+  // not-cloth joined to what lies beyond the cushions, and discs would fit all along it. A
+  // connected patch that reaches beyond the cushions and is longer than a few balls is such
+  // a band; the part of it near the cushions is left out. A ball away from the cushion
+  // keeps the part of itself that sticks out; a ball frozen to a cushion of that kind is
+  // lost, which is the price of not reporting a row of balls that are not there.
+  {
+    const { width, height } = img;
+    const label = new Int32Array(width * height).fill(-1);
+    const stack = new Int32Array(width * height);
+    const longM = SURROUND_MIN_LENGTH_BALLS * 2 * radiusM;
+    for (let start = 0; start < solid.length; start++) {
+      if (solid[start] !== 1 || label[start] !== -1) continue;
+      let top = 0;
+      stack[top++] = start;
+      label[start] = start;
+      const members: number[] = [];
+      let beyond = false;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      while (top > 0) {
+        const at = stack[--top] as number;
+        members.push(at);
+        if ((insideM[at] as number) < 0) beyond = true;
+        const x = at % width;
+        const y = (at - x) / width;
+        const flat = onCloth(x + 0.5, y + 0.5);
+        if (flat) {
+          if (flat.x < minX) minX = flat.x;
+          if (flat.x > maxX) maxX = flat.x;
+          if (flat.y < minY) minY = flat.y;
+          if (flat.y > maxY) maxY = flat.y;
+        }
+        if (x > 0 && solid[at - 1] === 1 && label[at - 1] === -1) {
+          label[at - 1] = start;
+          stack[top++] = at - 1;
+        }
+        if (x < width - 1 && solid[at + 1] === 1 && label[at + 1] === -1) {
+          label[at + 1] = start;
+          stack[top++] = at + 1;
+        }
+        if (y > 0 && solid[at - width] === 1 && label[at - width] === -1) {
+          label[at - width] = start;
+          stack[top++] = at - width;
+        }
+        if (y < height - 1 && solid[at + width] === 1 && label[at + width] === -1) {
+          label[at + width] = start;
+          stack[top++] = at + width;
+        }
+      }
+      if (!beyond || Math.max(maxX - minX, maxY - minY) < longM) continue;
+      for (const at of members) {
+        if ((insideM[at] as number) < SURROUND_REACH_M) skip[at] = 1;
+      }
+    }
+  }
+
   // Score a disc at every candidate pixel.
   const discs: Disc[] = [];
   for (const at of candidates) {
@@ -242,8 +345,8 @@ export function findBalls(
     if (!p) continue;
     const r = (apparentRadiusPx(camera, { x: p.x, y: p.y, z: radiusM }, radiusM) ?? 0) / s;
     if (r < MIN_RADIUS_PX) continue;
-    const c = coverage(mask, img.width, img.height, u, v, r);
-    if (c.fill < MIN_FILL) continue;
+    const c = coverage(mask, skip, img.width, img.height, u, v, r);
+    if (c.fill < MIN_FILL || c.free < MIN_FREE) continue;
     discs.push({ x: p.x, y: p.y, u, v, r, score: c.fill - RING_WEIGHT * c.ring });
   }
   discs.sort((a, b) => b.score - a.score || a.v - b.v || a.u - b.u);
@@ -251,22 +354,45 @@ export function findBalls(
   // Take the best discs first; none may stand inside one already taken.
   const minGap = 2 * radiusM * (1 - OVERLAP_ALLOWED);
   const taken: Disc[] = [];
+  // A ball that is taken explains the pixels around it, its shadow included. A further ball
+  // must be justified by what is left: the crescent of shadow beside a ball is not a second
+  // ball, while a real neighbour is still mostly unexplained.
+  const claim = (d: Disc): void => {
+    const r = d.r * CLAIM_REACH;
+    const x0 = Math.max(0, Math.floor(d.u - r));
+    const x1 = Math.min(img.width - 1, Math.ceil(d.u + r));
+    const y0 = Math.max(0, Math.floor(d.v - r));
+    const y1 = Math.min(img.height - 1, Math.ceil(d.v + r));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const dx = x + 0.5 - d.u;
+        const dy = y + 0.5 - d.v;
+        if (dx * dx + dy * dy <= r * r) skip[y * img.width + x] = 1;
+      }
+    }
+  };
   for (const d of discs) {
     // Move the disc onto the middle of what it covers, twice, and score it there.
     let cur = d;
     for (let pass = 0; pass < 2; pass++) {
-      const c = coverage(mask, img.width, img.height, cur.u, cur.v, cur.r);
+      const c = coverage(mask, skip, img.width, img.height, cur.u, cur.v, cur.r);
       const p = toTable(c.cu, c.cv);
       if (!p || !onTable(p)) break;
       const r = (apparentRadiusPx(camera, { x: p.x, y: p.y, z: radiusM }, radiusM) ?? 0) / s;
       if (r < MIN_RADIUS_PX) break;
-      const again = coverage(mask, img.width, img.height, c.cu, c.cv, r);
+      const again = coverage(mask, skip, img.width, img.height, c.cu, c.cv, r);
+      if (again.free < MIN_FREE || again.fill < MIN_FILL) break;
       const score = again.fill - RING_WEIGHT * again.ring;
       if (score < cur.score) break;
       cur = { x: p.x, y: p.y, u: c.cu, v: c.cv, r, score };
     }
     if (taken.some((t) => Math.hypot(t.x - cur.x, t.y - cur.y) < minGap)) continue;
+    if (taken.length > 0) {
+      const left = coverage(mask, skip, img.width, img.height, cur.u, cur.v, cur.r);
+      if (left.free < MIN_FREE || left.fill < MIN_FILL) continue;
+    }
     taken.push(cur);
+    claim(cur);
   }
 
   return nameBalls(img, taken, ballSet);
@@ -284,8 +410,18 @@ interface Seen {
 /** A pixel is "white" when it is bright against the brightest ball and has almost no tint. */
 const WHITE_TINT = 0.09;
 const WHITE_BRIGHT = 0.62;
+/** Pixels at least this bright against the brightest ball pixel show the colour of the light. */
+const LIGHT_BRIGHT = 0.88;
+/** A "light" more tinted than this is taken to be a bright coloured ball instead. */
+const LIGHT_MAX_TINT = 0.3;
 
-function look(img: WorkImage, disc: Disc, whiteY: number): Seen {
+/** The colour of the light, as the tint a white thing has under it. */
+interface Light {
+  tintB: number;
+  tintR: number;
+}
+
+function look(img: WorkImage, disc: Disc, whiteY: number, light: Light): Seen {
   const r = disc.r * 0.8;
   let n = 0;
   let white = 0;
@@ -304,8 +440,9 @@ function look(img: WorkImage, disc: Disc, whiteY: number): Seen {
       if (dx * dx + dy * dy > r * r) continue;
       const at = y * img.width + x;
       const luma = img.y[at] as number;
-      const tb = tintOf(luma, img.cb[at] as number);
-      const tr = tintOf(luma, img.cr[at] as number);
+      // Tints are taken relative to the light, so that white is white under a coloured lamp.
+      const tb = tintOf(luma, img.cb[at] as number) - light.tintB;
+      const tr = tintOf(luma, img.cr[at] as number) - light.tintR;
       n++;
       if (Math.hypot(tb, tr) < WHITE_TINT && luma > WHITE_BRIGHT * whiteY) {
         white++;
@@ -342,7 +479,38 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
       }
     }
   }
-  const seen = discs.map((d) => look(img, d, whiteY));
+  // The colour of the light: the brightest pixels on the balls are highlights (the lamp
+  // mirrored in the ball) or the cue ball, both of which show the light's own colour. If
+  // they are strongly coloured they are more likely a bright ball than the light, and no
+  // correction is made.
+  let ln = 0;
+  let lb = 0;
+  let lr = 0;
+  for (const d of discs) {
+    const r = d.r * 0.8;
+    const x0 = Math.max(0, Math.floor(d.u - r));
+    const x1 = Math.min(img.width - 1, Math.ceil(d.u + r));
+    const y0 = Math.max(0, Math.floor(d.v - r));
+    const y1 = Math.min(img.height - 1, Math.ceil(d.v + r));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const dx = x + 0.5 - d.u;
+        const dy = y + 0.5 - d.v;
+        if (dx * dx + dy * dy > r * r) continue;
+        const at = y * img.width + x;
+        const luma = img.y[at] as number;
+        if (luma < LIGHT_BRIGHT * whiteY) continue;
+        ln++;
+        lb += tintOf(luma, img.cb[at] as number);
+        lr += tintOf(luma, img.cr[at] as number);
+      }
+    }
+  }
+  const light: Light =
+    ln > 0 && Math.hypot(lb / ln, lr / ln) < LIGHT_MAX_TINT
+      ? { tintB: lb / ln, tintR: lr / ln }
+      : { tintB: 0, tintR: 0 };
+  const seen = discs.map((d) => look(img, d, whiteY, light));
   const whiteRef = hexToYcc(CUE_BALL_COLOUR).y;
 
   interface Kind {

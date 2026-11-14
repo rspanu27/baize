@@ -121,16 +121,59 @@ export function findClothModel(img: WorkImage): ClothModel | undefined {
   };
 }
 
-/** True where a pixel has the cloth's tint and a brightness cloth can have. */
+/** A cloth with at least this much tint has a hue that shadow does not change. */
+const HUE_MIN_TINT = 0.12;
+/** Cosine of the largest angle between a shaded pixel's chroma and the cloth's (about 18 degrees). */
+const HUE_COS = 0.95;
+/**
+ * A shaded pixel's saturation as a share of the cloth's: shade washes colour out, it does
+ * not deepen it much, so a darker thing of the same hue but stronger colour (a blue ball on
+ * a blue cloth, a brown rail beside a red cloth) is not cloth.
+ */
+const HUE_MIN_SATURATION = 0.35;
+const HUE_MAX_SATURATION = 1.3;
+/** Below this brightness a pixel has no colour to speak of. */
+const HUE_DARK_FLOOR = 8;
+
+/**
+ * True where a pixel is cloth: it has the cloth's tint and a brightness cloth can have, or
+ * it is darker than the cloth with the cloth's hue. The second rule is for real rooms, where
+ * one end of a table can be several times darker than the other and cushions cast shadows:
+ * a coloured cloth in shadow keeps its hue, even when its brightness falls outside any
+ * fixed range. It is not used for grey or black cloths, which have no hue to keep.
+ */
 export function clothMask(img: WorkImage, model: ClothModel): Uint8Array {
   const mask = new Uint8Array(img.width * img.height);
   const r2 = model.tintRadius * model.tintRadius;
+  const tintSize = Math.hypot(model.tintB, model.tintR);
+  const hued = tintSize >= HUE_MIN_TINT;
+  // The cloth's saturation with the small floor used for shaded pixels below.
+  const clothSaturation = (tintSize * (model.y + 24)) / (model.y + HUE_DARK_FLOOR);
   for (let at = 0; at < mask.length; at++) {
     const luma = img.y[at] as number;
-    if (luma < model.yMin || luma > model.yMax) continue;
-    const db = tintOf(luma, img.cb[at] as number) - model.tintB;
-    const dr = tintOf(luma, img.cr[at] as number) - model.tintR;
-    if (db * db + dr * dr <= r2) mask[at] = 1;
+    const cb = img.cb[at] as number;
+    const cr = img.cr[at] as number;
+    if (luma >= model.yMin && luma <= model.yMax) {
+      const db = tintOf(luma, cb) - model.tintB;
+      const dr = tintOf(luma, cr) - model.tintR;
+      if (db * db + dr * dr <= r2) {
+        mask[at] = 1;
+        continue;
+      }
+    }
+    if (hued && luma < model.y && luma >= HUE_DARK_FLOOR) {
+      const chroma = Math.hypot(cb, cr);
+      if (chroma <= 0) continue;
+      const cos = (cb * model.tintB + cr * model.tintR) / (chroma * tintSize);
+      const saturation = chroma / (luma + HUE_DARK_FLOOR);
+      if (
+        cos >= HUE_COS &&
+        saturation >= HUE_MIN_SATURATION * clothSaturation &&
+        saturation <= HUE_MAX_SATURATION * clothSaturation
+      ) {
+        mask[at] = 1;
+      }
+    }
   }
   return mask;
 }

@@ -1,7 +1,7 @@
 import { sanitizeLayout } from "@baize/tables";
 import type { BallSetSpec, Layout, TableSpec } from "@baize/tables";
 import { findBalls } from "./balls/findBalls";
-import { cameraFromHomography } from "./geometry/camera";
+import { cameraFromCorners } from "./geometry/camera";
 import { homographyFromCorners } from "./geometry/homography";
 import { findTable } from "./table/findTable";
 import type { Camera, ImportOptions, ImportResult, PhotoImage, TableCorners } from "./types";
@@ -10,7 +10,7 @@ import type { Camera, ImportOptions, ImportResult, PhotoImage, TableCorners } fr
  * One photo to a layout of balls.
  *
  * 1. The table: its four corners, given by the person or found from the cloth.
- * 2. The camera behind those corners.
+ * 2. The camera behind those corners, which are at the height of the cushion noses.
  * 3. The balls, each with a kind and a confidence.
  * 4. Sanity: balls kept inside the cushions and apart, duplicate identities resolved by
  *    confidence (`sanitizeLayout` from `@baize/tables`, the same rules the editor uses).
@@ -36,6 +36,7 @@ export function importPhoto(
     return out;
   };
   const empty: Layout = { balls: [] };
+  const cornerHeightM = options.cornerHeightM ?? table.cushion.noseHeightM;
   const { widthM, lengthM } = table.playingArea;
 
   let corners: TableCorners | undefined = options.corners;
@@ -45,7 +46,7 @@ export function importPhoto(
     const given = corners;
     camera = timed("camera", () => {
       const h = homographyFromCorners(given, widthM, lengthM);
-      return h ? cameraFromHomography(h, image.widthPx, image.heightPx) : undefined;
+      return h ? cameraFromCorners(h, image.widthPx, image.heightPx, cornerHeightM) : undefined;
     });
     if (!camera) {
       return {
@@ -56,7 +57,7 @@ export function importPhoto(
       };
     }
   } else {
-    const found = timed("table", () => findTable(image, table));
+    const found = timed("table", () => findTable(image, table, cornerHeightM));
     if (!found) {
       return {
         problem: "table-not-found",
@@ -69,7 +70,7 @@ export function importPhoto(
   }
 
   const seen = camera;
-  const balls = timed("balls", () => findBalls(image, table, ballSet, seen));
+  const balls = timed("balls", () => findBalls(image, table, ballSet, seen, cornerHeightM));
   const clean = timed("sanity", () => sanitizeLayout({ balls }, table, ballSet));
   return {
     corners,

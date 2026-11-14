@@ -1,6 +1,10 @@
 import { CUSHION_TOP_DEPTH_M } from "@baize/tables";
 import type { TableSpec } from "@baize/tables";
-import { ASSUMED_FOCAL_PER_LONG_SIDE, cameraFromHomography } from "../geometry/camera";
+import {
+  ASSUMED_FOCAL_PER_LONG_SIDE,
+  cameraFromCorners,
+  cameraFromHomography,
+} from "../geometry/camera";
 import { homographyFromCorners, tableToImage } from "../geometry/homography";
 import { toWorkImage } from "../image/pixels";
 import type { WorkImage } from "../image/pixels";
@@ -22,9 +26,10 @@ import type { Pt } from "./quad";
  * 5. That quadrilateral is the playing area plus the cushions all round. The playing area's
  *    own corners are found by mapping the rectangle that is one cushion depth smaller.
  *
- * Limits, stated plainly. The cushion tops are a few centimetres above the cloth, which this
- * treats as level with it; and the depth of a cushion is a typical value, not this table's.
- * Both move the corners by a centimetre or two at worst. Which end of the table is the baulk
+ * Limits, stated plainly. The outline is taken to lie in one plane at the height of the
+ * cushion noses (the rail tops may be a little higher or lower), and the depth of a cushion
+ * is a typical value, not this table's. Both move the corners by a centimetre or two at
+ * worst. Which end of the table is the baulk
  * end cannot be seen from the outline: the end nearer the camera is taken as baulk, and the
  * result says that this was a guess. All four corners must be in the photo; otherwise
  * nothing is returned and the corners are placed by hand.
@@ -219,7 +224,12 @@ function refine(quad: readonly Pt[], edge: readonly Pt[]): Pt[] | undefined {
  * (no clear cloth, the table is cut off by the edge of the photo, or the outline is not a
  * table seen from above).
  */
-export function findTable(image: PhotoImage, table: TableSpec): FoundTable | undefined {
+export function findTable(
+  image: PhotoImage,
+  table: TableSpec,
+  /** Height above the cloth of the cushion tops and noses; the nose height by default. */
+  cornerHeightM: number = table.cushion.noseHeightM,
+): FoundTable | undefined {
   const img = toWorkImage(image, WORK_SIDE);
   if (img.width < 16 || img.height < 16) return undefined;
   const cloth = findClothModel(img);
@@ -317,7 +327,10 @@ export function findTable(image: PhotoImage, table: TableSpec): FoundTable | und
   ].map((p) => tableToImage(h, p)) as unknown as TableCorners;
   // The camera in the playing area's own coordinates.
   const hInner = homographyFromCorners(inner, table.playingArea.widthM, table.playingArea.lengthM);
-  const camera = hInner ? cameraFromHomography(hInner, image.widthPx, image.heightPx) : undefined;
+  // The outline is the top of the cushions, so its plane is at about nose height.
+  const camera = hInner
+    ? cameraFromCorners(hInner, image.widthPx, image.heightPx, cornerHeightM)
+    : undefined;
   if (!camera) return undefined;
   return { corners: inner, outer: best.outer, camera, cloth, baulkEndGuessed: true };
 }

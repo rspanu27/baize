@@ -90,9 +90,9 @@ function run(
   const { table, set } = preset(id);
   const camera = cam ?? standing(table);
   const photo = renderPhoto(camera, table, set, layout, { cloth, ...look });
-  const where = findTable(photo.image, table);
+  const where = findTable(photo.image, table, 0);
   if (!where) throw new Error("table not found");
-  const found = findBalls(photo.image, table, set, where.camera);
+  const found = findBalls(photo.image, table, set, where.camera, 0);
   return { result: score(found, layout, table, set), found };
 }
 
@@ -187,10 +187,12 @@ describe("findBalls on synthetic photos", () => {
     if (!kind) throw new Error("no rack");
     const layout = rackLayout(table, set, kind);
     const { result } = run("pool-9@1", layout, "#1f6b3a");
-    // Measured on 2026-11-13: 12 of 16 found (75 %). Balls in the middle of a rack are mostly
-    // hidden by their neighbours; this is the case the trained detector is needed for, and
-    // why a rack is better put on the table with the rack button than from a photo.
-    expect(result.found / layout.balls.length).toBeGreaterThanOrEqual(0.7);
+    // Measured on 2026-11-14: 10 of 16 found (62 %). It was 12 of 16 before the finder
+    // learned, from a real photo, not to count a ball's shadow as a second ball: a ball now
+    // has to be justified by pixels that no ball already taken explains, and in a rack most
+    // of a ball's pixels are its neighbours'. A rack is better put on the table with the
+    // rack button than from a photo; this is a case for the trained detector.
+    expect(result.found / layout.balls.length).toBeGreaterThanOrEqual(0.6);
     expect(result.extra).toBeLessThanOrEqual(2);
     expect(result.errors[Math.floor(result.errors.length / 2)]).toBeLessThan(0.004);
   });

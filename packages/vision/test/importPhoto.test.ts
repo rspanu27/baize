@@ -25,6 +25,9 @@ function standing(table: TableSpec, width: number, height: number): Camera {
   });
 }
 
+/** The test renderer draws cushions flat on the cloth, so the corners are at height 0. */
+const FLAT = { cornerHeightM: 0 };
+
 const LAYOUT: Layout = {
   balls: [
     { kind: "cue", x: 0.4, y: 0.6 },
@@ -39,7 +42,7 @@ describe("importPhoto", () => {
   const photo = renderPhoto(standing(table, 1600, 1200), table, set, LAYOUT, { cloth: "#1f6b3a" });
 
   test("finds the table and the balls, and reports that it found the corners itself", () => {
-    const result = importPhoto(photo.image, table, set);
+    const result = importPhoto(photo.image, table, set, FLAT);
     expect(result.problem).toBeUndefined();
     expect(result.diagnostics.cornersDetected).toBe(true);
     expect(result.corners).toBeDefined();
@@ -63,7 +66,7 @@ describe("importPhoto", () => {
   });
 
   test("corners placed by hand are used as given", () => {
-    const result = importPhoto(photo.image, table, set, { corners: photo.corners });
+    const result = importPhoto(photo.image, table, set, { corners: photo.corners, ...FLAT });
     expect(result.problem).toBeUndefined();
     expect(result.diagnostics.cornersDetected).toBe(false);
     expect(result.corners).toBe(photo.corners);
@@ -73,7 +76,7 @@ describe("importPhoto", () => {
   test("corners in the wrong order are a named problem, with no balls", () => {
     const [a, b, c, d] = photo.corners;
     const mirrored: TableCorners = [b, a, d, c];
-    const result = importPhoto(photo.image, table, set, { corners: mirrored });
+    const result = importPhoto(photo.image, table, set, { corners: mirrored, ...FLAT });
     expect(result.problem).toBe("corners-invalid");
     expect(result.layout.balls).toEqual([]);
   });
@@ -84,7 +87,7 @@ describe("importPhoto", () => {
       heightPx: 150,
       data: new Uint8ClampedArray(200 * 150 * 4).fill(90),
     };
-    const result = importPhoto(blank, table, set);
+    const result = importPhoto(blank, table, set, FLAT);
     expect(result.problem).toBe("table-not-found");
     expect(result.layout.balls).toEqual([]);
     expect(result.corners).toBeUndefined();
@@ -92,10 +95,10 @@ describe("importPhoto", () => {
 
   test("the photo is not changed, and timings appear only when a clock is given", () => {
     const before = photo.image.data.slice();
-    const plain = importPhoto(photo.image, table, set);
+    const plain = importPhoto(photo.image, table, set, FLAT);
     expect(plain.diagnostics.timingsMs).toEqual({});
     let t = 0;
-    const timed = importPhoto(photo.image, table, set, { now: () => (t += 5) });
+    const timed = importPhoto(photo.image, table, set, { now: () => (t += 5), ...FLAT });
     expect(Object.keys(timed.diagnostics.timingsMs).sort()).toEqual(["balls", "sanity", "table"]);
     expect(photo.image.data).toEqual(before);
     expect(timed.layout).toEqual(plain.layout);
@@ -104,7 +107,7 @@ describe("importPhoto", () => {
   test("speed: a 12 megapixel photo is imported well inside the 8 second limit", () => {
     const big = renderPhoto(standing(table, 4000, 3000), table, set, LAYOUT, { cloth: "#1f6b3a" });
     const start = performance.now();
-    const result = importPhoto(big.image, table, set);
+    const result = importPhoto(big.image, table, set, FLAT);
     const ms = performance.now() - start;
     expect(result.layout.balls).toHaveLength(4);
     // Measured on 2026-11-13 on a desktop; a phone is several times slower.

@@ -206,3 +206,27 @@ export function apparentRadiusPx(
     r[8] * (p.z - camera.position.z);
   return zc > 0 ? (camera.focalPx * radiusM) / zc : undefined;
 }
+
+/**
+ * The camera behind four corners of the playing area, with heights measured from the cloth.
+ *
+ * The corners of a playing area are where the cushion noses meet, and a nose is not on the
+ * cloth: it is `cornerHeightM` above it (about 0.635 of a ball diameter, close to the height
+ * of the centre of a ball). The homography of the corners is therefore that of the plane at
+ * nose height. The camera recovered from it is at the right place sideways and at its height
+ * above that plane; adding the nose height gives its height above the cloth. Treating the
+ * corners as lying on the cloth instead puts a far ball several centimetres too near.
+ */
+export function cameraFromCorners(
+  h: Mat3,
+  widthPx: number,
+  heightPx: number,
+  cornerHeightM: number,
+): Camera | undefined {
+  const camera = cameraFromHomography(h, widthPx, heightPx);
+  if (!camera) return undefined;
+  return {
+    ...camera,
+    position: { ...camera.position, z: camera.position.z + cornerHeightM },
+  };
+}

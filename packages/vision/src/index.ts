@@ -19,6 +19,7 @@ export type { ClothModel } from "./table/clothModel";
 export {
   ASSUMED_FOCAL_PER_LONG_SIDE,
   apparentRadiusPx,
+  cameraFromCorners,
   cameraFromHomography,
   imageToTableAtHeight,
   projectPoint,

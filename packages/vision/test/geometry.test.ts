@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   ASSUMED_FOCAL_PER_LONG_SIDE,
   apparentRadiusPx,
+  cameraFromCorners,
   cameraFromHomography,
   homographyFromCorners,
   imageToTable,
@@ -327,5 +328,58 @@ describe("error budget: corners that are a few pixels off", () => {
     const summary = `median ${(median * 100).toFixed(3)} %, p95 ${(p95 * 100).toFixed(3)} %, worst ${(worst * 100).toFixed(3)} %`;
     expect(median, summary).toBeLessThan(0.0015);
     expect(p95, summary).toBeLessThan(0.005);
+  });
+});
+
+describe("corners on the cushion noses, above the cloth", () => {
+  // Found with the first real photo (2026-11-14): the corners a person places are where the
+  // cushion noses meet, and a nose is about 3.6 cm above the cloth on a pool table.
+  const table = TABLES[1];
+  const nose = 0.635 * 2 * table.ballRadiusM;
+  const pose: Pose = {
+    position: { x: -0.3, y: -0.5, z: 1.0 },
+    target: { x: table.widthM / 2, y: table.lengthM / 2 },
+    rollRad: 0.04,
+    focalPx: 2900,
+    widthPx: 3000,
+    heightPx: 4000,
+  };
+  const truth = cameraOf(pose);
+  // Where the four nose corners really appear: points at nose height, not on the cloth.
+  const seenCorners = [
+    { x: 0, y: 0 },
+    { x: table.widthM, y: 0 },
+    { x: table.widthM, y: table.lengthM },
+    { x: 0, y: table.lengthM },
+  ].map((c) => {
+    const p = projectPoint(truth, { ...c, z: nose });
+    if (!p) throw new Error("corner not seen");
+    return p;
+  }) as unknown as TableCorners;
+  const far = { x: 0.9, y: table.lengthM - 0.25, z: table.ballRadiusM };
+
+  test("with the nose height given, the camera and a far ball are recovered exactly", () => {
+    const h = homographyFromCorners(seenCorners, table.widthM, table.lengthM);
+    const camera = h ? cameraFromCorners(h, pose.widthPx, pose.heightPx, nose) : undefined;
+    if (!camera) throw new Error("no camera");
+    expect(camera.position.x).toBeCloseTo(pose.position.x, 6);
+    expect(camera.position.y).toBeCloseTo(pose.position.y, 6);
+    expect(camera.position.z).toBeCloseTo(pose.position.z, 6);
+    const seen = projectPoint(truth, far);
+    const placed = seen ? imageToTableAtHeight(camera, seen, far.z) : undefined;
+    expect(Math.hypot((placed?.x ?? 9) - far.x, (placed?.y ?? 9) - far.y)).toBeLessThan(1e-6);
+  });
+
+  test("taking the corners to be on the cloth puts the far ball centimetres too near", () => {
+    const h = homographyFromCorners(seenCorners, table.widthM, table.lengthM);
+    const flat = h ? cameraFromCorners(h, pose.widthPx, pose.heightPx, 0) : undefined;
+    if (!flat) throw new Error("no camera");
+    const seen = projectPoint(truth, far);
+    const placed = seen ? imageToTableAtHeight(flat, seen, far.z) : undefined;
+    const error = Math.hypot((placed?.x ?? 9) - far.x, (placed?.y ?? 9) - far.y);
+    // About nose height x distance / camera height: this is the error the first real photo
+    // showed, with the cushion itself read as a row of balls.
+    expect(error).toBeGreaterThan(0.05);
+    expect(error).toBeLessThan(0.15);
   });
 });
