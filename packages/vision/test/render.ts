@@ -1,4 +1,10 @@
-import { ballAppearance, ballSizeOf, CUE_BALL_COLOUR, pocketDropCircles } from "@baize/tables";
+import {
+  ballAppearance,
+  ballSizeOf,
+  CUE_BALL_COLOUR,
+  CUSHION_TOP_DEPTH_M,
+  pocketDropCircles,
+} from "@baize/tables";
 import type { BallKind, BallSetSpec, Layout, TableSpec } from "@baize/tables";
 import { apparentRadiusPx, projectPoint } from "../src/index";
 import type { Camera, ImagePoint, PhotoImage, TableCorners } from "../src/index";
@@ -14,7 +20,7 @@ import { cornersSeen, seeded } from "./synthetic";
  * (floor(u), floor(v)), which is how `corners` and ball `centre` are to be read.
  *
  * Limitations. Cushions and rails are drawn flat at z = 0 (no height, no cushion shading, no
- * pocket jaws), so they do not hide anything. The widths of the cushion band (0.05 m) and the
+ * pocket jaws), so they do not hide anything. The widths of the cushion band (`CUSHION_TOP_DEPTH_M`) and the
  * rail (0.12 m) are fixture choices, not table data. Balls have no numbers, and there are no
  * reflections of balls in the cloth.
  */
@@ -51,8 +57,8 @@ export interface RenderedPhoto {
   }[];
 }
 
-/** Width of the cushion band outside the playing area (fixture choice). */
-const CUSHION_BAND_M = 0.05;
+/** Width of the cushion band outside the playing area: the depth the finder assumes. */
+const CUSHION_BAND_M = CUSHION_TOP_DEPTH_M;
 /** Width of the rail outside the cushion band (fixture choice). */
 const RAIL_BAND_M = 0.12;
 /** Colour of a pocket seen from above. */

@@ -8,7 +8,7 @@ import { cameraOf, seeded } from "./synthetic";
 
 /**
  * The table finder on synthetic photos, where the true corners are known exactly. The
- * renderer draws cushions 0.05 m deep and level with the cloth, which is what the finder
+ * renderer draws cushions `CUSHION_TOP_DEPTH_M` deep and level with the cloth, which is what the finder
  * assumes, so these tests check the finder's own accuracy and not that assumption.
  */
 
@@ -145,6 +145,30 @@ describe("findTable on synthetic photos", () => {
     );
     expect(error).toBeLessThan(2);
   });
+
+  test.each([
+    ["the table across the photo", 0],
+    ["slightly turned", 0.12],
+  ] as const)(
+    "seen from far above through a long lens, the long sides are the longer ones (%s)",
+    (_name, roll) => {
+      // Found with the pix2pockets pictures (2026-11-15): with almost no perspective the
+      // focal-length fit says little, and it had swapped long and short sides. The table
+      // fills most of the photo, its length across it.
+      const table = TABLE_PRESETS.find((t) => t.id === "pool-9@1") as TableSpec;
+      const cam = camera(table, { x: 0.5, y: 0.5, z: 6, focal: 1700, roll: Math.PI / 2 + roll });
+      const photo = renderPhoto(cam, table, setOf(table), EMPTY, { cloth: "#2a6fb5" });
+      const found = findTable(photo.image, table, 0);
+      if (!found) throw new Error("table not found");
+      const [a, b, c, d] = photo.corners;
+      const turned: TableCorners = [c, d, a, b];
+      const error = Math.min(
+        cornerError(found.corners, photo.corners),
+        cornerError(found.corners, turned),
+      );
+      expect(error).toBeLessThan(3);
+    },
+  );
 
   test("a table that runs off the photo is not guessed at", () => {
     const table = TABLE_PRESETS.find((t) => t.id === "snooker-12@1") as TableSpec;

@@ -88,6 +88,38 @@ or the fit was doubtful.
 These figures are the base line for task 5.11. The time for all the pictures, both ways,
 was 2.5 minutes.
 
+## After the first round of fixes (2026-11-15)
+
+The same 231 pictures, after the changes recorded in the decisions log in
+`docs/ARCHITECTURE.md` (ball finder, then table finder).
+
+|                                 | Target | Corners given, before | Corners given, now | Nothing given, before | Nothing given, now |
+| ------------------------------- | ------ | --------------------- | ------------------ | --------------------- | ------------------ |
+| Table found right               |        |                       |                    | 61 %                  | 78.4 %             |
+| Balls found                     | 95 %   | 82.6 %                | 89.9 %             | 78.6 %                | 87.9 %             |
+| Named (to the group)            | 90 %   | 85.0 %                | 81.9 %             | 84.3 %                | 84.4 %             |
+| Position error, median          | 0.6 %  | 0.20 %                | 0.19 %             | 0.70 %                | 0.44 %             |
+| Position error, 95th percentile | 1.5 %  | 0.96 %                | 0.94 %             | 1.82 %                | 1.70 %             |
+| False balls per picture         | 0      | 3.5                   | 0.43               | 4.2                   | 0.95               |
+
+"Nothing given" counts only the pictures where the table was found right (140 before, 181
+now). The share named fell with corners given because more balls are found, and the ones
+added are the hard ones (dark balls, balls on the far side); in number, more balls are
+named right than before (1963 against 1872).
+
+What is left:
+
+- **Racks.** Most of the balls still missed are in racks, where balls hide each other.
+- **Tables that are small in the picture.** 18 pictures get no table. 12 of them are wide
+  shots in which the playing area covers under 5 % of the picture (three of those also
+  touch its edge), which is refused on purpose. The other 6 (pictures 6, 7, 14a, 15, 15a
+  and 181, 5.5 to 16 % of the picture) should have been found and were not.
+- **Corners off by 3 to 13 % of the length** in about 30 pictures: the long sides are
+  found but the ends are placed wrong, mostly in views from low along the table.
+- On synthetic photos the 95th percentile of position error rose from 0.58 % to 0.80 %
+  (0.09 points from the wider cushion band the renderer now draws, the rest from the new
+  table finder); still inside the 1.5 % target.
+
 ## What this changes in the plan
 
 - Task 5.11 (measure stage A on real photos) can start on pix2pockets before the project's

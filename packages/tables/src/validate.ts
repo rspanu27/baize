@@ -16,11 +16,14 @@ import type {
  * Distance from the cushion nose back to where the cloth-covered cushion meets the top of
  * the wooden rail, seen from above, metres. The photo import needs it: in a photo the area of
  * cloth colour ends at the rail, not at the nose, and the playing area is this much inside.
- * UNVERIFIED: about 2 in (50 mm), from the K-66 pool profile (1 3/16 in of rubber) plus the
- * cloth-covered strip behind it; no maker's drawing was consulted, and snooker cushions and
- * individual tables differ by a centimetre or more. The corners can always be placed by hand.
+ * Measured, not from a drawing: 6 cm is the middle value found on 157 pictures of the
+ * public pix2pockets set (2026-11-14; a tenth of them below 5.5 cm, a tenth above 8.5 cm),
+ * where the true place of the cushion noses was worked out from the table's sights. That
+ * truth rests on `POOL_SIGHT_SETBACK_M`, which is itself unverified, and nearly all of those
+ * tables are tournament pool tables: snooker cushions and bar tables may differ by a
+ * centimetre or more. The corners can always be placed by hand.
  */
-export const CUSHION_TOP_DEPTH_M = 0.05;
+export const CUSHION_TOP_DEPTH_M = 0.06;
 
 export const TABLE_DEFAULTS = {
   /**

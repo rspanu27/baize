@@ -568,9 +568,22 @@ export function findBalls(
     if (!p) continue;
     const r = (apparentRadiusPx(camera, { x: p.x, y: p.y, z: radiusM }, radiusM) ?? 0) / s;
     if (r < DARK_BALL_MIN_RADIUS_PX) continue;
-    const c = coverage(darkMask, skip, img.width, img.height, x + 0.5, y + 0.5, r);
+    // The dark pixels of such a ball lie on its shaded side, so a disc centred on one of
+    // them is off the ball: move it onto the middle of what it covers, as above.
+    let u = x + 0.5;
+    let v = y + 0.5;
+    let c = coverage(darkMask, skip, img.width, img.height, u, v, r);
+    for (let pass = 0; pass < 2; pass++) {
+      const again = coverage(darkMask, skip, img.width, img.height, c.cu, c.cv, r);
+      if (again.fill - again.ring <= c.fill - c.ring) break;
+      u = c.cu;
+      v = c.cv;
+      c = again;
+    }
     if (c.fill < DARK_BALL_FILL || c.ring > DARK_BALL_RING || c.free < DARK_BALL_FREE) continue;
-    darkDiscs.push({ x: p.x, y: p.y, u: x + 0.5, v: y + 0.5, r, score: c.fill - c.ring });
+    const q = toTable(u, v);
+    if (!q || !onTable(q)) continue;
+    darkDiscs.push({ x: q.x, y: q.y, u, v, r, score: c.fill - c.ring });
   }
   darkDiscs.sort((a, b) => b.score - a.score || a.v - b.v || a.u - b.u);
   for (const d of darkDiscs) {

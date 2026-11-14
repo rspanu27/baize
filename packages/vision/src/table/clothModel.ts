@@ -207,7 +207,22 @@ export function isCushionShade(model: ClothModel, luma: number, cb: number, cr: 
   if (luma < FACE_DARK * model.y) return true;
   const tintSize = Math.hypot(model.tintB, model.tintR);
   if (tintSize < HUE_MIN_TINT) return luma < model.y;
+  return hasClothHue(model, luma, cb, cr);
+}
+
+/** A pixel with less colour than this share of the cloth's has no hue to compare. */
+const FACE_MIN_SATURATION = 0.25;
+
+/**
+ * True where a pixel has the hue of a coloured cloth, at any brightness: the bed, the
+ * cushion tops, and the cushion faces between them, which are much darker. Always false
+ * for a cloth with no hue of its own (grey, black).
+ */
+export function hasClothHue(model: ClothModel, luma: number, cb: number, cr: number): boolean {
+  const tintSize = Math.hypot(model.tintB, model.tintR);
+  if (tintSize < HUE_MIN_TINT || luma < HUE_DARK_FLOOR) return false;
   const chroma = Math.hypot(cb, cr);
-  if (chroma <= 0) return false;
+  const clothSaturation = (tintSize * (model.y + 24)) / (model.y + HUE_DARK_FLOOR);
+  if (chroma / (luma + HUE_DARK_FLOOR) < FACE_MIN_SATURATION * clothSaturation) return false;
   return (cb * model.tintB + cr * model.tintR) / (chroma * tintSize) >= FACE_HUE_COS;
 }

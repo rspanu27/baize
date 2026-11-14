@@ -9,7 +9,7 @@ import { homographyFromCorners, tableToImage } from "../geometry/homography";
 import { toWorkImage } from "../image/pixels";
 import type { WorkImage } from "../image/pixels";
 import type { Camera, ImagePoint, PhotoImage, TableCorners } from "../types";
-import { clothMask, findClothModel } from "./clothModel";
+import { clothMask, findClothModel, hasClothHue } from "./clothModel";
 import type { ClothModel } from "./clothModel";
 import { convexHull, cross, enclosingQuad, fitLine, intersectLines, polygonArea } from "./quad";
 import type { Pt } from "./quad";
@@ -58,8 +58,14 @@ const MAX_BORDER_SHARE = 0.03;
 const FIT_TIE = 1e-3;
 /** A difference in log focal length smaller than this does not decide between readings. */
 const FOCAL_ODD_MARGIN = 0.25;
-/** Edge pixels within this distance (working pixels) of a side are used to refit it. */
-const REFIT_BAND = 2.5;
+/** How far the cloth area is worn down and grown back, working pixels. */
+const OPEN_PX = 3;
+/** Edge pixels within these distances (working pixels) of a side are used to refit it, in turn. */
+const REFIT_BANDS = [8, 4, 2.5];
+/** In the second fit of a side, edge pixels farther than this from the first fit are left out. */
+const REFIT_KEEP = 1.5;
+/** Opposite sides whose lengths in the photo differ by less than this share show no perspective to speak of. */
+const FLAT_VIEW = 0.2;
 
 /** The connected area of cloth that covers most of the middle of the picture. */
 function clothRegion(
@@ -124,6 +130,46 @@ function clothRegion(
   return { region, size: bestSize };
 }
 
+/**
+ * The region with everything thinner than about twice `OPEN_PX` removed: worn down by that
+ * many pixels, reduced to the piece that covers the middle, and grown back.
+ */
+function opened(
+  img: WorkImage,
+  region: Uint8Array,
+): { region: Uint8Array; size: number } | undefined {
+  const { width, height } = img;
+  const pass = (src: Uint8Array, grow: boolean): Uint8Array => {
+    let cur = src;
+    for (let step = 0; step < OPEN_PX; step++) {
+      const next = new Uint8Array(width * height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const at = y * width + x;
+          const l = x > 0 ? (cur[at - 1] as number) : 0;
+          const r = x < width - 1 ? (cur[at + 1] as number) : 0;
+          const u = y > 0 ? (cur[at - width] as number) : 0;
+          const d = y < height - 1 ? (cur[at + width] as number) : 0;
+          const c = cur[at] as number;
+          next[at] = grow ? (c | l | r | u | d ? 1 : 0) : c & l & r & u & d ? 1 : 0;
+        }
+      }
+      cur = next;
+    }
+    return cur;
+  };
+  const core = clothRegion(img, pass(region, false));
+  if (!core) return undefined;
+  const grown = pass(core.region, true);
+  let size = 0;
+  // Growing back never goes beyond what was there.
+  for (let at = 0; at < grown.length; at++) {
+    if (grown[at] === 1 && region[at] === 1) size++;
+    else grown[at] = 0;
+  }
+  return { region: grown, size };
+}
+
 /** Outer edge pixels of a region: the first and last pixel of every row and every column. */
 function outline(img: WorkImage, region: Uint8Array): { points: Pt[]; onBorder: number } {
   const { width, height } = img;
@@ -170,7 +216,7 @@ function outline(img: WorkImage, region: Uint8Array): { points: Pt[]; onBorder: 
 }
 
 /** Refits the four sides to the edge pixels along them and returns the new corners. */
-function refine(quad: readonly Pt[], edge: readonly Pt[]): Pt[] | undefined {
+function refine(quad: readonly Pt[], edge: readonly Pt[], band: number): Pt[] | undefined {
   const centre = {
     x: quad.reduce((s, p) => s + p.x, 0) / 4,
     y: quad.reduce((s, p) => s + p.y, 0) / 4,
@@ -187,9 +233,19 @@ function refine(quad: readonly Pt[], edge: readonly Pt[]): Pt[] | undefined {
     const near = edge.filter((p) => {
       const along = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (len * len);
       const off = (p.x - a.x) * nx + (p.y - a.y) * ny;
-      return along > 0.12 && along < 0.88 && Math.abs(off) < REFIT_BAND;
+      return along > 0.12 && along < 0.88 && Math.abs(off) < band;
     });
-    const fitted = near.length >= 8 ? fitLine(near) : undefined;
+    let fitted = near.length >= 8 ? fitLine(near) : undefined;
+    if (fitted) {
+      // Once more without the pixels that lie off the line (a pocket's lip, a hand).
+      const first = fitted;
+      const close = near.filter(
+        (p) =>
+          Math.abs((p.x - first.point.x) * first.dir.y - (p.y - first.point.y) * first.dir.x) <
+          REFIT_KEEP,
+      );
+      if (close.length >= 8) fitted = fitLine(close) ?? fitted;
+    }
     if (!fitted) {
       lines.push({ point: a, dir: { x: (b.x - a.x) / len, y: (b.y - a.y) / len } });
       continue;
@@ -234,7 +290,24 @@ export function findTable(
   if (img.width < 16 || img.height < 16) return undefined;
   const cloth = findClothModel(img);
   if (!cloth) return undefined;
-  const found = clothRegion(img, clothMask(img, cloth));
+  // The faces of the far cushions are the cloth turned away from the light, much darker
+  // than the bed. Left out, they cut the cushion tops off from the bed, and the outline
+  // would stop at the bed on those sides and at the rails on the others. Anything with the
+  // cloth's hue joins the area.
+  const mask = clothMask(img, cloth);
+  for (let at = 0; at < mask.length; at++) {
+    if (
+      mask[at] !== 1 &&
+      hasClothHue(cloth, img.y[at] as number, img.cb[at] as number, img.cr[at] as number)
+    ) {
+      mask[at] = 1;
+    }
+  }
+  const whole = clothRegion(img, mask);
+  if (!whole) return undefined;
+  // Things of the cloth's colour that touch the table in the picture (a shirt, a chalk, a
+  // reflection) hang on to it by a thin neck: wear the area down and grow it back.
+  const found = opened(img, whole.region);
   if (!found || found.size < MIN_AREA_SHARE * img.width * img.height) return undefined;
   const edge = outline(img, found.region);
   // A table that runs off the photo has a corner or a side that cannot be seen.
@@ -243,7 +316,10 @@ export function findTable(
   const rough = enclosingQuad(hull);
   if (!rough) return undefined;
   if (found.size < MIN_FILL * polygonArea(rough)) return undefined;
-  const fine = refine(rough, edge.points) ?? rough;
+  // From a wide band to a narrow one: the first outline can be a few pixels off where
+  // something sticks out of the cloth area at a corner.
+  let fine = rough;
+  for (const band of REFIT_BANDS) fine = refine(fine, edge.points, band) ?? fine;
 
   // Into photo pixels, and into the order in which a table's corners appear from above:
   // clockwise on the screen (v grows downwards).
@@ -283,7 +359,22 @@ export function findTable(
   const other: [Reading | undefined, Reading | undefined] = [readings[1], readings[3]];
   const fit = misfitOf(...pair);
   const otherFit = misfitOf(...other);
-  if (Math.abs(otherFit - fit) > FIT_TIE) {
+  // Seen from above, or from far away through a long lens, the table shows hardly any
+  // perspective, and its long sides are simply the longer ones in the photo. The fit of the
+  // focal length means little there and must not overrule that.
+  const len = (i: number): number => {
+    const a = quad[i] as ImagePoint;
+    const b = quad[(i + 1) % 4] as ImagePoint;
+    return Math.hypot(b.u - a.u, b.v - a.v);
+  };
+  const even = (a: number, b: number): boolean => Math.abs(a - b) < FLAT_VIEW * Math.max(a, b);
+  const flat = even(len(0), len(2)) && even(len(1), len(3));
+  const evenSides = len(0) + len(2);
+  const oddSides = len(1) + len(3);
+  if (flat && !even(evenSides, oddSides)) {
+    // Side 0 of a reading is a short side: readings 0 and 2 start on even sides.
+    if (evenSides > oddSides) pair = other;
+  } else if (Math.abs(otherFit - fit) > FIT_TIE) {
     if (otherFit < fit) pair = other;
   } else {
     // The fit says nothing when the photo gives only one equation for the focal length
