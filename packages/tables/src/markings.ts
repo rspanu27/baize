@@ -132,6 +132,16 @@ const POOL_FOOT_STRING_FRACTION = 3 / 4;
 const POOL_LONG_RAIL_DIVISIONS = 8;
 const POOL_SHORT_RAIL_DIVISIONS = 4;
 
+/**
+ * How far behind the cushion nose the centre of a pool sight is, on the rail top, metres.
+ * UNVERIFIED: 3 11/16 in (tolerance 1/8 in), recalled from the WPA Tournament Table &
+ * Equipment Specifications section on sights; the page could not be re-read when this was
+ * added (2026-11-14). Bar tables and older tables differ. Nothing in the editor depends on
+ * it (sights are drawn at a fixed place on the drawn rail); the photo evaluation uses it to
+ * work out true ball positions from labelled sights, and checks it against the pictures.
+ */
+export const POOL_SIGHT_SETBACK_M = (3 + 11 / 16) * 0.0254;
+
 function poolSpots(table: TableSpec): Spot[] {
   const { lengthM, widthM } = table.playingArea;
   return [

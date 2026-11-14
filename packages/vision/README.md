@@ -56,3 +56,27 @@ file beside it with the same name and `.json`:
 
 Running the evaluation on real photos needs a JPEG decoder for Node, which this package does
 not have (it has no dependencies beyond `@baize/tables`); that runner is part of stage B.
+
+### Real pictures with marked sights
+
+`test/realSet.test.ts` measures the import on pictures of pool tables in which the balls
+and the sights (diamonds) are marked in YOLO format, such as the public pix2pockets set
+(see `docs/DATASETS.md`). The pictures are never put in the repository. The true camera,
+and with it the true place of every ball, is worked out from the sights (`test/sights.ts`).
+
+1. Decode the pictures once, to a folder outside the repository (this uses the browser
+   installed for the end-to-end tests, so no image decoder is needed):
+
+   ```
+   node apps/web/scripts/decode-photos.mjs <folder of pictures> <folder for pixels>
+   ```
+
+2. Run the measurement:
+
+   ```
+   BAIZE_REAL_LABELS=<folder of label files> BAIZE_REAL_PIXELS=<folder for pixels> \
+   BAIZE_EVAL_REPORT=<report file> pnpm --filter @baize/vision exec vitest run test/realSet.test.ts
+   ```
+
+Without those variables the test is skipped, so `pnpm check` and CI do not need the
+pictures.

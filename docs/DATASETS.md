@@ -2,8 +2,8 @@
 
 Survey of 2026-11-14, made to see whether public data can stand in for the project's own
 labelled photos (task 5.10) while those are being collected. Every entry was opened and a
-sample of its pictures looked at. Nothing here has been downloaded, and no image from any
-of these sets is in the repository.
+sample of its pictures looked at. Only pix2pockets has been downloaded, to a folder outside
+the repository; no image from any of these sets is in the repository.
 
 ## Result in one paragraph
 
@@ -52,6 +52,41 @@ opened.
   the labelled diamonds (the authors report 0.4 cm with their method), which is what makes
   it usable for measuring position error. For the others only "found or not" and "named
   right or not" can be measured.
+
+## First measurement on pix2pockets (2026-11-14)
+
+The set was downloaded to a folder outside the repository (the zip in the authors' code
+repository, 41 MB) and the import as it stood at commit `6bc1a5c` was run on all 247
+pictures with `packages/vision/test/realSet.test.ts`. The truth comes from the marked
+sights (`packages/vision/test/sights.ts`): good to about a centimetre, balls known only as
+cue, black, solid or striped. A truth was made for 231 pictures (median distance between a
+sight and its mark 1.0 pixel); 16 were left out because a rail had too few sights in view
+or the fit was doubtful.
+
+|                                 | Target | Corners given | Nothing given, table right |
+| ------------------------------- | ------ | ------------- | -------------------------- |
+| Pictures                        |        | 231           | 140                        |
+| Balls found                     | 95 %   | 82.6 %        | 78.6 %                     |
+| Named (to the group)            | 90 %   | 85.0 %        | 84.3 %                     |
+| Position error, median          | 0.6 %  | 0.20 %        | 0.70 %                     |
+| Position error, 95th percentile | 1.5 %  | 0.96 %        | 1.82 %                     |
+| False balls per picture         | 0      | 3.5           | 4.2                        |
+
+- **Finding the table alone:** a table was reported in 213 of 231 pictures and was the
+  right one (every corner within 3 % of the table length) in 140, which is 61 %. So in
+  four pictures of ten the person would have to move the corners.
+- **Position is good when the corners are right** (median 0.20 % of the table length, the
+  target is 0.6 %), and three to four times worse with the corners the finder gives. The
+  geometry is sound; the corner finder is the weak part of it.
+- **False balls are the largest fault.** There are none in the 25 pictures taken from
+  straight above and 3.5 to 4 per picture in every angled view, so they come from what an
+  angled view shows beside the cloth: cushion faces, pockets, rails.
+- **One ball in six is missed**, more on the small bar tables (76 % found on the 7 ft
+  Valley size) where a ball is about 8 pixels across.
+- Only 14 of 231 pictures came out with every ball found and none invented.
+
+These figures are the base line for task 5.11. The time for all the pictures, both ways,
+was 2.5 minutes.
 
 ## What this changes in the plan
 
