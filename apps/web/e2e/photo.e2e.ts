@@ -195,3 +195,21 @@ test("a corner can be moved, a ball changed and one added, and a bad file is exp
   });
   await expect(page.getByRole("alert").filter({ hasText: "could not be read" })).toBeVisible();
 });
+
+test("on a small phone the two closing buttons stay in view while the controls scroll", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 560 });
+  const dialog = await openReview(page);
+  // Selecting a ball and starting to add one makes the controls taller than their share.
+  await dialog.locator(".photo-ball").first().dispatchEvent("pointerdown", { bubbles: true });
+  await dialog.getByRole("button", { name: "Add a ball" }).click();
+  for (const name of ["Use these balls", "Cancel"]) {
+    await expect(dialog.getByRole("button", { name })).toBeInViewport({ ratio: 1 });
+  }
+  const controls = dialog.locator(".photo-controls");
+  await controls.evaluate((el) => el.scrollTo(0, 0));
+  for (const name of ["Use these balls", "Cancel"]) {
+    await expect(dialog.getByRole("button", { name })).toBeInViewport({ ratio: 1 });
+  }
+});

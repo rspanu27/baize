@@ -196,8 +196,13 @@
   outline-offset: 2px;
 }
 
+/* Always in view: the controls above scroll behind them, on a phone above all. */
 .photo-actions {
   margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.5rem;
+  background: #18261f;
 }
 
 /* A phone held upright: the photo takes the height that is left, the controls scroll below it. */

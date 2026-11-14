@@ -133,7 +133,7 @@ Fixed at kickoff: one photo through the system camera or file picker; automatic 
 
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
-| 5.10 | Capture protocol and the labelled set: what to photograph, how the true ball positions are known (balls on spots and racks, plus measured or top-down reference), the label file format | You, L | 5.6 | At least 100 photos across tables, cloth colours, lighting and angles, with labels | todo |
+| 5.10 | Capture protocol and the labelled set: what to photograph, how the true ball positions are known (balls on spots and racks, plus measured or top-down reference), the label file format | You, L | 5.6 | At least 100 photos across tables, cloth colours, lighting and angles, with labels | todo; public sets surveyed in docs/DATASETS.md (2026-11-14): none has phone photos of whole tables, pix2pockets can serve 5.11 as a first test set |
 | 5.11 | Measure stage A on the real set and decide what the learned detector must fix | L | 5.10 | Metrics table in PROGRESS; decision recorded | todo |
 | 5.12 | Train a small detector (YOLO family) on public data plus the project's photos; licences of data and code checked and recorded; export to ONNX. Training on free compute only | L, You | 5.10 | Model file with its training record; recall and identity on a held-out part of the set | todo |
 | 5.13 | Run the model in the browser with ONNX Runtime Web (WebGPU, falling back to WASM), loaded only when a photo is imported, served as a static file | I | 5.12 | Targets met or the shortfall stated; time limits met; the app works with the model missing | todo |
