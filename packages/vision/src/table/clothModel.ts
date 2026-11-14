@@ -132,17 +132,29 @@ const HUE_COS = 0.95;
  */
 const HUE_MIN_SATURATION = 0.35;
 const HUE_MAX_SATURATION = 1.3;
+/**
+ * Cloth under the glare of a lamp is brighter and paler than the rest, with the same hue.
+ * It may lose this share of its saturation and still be cloth.
+ */
+const GLARE_MIN_SATURATION = 0.6;
+/** ... and it is never stronger in colour: a brighter thing of the same hue and full colour is a ball. */
+const GLARE_MAX_SATURATION = 0.97;
 /** Below this brightness a pixel has no colour to speak of. */
 const HUE_DARK_FLOOR = 8;
 
 /**
  * True where a pixel is cloth: it has the cloth's tint and a brightness cloth can have, or
- * it is darker than the cloth with the cloth's hue. The second rule is for real rooms, where
+ * it has the cloth's hue and is darker, or brighter and a little paler. The second rule is for real rooms, where
  * one end of a table can be several times darker than the other and cushions cast shadows:
  * a coloured cloth in shadow keeps its hue, even when its brightness falls outside any
  * fixed range. It is not used for grey or black cloths, which have no hue to keep.
  */
-export function clothMask(img: WorkImage, model: ClothModel): Uint8Array {
+export function clothMask(
+  img: WorkImage,
+  model: ClothModel,
+  /** If given, set to 1 where a pixel is cloth only by the second rule (darker, same hue). */
+  shade?: Uint8Array,
+): Uint8Array {
   const mask = new Uint8Array(img.width * img.height);
   const r2 = model.tintRadius * model.tintRadius;
   const tintSize = Math.hypot(model.tintB, model.tintR);
@@ -161,19 +173,41 @@ export function clothMask(img: WorkImage, model: ClothModel): Uint8Array {
         continue;
       }
     }
-    if (hued && luma < model.y && luma >= HUE_DARK_FLOOR) {
+    if (hued && luma >= HUE_DARK_FLOOR && luma <= model.yMax) {
       const chroma = Math.hypot(cb, cr);
       if (chroma <= 0) continue;
       const cos = (cb * model.tintB + cr * model.tintR) / (chroma * tintSize);
       const saturation = chroma / (luma + HUE_DARK_FLOOR);
+      const darker = luma < model.y;
       if (
         cos >= HUE_COS &&
-        saturation >= HUE_MIN_SATURATION * clothSaturation &&
-        saturation <= HUE_MAX_SATURATION * clothSaturation
+        saturation >= (darker ? HUE_MIN_SATURATION : GLARE_MIN_SATURATION) * clothSaturation &&
+        saturation <= (darker ? HUE_MAX_SATURATION : GLARE_MAX_SATURATION) * clothSaturation
       ) {
         mask[at] = 1;
+        if (shade && darker) shade[at] = 1;
       }
     }
   }
   return mask;
+}
+
+/** Cosine of the largest angle between the chroma of a cushion face and the cloth's (about 26 degrees). */
+const FACE_HUE_COS = 0.9;
+/** Darker than this share of the cloth, a pixel under a cushion is shadow whatever its colour. */
+const FACE_DARK = 0.3;
+
+/**
+ * True where a pixel could be the face of a cushion or the shadow under it: the cloth's hue
+ * at any brightness and any strength of colour, or simply dark. It is a looser test than
+ * `clothMask` and is meant only for the narrow band where a cushion's face is seen, where
+ * the cloth turns away from the light and looks deeper and darker than on the bed.
+ */
+export function isCushionShade(model: ClothModel, luma: number, cb: number, cr: number): boolean {
+  if (luma < FACE_DARK * model.y) return true;
+  const tintSize = Math.hypot(model.tintB, model.tintR);
+  if (tintSize < HUE_MIN_TINT) return luma < model.y;
+  const chroma = Math.hypot(cb, cr);
+  if (chroma <= 0) return false;
+  return (cb * model.tintB + cr * model.tintR) / (chroma * tintSize) >= FACE_HUE_COS;
 }

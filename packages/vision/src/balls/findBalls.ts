@@ -10,7 +10,8 @@ import type { BallKind, BallSetSpec, LayoutBall, TableSpec } from "@baize/tables
 import { apparentRadiusPx, imageToTableAtHeight, projectPoint } from "../geometry/camera";
 import { toWorkImage } from "../image/pixels";
 import type { WorkImage } from "../image/pixels";
-import { clothMask, findClothModel, tintOf } from "../table/clothModel";
+import { clothMask, findClothModel, isCushionShade, tintOf } from "../table/clothModel";
+import type { ClothModel } from "../table/clothModel";
 import type { Camera, PhotoImage } from "../types";
 
 /**
@@ -42,6 +43,26 @@ export interface FoundBall extends LayoutBall {
 
 /** Longer side of the working copy of the photo, pixels. A far ball must still be a few across. */
 const WORK_SIDE = 1200;
+/** The farthest ball should keep at least this radius in the working copy, pixels. */
+const FAR_BALL_RADIUS_PX = 4;
+/** The working copy is never larger than this on its longer side, whatever the balls need. */
+const MAX_WORK_SIDE = 2400;
+/** How far beyond the cushion noses the part of the photo that is worked on reaches, metres. */
+const PART_MARGIN_M = 0.3;
+/** A disc whose not-cloth pixels are less unlike the cloth than this is cloth (see `distinctness`). */
+const DISTINCT_MIN = 1.6;
+/** Dark balls among shaded cloth: darker than this share of the cloth. */
+const DARK_BALL_BRIGHT = 0.75;
+/** ... this full of dark, with at most this share of dark in the ring around, this much left to judge. */
+const DARK_BALL_FILL = 0.75;
+const DARK_BALL_RING = 0.2;
+const DARK_BALL_FREE = 0.7;
+/** ... at least this many ball diameters from every cushion, where shadows are. */
+const DARK_BALL_CLEAR_BALLS = 1;
+/** ... and big enough in the working image for its outline to mean something, pixels. */
+const DARK_BALL_MIN_RADIUS_PX = 4;
+/** The shape score given to a dark ball found this way: it is never a sure thing. */
+const DARK_BALL_SCORE = 0.6;
 /** A disc must be at least this full of not-cloth to be a ball. Tuned on synthetic photos. */
 const MIN_FILL = 0.55;
 /** Width of the ring around a disc that should be cloth, as a share of the ball's radius. */
@@ -50,6 +71,8 @@ const RING = 0.45;
 const RING_WEIGHT = 0.35;
 /** A taken ball explains the pixels within this multiple of its radius (its shadow too). */
 const CLAIM_REACH = 1.25;
+/** Beyond its own disc a ball explains only pixels darker than this share of the cloth. */
+const SHADOW_BRIGHT = 0.75;
 /** A ball needs at least this share of its disc left to judge. */
 const MIN_FREE = 0.45;
 /** A patch of not-cloth joined to the surround counts as surround from this length, in balls. */
@@ -155,6 +178,39 @@ function coverage(
 }
 
 /**
+ * How unlike the cloth the not-cloth pixels of a disc are, on average: for each, the larger
+ * of its tint distance in units of the cloth's tint radius and three times its relative
+ * difference in brightness, capped at 4. About 1 is a pixel that only just fails to be
+ * cloth; a ball is 2 or more.
+ */
+function distinctness(img: WorkImage, mask: Uint8Array, cloth: ClothModel, d: Disc): number {
+  const x0 = Math.max(0, Math.floor(d.u - d.r));
+  const x1 = Math.min(img.width - 1, Math.ceil(d.u + d.r));
+  const y0 = Math.max(0, Math.floor(d.v - d.r));
+  const y1 = Math.min(img.height - 1, Math.ceil(d.v + d.r));
+  let n = 0;
+  let sum = 0;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x + 0.5 - d.u;
+      const dy = y + 0.5 - d.v;
+      const at = y * img.width + x;
+      if (dx * dx + dy * dy > d.r * d.r || mask[at] !== 1) continue;
+      const luma = img.y[at] as number;
+      const tint =
+        Math.hypot(
+          tintOf(luma, img.cb[at] as number) - cloth.tintB,
+          tintOf(luma, img.cr[at] as number) - cloth.tintR,
+        ) / cloth.tintRadius;
+      const bright = (3 * Math.abs(luma - cloth.y)) / cloth.y;
+      n++;
+      sum += Math.min(4, Math.max(tint, bright));
+    }
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+/**
  * Finds the balls on a table whose corners (and so its camera) are known. `camera` must be
  * the camera in table coordinates with heights measured from the cloth, as `findTable` and
  * `cameraFromCorners` return it.
@@ -167,18 +223,75 @@ export function findBalls(
   /** Height above the cloth of the cushion tops and rails as seen; the nose height by default. */
   surroundHeightM: number = table.cushion.noseHeightM,
 ): FoundBall[] {
-  const img = toWorkImage(image, WORK_SIDE);
+  const { widthM: W, lengthM: L } = table.playingArea;
+  // Work on the part of the photo that holds the table and its rails, not on all of it: a
+  // table that fills a fifth of the photo would otherwise be shrunk until a ball is three
+  // pixels across.
+  let part: { u0: number; v0: number; u1: number; v1: number } | undefined = {
+    u0: Number.POSITIVE_INFINITY,
+    v0: Number.POSITIVE_INFINITY,
+    u1: Number.NEGATIVE_INFINITY,
+    v1: Number.NEGATIVE_INFINITY,
+  };
+  for (const [x, y] of [
+    [-PART_MARGIN_M, -PART_MARGIN_M],
+    [W + PART_MARGIN_M, -PART_MARGIN_M],
+    [W + PART_MARGIN_M, L + PART_MARGIN_M],
+    [-PART_MARGIN_M, L + PART_MARGIN_M],
+  ] as const) {
+    for (const z of [0, 2 * ballSet.object.diameterM]) {
+      const seen = projectPoint(camera, { x, y, z });
+      if (!seen || !part) {
+        part = undefined;
+        break;
+      }
+      part.u0 = Math.min(part.u0, seen.u);
+      part.v0 = Math.min(part.v0, seen.v);
+      part.u1 = Math.max(part.u1, seen.u);
+      part.v1 = Math.max(part.v1, seen.v);
+    }
+  }
+  // How much to shrink: as for the whole photo (averaging blocks of pixels is what quiets
+  // the noise), but no more than leaves the farthest ball a few pixels of radius.
+  const wholeBlock = Math.max(1, Math.ceil(Math.max(image.widthPx, image.heightPx) / WORK_SIDE));
+  let farRadiusPx = Number.POSITIVE_INFINITY;
+  const ballR = ballSet.object.diameterM / 2;
+  for (const [x, y] of [
+    [0, 0],
+    [W, 0],
+    [W, L],
+    [0, L],
+  ] as const) {
+    const r = apparentRadiusPx(camera, { x, y, z: ballR }, ballR);
+    if (r !== undefined) farRadiusPx = Math.min(farRadiusPx, r);
+  }
+  const partSide = part
+    ? Math.max(
+        Math.min(image.widthPx, part.u1) - Math.max(0, part.u0),
+        Math.min(image.heightPx, part.v1) - Math.max(0, part.v0),
+      )
+    : Math.max(image.widthPx, image.heightPx);
+  const block = Math.max(
+    1,
+    Math.ceil(partSide / MAX_WORK_SIDE),
+    Math.min(wholeBlock, Math.floor(farRadiusPx / FAR_BALL_RADIUS_PX)),
+  );
+  const img = toWorkImage(image, Math.max(1, partSide / block), part);
   const cloth = findClothModel(img);
   if (!cloth) return [];
-  const isCloth = clothMask(img, cloth);
-  const { widthM: W, lengthM: L } = table.playingArea;
+  // Pixels taken for cloth in shadow: darker than the cloth, with its hue. A dark ball that
+  // mirrors the cloth (the black, or a blue ball on a blue cloth) is among them.
+  const shade = new Uint8Array(img.width * img.height);
+  const isCloth = clothMask(img, cloth, shade);
   const radiusM = ballSet.object.diameterM / 2;
   const margin = noseContactDistanceM(radiusM, table.cushion.noseHeightM) - CUSHION_SLACK_M;
   const pockets = pocketDropCircles(table);
   const s = img.scale;
+  const ou = img.originU;
+  const ov = img.originV;
   // The camera works in photo pixels; the working image is `s` times smaller.
   const toTable = (u: number, v: number): { x: number; y: number } | undefined =>
-    imageToTableAtHeight(camera, { u: u * s, v: v * s }, radiusM);
+    imageToTableAtHeight(camera, { u: ou + u * s, v: ov + v * s }, radiusM);
   const onTable = (p: { x: number; y: number }): boolean => {
     if (p.x < margin || p.x > W - margin || p.y < margin || p.y > L - margin) return false;
     for (const c of pockets) {
@@ -189,7 +302,10 @@ export function findBalls(
 
   // Where each pixel is if it shows the top of a cushion or a rail (as opposed to a ball).
   const onCloth = (u: number, v: number): { x: number; y: number } | undefined =>
-    imageToTableAtHeight(camera, { u: u * s, v: v * s }, surroundHeightM);
+    imageToTableAtHeight(camera, { u: ou + u * s, v: ov + v * s }, surroundHeightM);
+  // Where each pixel is if it shows the bed.
+  const onBed = (u: number, v: number): { x: number; y: number } | undefined =>
+    imageToTableAtHeight(camera, { u: ou + u * s, v: ov + v * s }, 0);
   const depth = CUSHION_TOP_DEPTH_M;
   /** How far outside the playing area a point of the cloth plane is (0 inside). */
   const outside = (p: { x: number; y: number }): number =>
@@ -252,6 +368,22 @@ export function findBalls(
       const flat = onCloth(x + 0.5, y + 0.5);
       if (flat) {
         const inside = Math.min(flat.x, W - flat.x, flat.y, L - flat.y);
+        // The face of a cushion. Seen from across the table, a cushion shows its face: the
+        // band between its nose and the bed below it. A pixel is in that band when the ray
+        // through it is inside the noses at nose height and at or beyond them at the height
+        // of the bed. The face is cloth turned away from the light, deeper and darker than
+        // the bed, and a row of discs fits along it. Pixels of that band with the cloth's
+        // hue, or dark, are the cushion; anything else there is a ball in front of it.
+        const bed = onBed(x + 0.5, y + 0.5);
+        const insideBed = bed ? Math.min(bed.x, W - bed.x, bed.y, L - bed.y) : inside;
+        if (
+          inside >= 0 &&
+          insideBed < NOSE_STRIP_M &&
+          isCushionShade(cloth, img.y[at] as number, img.cb[at] as number, img.cr[at] as number)
+        ) {
+          skip[at] = 1;
+          continue;
+        }
         solid[at] = 1;
         insideM[at] = inside;
         if (
@@ -367,7 +499,12 @@ export function findBalls(
       for (let x = x0; x <= x1; x++) {
         const dx = x + 0.5 - d.u;
         const dy = y + 0.5 - d.v;
-        if (dx * dx + dy * dy <= r * r) skip[y * img.width + x] = 1;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r * r) continue;
+        const at = y * img.width + x;
+        // Its own disc, and beyond that only what is dark enough to be its shadow: the
+        // bright side of a neighbour in a rack is not explained by this ball.
+        if (d2 <= d.r * d.r || (img.y[at] as number) < SHADOW_BRIGHT * cloth.y) skip[at] = 1;
       }
     }
   };
@@ -391,8 +528,60 @@ export function findBalls(
       const left = coverage(mask, skip, img.width, img.height, cur.u, cur.v, cur.r);
       if (left.free < MIN_FREE || left.fill < MIN_FILL) continue;
     }
+    // A ball is clearly not cloth. A patch of cloth whose colour is a little off (a worn or
+    // unevenly lit place) fills a disc as well as a ball does, but only just misses being
+    // cloth.
+    if (distinctness(img, mask, cloth, cur) < DISTINCT_MIN) continue;
     taken.push(cur);
     claim(cur);
+  }
+
+  // Dark balls that passed for shaded cloth. Shadow lies beside a ball or along a cushion,
+  // and spreads; a ball is a full, round patch of it with lit cloth all around. Only such
+  // patches are taken, away from the cushions, after the pixels of the balls above (and
+  // their shadows) have been set aside.
+  const darkMask = new Uint8Array(img.width * img.height);
+  const darkAt: number[] = [];
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const at = y * img.width + x;
+      if (skip[at] === 1) continue;
+      // Such a ball is seldom all shade: its number, its stripe and its highlight are plainly
+      // not cloth. Both count towards the disc; only the shade may be its centre.
+      if (mask[at] === 1) {
+        darkMask[at] = 1;
+        continue;
+      }
+      if (shade[at] !== 1 || (img.y[at] as number) > DARK_BALL_BRIGHT * cloth.y) continue;
+      darkMask[at] = 1;
+      const p = toTable(x + 0.5, y + 0.5);
+      if (!p || !onTable(p)) continue;
+      if (Math.min(p.x, W - p.x, p.y, L - p.y) < DARK_BALL_CLEAR_BALLS * 2 * radiusM) continue;
+      darkAt.push(at);
+    }
+  }
+  const darkDiscs: Disc[] = [];
+  for (const at of darkAt) {
+    const x = at % img.width;
+    const y = (at - x) / img.width;
+    const p = toTable(x + 0.5, y + 0.5);
+    if (!p) continue;
+    const r = (apparentRadiusPx(camera, { x: p.x, y: p.y, z: radiusM }, radiusM) ?? 0) / s;
+    if (r < DARK_BALL_MIN_RADIUS_PX) continue;
+    const c = coverage(darkMask, skip, img.width, img.height, x + 0.5, y + 0.5, r);
+    if (c.fill < DARK_BALL_FILL || c.ring > DARK_BALL_RING || c.free < DARK_BALL_FREE) continue;
+    darkDiscs.push({ x: p.x, y: p.y, u: x + 0.5, v: y + 0.5, r, score: c.fill - c.ring });
+  }
+  darkDiscs.sort((a, b) => b.score - a.score || a.v - b.v || a.u - b.u);
+  for (const d of darkDiscs) {
+    if (taken.some((t) => Math.hypot(t.x - d.x, t.y - d.y) < minGap)) continue;
+    const left = coverage(darkMask, skip, img.width, img.height, d.u, d.v, d.r);
+    if (left.fill < DARK_BALL_FILL || left.ring > DARK_BALL_RING || left.free < DARK_BALL_FREE) {
+      continue;
+    }
+    // Its score among the other balls: a dark ball found this way is never a sure thing.
+    taken.push({ ...d, score: Math.min(d.score, DARK_BALL_SCORE) });
+    claim(d);
   }
 
   return nameBalls(img, taken, ballSet);
@@ -410,6 +599,9 @@ interface Seen {
 /** A pixel is "white" when it is bright against the brightest ball and has almost no tint. */
 const WHITE_TINT = 0.09;
 const WHITE_BRIGHT = 0.62;
+/** Below this brightness (against white) the tint of a ball is trusted less, down to this share. */
+const DARK_TINT_BRIGHT = 0.3;
+const DARK_TINT_TRUST = 0.2;
 /** Pixels at least this bright against the brightest ball pixel show the colour of the light. */
 const LIGHT_BRIGHT = 0.88;
 /** A "light" more tinted than this is taken to be a bright coloured ball instead. */
@@ -500,9 +692,13 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
         const at = y * img.width + x;
         const luma = img.y[at] as number;
         if (luma < LIGHT_BRIGHT * whiteY) continue;
+        const tb = tintOf(luma, img.cb[at] as number);
+        const tr = tintOf(luma, img.cr[at] as number);
+        // A bright pixel of strong colour is a bright ball (the yellow), not the light.
+        if (Math.hypot(tb, tr) >= LIGHT_MAX_TINT) continue;
         ln++;
-        lb += tintOf(luma, img.cb[at] as number);
-        lr += tintOf(luma, img.cr[at] as number);
+        lb += tb;
+        lr += tr;
       }
     }
   }
@@ -546,7 +742,10 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
     const bright = Math.abs(b.y / whiteY - k.y);
     // A striped ball shows a good share of white; a solid one shows little (a highlight).
     const whiteWanted = k.striped ? 0.45 : 0.03;
-    return 1.6 * tint + 0.6 * bright + 0.9 * Math.abs(b.white - whiteWanted);
+    // A very dark ball has little colour of its own: what tint it shows is the cloth
+    // mirrored in it. Its darkness says more than its tint.
+    const trust = Math.max(DARK_TINT_TRUST, Math.min(1, b.y / whiteY / DARK_TINT_BRIGHT));
+    return 1.6 * trust * tint + 0.6 * bright + 0.9 * Math.abs(b.white - whiteWanted);
   };
 
   // Hand out kinds best match first, never more of a kind than the set has.
