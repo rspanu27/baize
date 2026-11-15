@@ -143,6 +143,15 @@ The ball finder had worked one step coarser than intended; with that fixed, corn
 false balls per picture. Nothing given, table right (181 pictures): 88.3 % found, 85.2 %
 named, median 0.42 %, 95th percentile 1.71 %, 0.93 false balls per picture.
 
+## Balls placed through the corners' perspective (2026-11-15)
+
+Corners given: 91.1 % found, 83.7 % named, position error median 0.17 % and 95th percentile
+0.89 %, 0.32 false balls per picture. Nothing given: a table reported in 213 of 231
+pictures and the right one in 188 (81.4 %); where right, 92.6 % found, 85.4 % named, median
+0.22 %, 95th percentile 0.86 %, 0.37 false balls per picture. Both the finder and the truth
+use the corners' perspective now (see the decisions log), so part of the change is a more
+faithful truth.
+
 ## What this changes in the plan
 
 - Task 5.11 (measure stage A on real photos) can start on pix2pockets before the project's

@@ -62,6 +62,14 @@ export interface Camera {
   rotation: Mat3;
   /** Camera position in table coordinates, metres; `z` is its height above the cloth. */
   position: { x: number; y: number; z: number };
+  /**
+   * The perspective of the corners the camera was recovered from, at their height. Four
+   * measured corners never fit a camera exactly (the table is not exactly its stated size,
+   * the photo's middle is not exactly its optical centre), so points at that height are
+   * mapped through this, which honours the corners exactly; the camera itself only carries
+   * a point to that height along its line of sight. Absent for a camera known exactly.
+   */
+  plane?: { toImage: Mat3; toTable: Mat3; heightM: number };
 }
 
 export type ImportProblem =

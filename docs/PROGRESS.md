@@ -130,6 +130,8 @@ Checks: `pnpm check` (tables 220, physics 401, vision 120, web 554 tests) and se
 
 Independent review (stage A): two correctness bugs and some gaps, all closed. A corner dragged inwards, or three corners in a line, had been accepted with a meaningless camera; now refused. The ball finder had worked one step coarser than intended; fixed and re-measured (balls found and named both up on real pictures). Also: the upload guard is tighter (only short script fetches from the site after a photo is chosen, and no sizeable WebSocket messages); the pixels are handed to the worker instead of copied; a failed re-run is shown and blocks confirming; tests for the worker messages, the dark-ball pass and the review status; two more lint bans in `packages/vision`.
 
+Later the same day, balls were placed through the corners' own perspective instead of the recovered camera alone: on real pictures with nothing given, 92.6 % of balls found, 0.37 false balls per picture and a median error of 0.22 %, with the table found right in 81 % (see `docs/DATASETS.md`).
+
 Known gaps carried forward:
 - Targets not met on real pictures: 95 % of balls found and 90 % named, and the table found unaided in 90 % of photos. Racks are found poorly; tables whose surroundings share the cloth's colour, or that are not in the middle of the picture, are often not found.
 - Measured on broadcast pictures and one real phone photo only; no real-phone timing. The project's own photos are needed.

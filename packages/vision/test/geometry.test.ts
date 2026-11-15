@@ -12,7 +12,7 @@ import {
   projectPoint,
   tableToImage,
 } from "../src/index";
-import type { TableCorners } from "../src/index";
+import type { Camera, TableCorners } from "../src/index";
 import { cameraOf, cornersSeen, seeded } from "./synthetic";
 import type { Pose } from "./synthetic";
 
@@ -381,5 +381,73 @@ describe("corners on the cushion noses, above the cloth", () => {
     // showed, with the cushion itself read as a row of balls.
     expect(error).toBeGreaterThan(0.05);
     expect(error).toBeLessThan(0.15);
+  });
+});
+
+describe("balls placed through the corners' own perspective", () => {
+  // Four measured corners never fit a camera exactly. Here the photo's optical centre is
+  // 12 % of its width off its middle (a cropped photo), which the recovered camera cannot
+  // know. Points are mapped through the corners' perspective, and the camera only carries
+  // them along its line of sight between heights (2026-11-15).
+  const table = TABLES[1];
+  const nose = 0.635 * 2 * table.ballRadiusM;
+  const r = table.ballRadiusM;
+  const pose: Pose = {
+    position: { x: 0.2, y: -0.9, z: 1.3 },
+    target: { x: table.widthM / 2, y: table.lengthM / 2 },
+    rollRad: 0.02,
+    focalPx: 1300,
+    widthPx: 2000,
+    heightPx: 1500,
+  };
+  const exact = cameraOf(pose);
+  const truth: Camera = { ...exact, centre: { u: exact.centre.u + 240, v: exact.centre.v - 60 } };
+  const seen = [
+    { x: 0, y: 0 },
+    { x: table.widthM, y: 0 },
+    { x: table.widthM, y: table.lengthM },
+    { x: 0, y: table.lengthM },
+  ].map((c) => {
+    const p = projectPoint(truth, { ...c, z: nose });
+    if (!p) throw new Error("corner not seen");
+    return p;
+  }) as unknown as TableCorners;
+  const h = homographyFromCorners(seen, table.widthM, table.lengthM);
+  const camera = h ? cameraFromCorners(h, pose.widthPx, pose.heightPx, nose) : undefined;
+  if (!camera) throw new Error("no camera");
+  const balls = [
+    { x: 0.2, y: 0.3 },
+    { x: table.widthM - 0.15, y: table.lengthM - 0.2 },
+    { x: table.widthM / 2, y: table.lengthM / 2 },
+    { x: 0.1, y: table.lengthM - 0.1 },
+  ];
+  const errorWith = (cam: Camera): number =>
+    Math.max(
+      ...balls.map((b) => {
+        const p = projectPoint(truth, { ...b, z: r });
+        const placed = p ? imageToTableAtHeight(cam, p, r) : undefined;
+        return placed ? Math.hypot(placed.x - b.x, placed.y - b.y) : Number.POSITIVE_INFINITY;
+      }),
+    );
+
+  test("the corners are honoured exactly, and balls land within a few millimetres", () => {
+    for (let i = 0; i < 4; i++) {
+      const corner = [
+        { x: 0, y: 0 },
+        { x: table.widthM, y: 0 },
+        { x: table.widthM, y: table.lengthM },
+        { x: 0, y: table.lengthM },
+      ][i] as { x: number; y: number };
+      const back = projectPoint(camera, { ...corner, z: nose });
+      const given = seen[i] as { u: number; v: number };
+      expect(Math.hypot((back?.u ?? 1e9) - given.u, (back?.v ?? 1e9) - given.v)).toBeLessThan(1e-6);
+    }
+    expect(errorWith(camera)).toBeLessThan(0.004);
+  });
+
+  test("through the camera alone the same balls are centimetres off", () => {
+    const cameraOnly: Camera = { ...camera };
+    delete cameraOnly.plane;
+    expect(errorWith(cameraOnly)).toBeGreaterThan(3 * errorWith(camera));
   });
 });

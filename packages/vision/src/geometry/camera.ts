@@ -1,4 +1,5 @@
 import type { Camera, ImagePoint, Mat3, TablePoint } from "../types";
+import { imageToTable, invertHomography, tableToImage } from "./homography";
 
 /**
  * Recovering the camera from the homography of the cloth.
@@ -150,8 +151,28 @@ export function cameraFromHomography(
   return { focalPx: f, focalSource, focalMisfit, centre: { u: cx, v: cy }, rotation, position };
 }
 
-/** Where a point in space (table coordinates, `z` up from the cloth) appears in the photo. */
+/**
+ * Where a point in space (table coordinates, `z` up from the cloth) appears in the photo.
+ * With the corners' perspective (`camera.plane`), the point is first carried along the line
+ * from the camera to the height of the corners, and mapped through that perspective there.
+ */
 export function projectPoint(
+  camera: Camera,
+  p: { x: number; y: number; z: number },
+): ImagePoint | undefined {
+  const exact = projectExactly(camera, p);
+  if (!exact || !camera.plane) return exact;
+  const c = camera.position;
+  const dz = p.z - c.z;
+  if (!(Math.abs(dz) > 1e-12)) return exact;
+  const s = (camera.plane.heightM - c.z) / dz;
+  if (!(s > 0)) return exact;
+  const onPlane = { x: c.x + s * (p.x - c.x), y: c.y + s * (p.y - c.y) };
+  return tableToImage(camera.plane.toImage, onPlane);
+}
+
+/** `projectPoint` through the camera alone. */
+function projectExactly(
   camera: Camera,
   p: { x: number; y: number; z: number },
 ): ImagePoint | undefined {
@@ -174,8 +195,28 @@ export function projectPoint(
  * from the camera through `p`, cut with the horizontal plane at that height. Used with the
  * ball radius as the height to place a ball from the image of its centre. Returns undefined
  * when the ray does not come down to that plane (the point is at or above the horizon).
+ * With the corners' perspective (`camera.plane`), the point at the corners' height is taken
+ * from that perspective, and carried to `heightM` along the line from the camera.
  */
 export function imageToTableAtHeight(
+  camera: Camera,
+  p: ImagePoint,
+  heightM: number,
+): TablePoint | undefined {
+  const exact = imageToTableExactly(camera, p, heightM);
+  if (!exact || !camera.plane) return exact;
+  const q = imageToTable(camera.plane.toTable, p);
+  if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) return exact;
+  const c = camera.position;
+  const dz = camera.plane.heightM - c.z;
+  if (!(dz < 0)) return exact;
+  // Along the line from the camera through (q, plane height), to `heightM`.
+  const s = (heightM - c.z) / dz;
+  return { x: c.x + s * (q.x - c.x), y: c.y + s * (q.y - c.y) };
+}
+
+/** `imageToTableAtHeight` through the camera alone. */
+function imageToTableExactly(
   camera: Camera,
   p: ImagePoint,
   heightM: number,
@@ -225,8 +266,10 @@ export function cameraFromCorners(
 ): Camera | undefined {
   const camera = cameraFromHomography(h, widthPx, heightPx);
   if (!camera) return undefined;
+  const toTable = invertHomography(h);
   return {
     ...camera,
     position: { ...camera.position, z: camera.position.z + cornerHeightM },
+    ...(toTable ? { plane: { toImage: h, toTable, heightM: cornerHeightM } } : {}),
   };
 }
