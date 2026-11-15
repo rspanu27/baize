@@ -1,11 +1,11 @@
 import type { BallKind, BallSetSpec, TableSpec } from "@baize/tables";
-import { importPhoto, imageToTableAtHeight } from "@baize/vision";
+import { imageToTableAtHeight } from "@baize/vision";
 import type { Camera, ImagePoint, ImportProblem, PhotoImage, TableCorners } from "@baize/vision";
 import { ballSizeOf } from "@baize/tables";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { useEditor } from "../store/store";
-import { afterPaint } from "./decode";
+import type { PhotoAnalyser } from "./analyser";
 import { toPhotoPoint } from "./overlay";
 import {
   CORNER_LABELS,
@@ -478,6 +478,8 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
 export interface PhotoReviewDialogProps {
   /** The decoded photo, kept only in memory for this review. */
   image: PhotoImage;
+  /** Runs the import on this photo again (in a worker); owned and ended by the caller. */
+  analyser: PhotoAnalyser;
   /** Object URL of the chosen file, for showing it. Revoked by the owner on close. */
   photoUrl: string;
   initial: {
@@ -497,7 +499,7 @@ const KEY_SETTLE_MS = 350;
 
 /** The review screen connected to its photo, the importer and the editor's store. */
 export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
-  const { image, table, ballSet, initial } = props;
+  const { image, table, ballSet, initial, analyser } = props;
   const w = image.widthPx;
   const h = image.heightPx;
   const [corners, setCorners] = useState<TableCorners>(initial.corners ?? defaultCorners(w, h));
@@ -539,12 +541,16 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
     async (given: TableCorners | undefined) => {
       const id = ++runId.current;
       setBusy(true);
-      await afterPaint();
+      let result;
+      try {
+        result = await analyser.run(table, ballSet, given ? { corners: given } : {});
+      } catch {
+        // The review was closed, or the worker failed: keep what is on screen.
+        if (id === runId.current) setBusy(false);
+        return;
+      }
+      // A later run has started (or the review closed): this result is out of date.
       if (id !== runId.current) return;
-      const result = importPhoto(image, table, ballSet, {
-        ...(given ? { corners: given } : {}),
-        now: () => performance.now(),
-      });
       const next = result.corners ?? given ?? defaultCorners(w, h);
       cornersRef.current = next;
       setCorners(next);
@@ -559,7 +565,7 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
       setBusy(false);
       setRuns((n) => n + 1);
     },
-    [image, table, ballSet, w, h],
+    [analyser, table, ballSet, w, h],
   );
 
   const markers = ballMarkers(analysis.camera, balls, ballSet);

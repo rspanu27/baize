@@ -1,10 +1,11 @@
-import { importPhoto } from "@baize/vision";
 import type { PhotoImage } from "@baize/vision";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { simulationFor } from "../sim/useSimulation";
 import { useDoc } from "../store/store";
-import { afterPaint, decodePhoto } from "./decode";
+import { createAnalyser } from "./analyser";
+import type { PhotoAnalyser } from "./analyser";
+import { decodePhoto } from "./decode";
 import { PhotoReviewDialog } from "./PhotoReview";
 import type { PhotoReviewDialogProps } from "./PhotoReview";
 import { reviewBalls } from "./reviewModel";
@@ -80,6 +81,7 @@ export function PhotoImportView(props: PhotoImportViewProps) {
 
 interface Review {
   image: PhotoImage;
+  analyser: PhotoAnalyser;
   photoUrl: string;
   initial: PhotoReviewDialogProps["initial"];
 }
@@ -87,7 +89,9 @@ interface Review {
 /**
  * Photo import. The chosen file is read into memory here and in the review; the photo, its
  * pixels and its object URL are kept in this component's state only, and are dropped (and the
- * URL revoked) when the review closes. Nothing is stored, shared or sent anywhere.
+ * URL revoked) when the review closes. The analysis runs in a worker of this page, which holds
+ * a copy of the pixels and is ended when the review closes. Nothing is stored, shared or sent
+ * anywhere.
  */
 export function PhotoImport() {
   const doc = useDoc();
@@ -97,12 +101,14 @@ export function PhotoImport() {
   const [error, setError] = useState<string | undefined>(undefined);
   const [review, setReview] = useState<Review | undefined>(undefined);
 
-  // Revoke the object URL when the review closes or this component goes away.
+  // Revoke the object URL and end the worker when the review closes or this component goes
+  // away.
   useEffect(() => {
     if (!review) return;
-    const url = review.photoUrl;
+    const { photoUrl: url, analyser } = review;
     return () => {
       URL.revokeObjectURL(url);
+      analyser.dispose();
     };
   }, [review]);
 
@@ -112,15 +118,15 @@ export function PhotoImport() {
     setBusy(true);
     void (async () => {
       let photoUrl: string | undefined;
+      let analyser: PhotoAnalyser | undefined;
       try {
         const image = await decodePhoto(file);
-        await afterPaint();
-        const result = importPhoto(image, scene.table, scene.ballSet, {
-          now: () => performance.now(),
-        });
+        analyser = createAnalyser(image);
+        const result = await analyser.run(scene.table, scene.ballSet);
         photoUrl = URL.createObjectURL(file);
         setReview({
           image,
+          analyser,
           photoUrl,
           initial: {
             ...(result.problem ? { problem: result.problem } : {}),
@@ -132,6 +138,7 @@ export function PhotoImport() {
         });
       } catch (e) {
         if (photoUrl) URL.revokeObjectURL(photoUrl);
+        analyser?.dispose();
         setError(e instanceof Error ? e.message : "The photo could not be read.");
       } finally {
         setBusy(false);
@@ -151,6 +158,7 @@ export function PhotoImport() {
       {review && scene ? (
         <PhotoReviewDialog
           image={review.image}
+          analyser={review.analyser}
           photoUrl={review.photoUrl}
           initial={review.initial}
           table={scene.table}

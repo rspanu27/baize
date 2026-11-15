@@ -51,6 +51,11 @@ export async function decodePhoto(file: Blob): Promise<PhotoImage> {
 /** Waits for the browser to paint, so that the busy message shows before a long synchronous call. */
 export function afterPaint(): Promise<void> {
   return new Promise((resolve) => {
+    // Without a page to paint (unit tests), there is nothing to wait for.
+    if (typeof requestAnimationFrame === "undefined") {
+      setTimeout(resolve, 0);
+      return;
+    }
     const fallback = setTimeout(resolve, 150);
     requestAnimationFrame(() => {
       setTimeout(() => {

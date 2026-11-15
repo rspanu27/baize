@@ -83,13 +83,15 @@ async function openReview(page: Page) {
 test("import from a photo: review, confirm, undo, and nothing leaves the page", async ({
   page,
 }) => {
-  const requests: string[] = [];
+  const requests: { url: string; method: string; body: boolean }[] = [];
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   const png = await syntheticPhoto(page);
   // Everything from here on is watched: choosing the photo, reviewing it, confirming.
-  page.on("request", (r) => requests.push(r.url()));
+  page.on("request", (r) =>
+    requests.push({ url: r.url(), method: r.method(), body: r.postDataBuffer() !== null }),
+  );
 
   await expect(page.getByText("The photo stays on this device.")).toBeVisible();
   await page.getByLabel("Photo of the table").setInputFiles({
@@ -115,8 +117,17 @@ test("import from a photo: review, confirm, undo, and nothing leaves the page", 
   await page.getByRole("button", { name: /Undo/ }).click();
   await expect(balls).toHaveCount(0);
 
-  // No request was made at all, no image data was stored, and the link carries none.
-  expect(requests.filter((u) => !u.startsWith("blob:") && !u.startsWith("data:"))).toEqual([]);
+  // Nothing was sent: no request carried a body, none used another method than GET, and none
+  // went anywhere but this site (the only ones are the page loading its own analysis worker).
+  // No image data was stored, and the link carries none.
+  const origin = new URL(page.url()).origin;
+  const sent = requests.filter(
+    (r) =>
+      !r.url.startsWith("blob:") &&
+      !r.url.startsWith("data:") &&
+      (r.body || r.method !== "GET" || new URL(r.url).origin !== origin),
+  );
+  expect(sent).toEqual([]);
   const stored = await page.evaluate(() => {
     const out: string[] = [];
     for (const store of [localStorage, sessionStorage]) {
