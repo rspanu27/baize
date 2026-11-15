@@ -152,6 +152,15 @@ pictures and the right one in 188 (81.4 %); where right, 92.6 % found, 85.4 % na
 use the corners' perspective now (see the decisions log), so part of the change is a more
 faithful truth.
 
+## Blue balls on blue cloth (2026-11-15)
+
+Of the balls still missed, most were not in racks but alone in the open: blue balls and the
+black on blue cloth. Part of such a ball reads as cloth in shadow, and its lit side, while
+of the cloth's colour and darker than it, was not dark enough to count for the second pass.
+It now fills the disc (the ring around it is still judged strictly). Corners given: 92.5 %
+found (was 91.1 %), 0.34 false balls per picture (0.32). Nothing given, table right: 94.2 %
+found (92.6 %), 0.38 false balls (0.37).
+
 ## What this changes in the plan
 
 - Task 5.11 (measure stage A on real photos) can start on pix2pockets before the project's

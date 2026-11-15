@@ -549,7 +549,12 @@ export function findBalls(
   // and spreads; a ball is a full, round patch of it with lit cloth all around. Only such
   // patches are taken, away from the cushions, after the pixels of the balls above (and
   // their shadows) have been set aside.
+  // Strict: not cloth, or dark shade. Broad: also the lighter shade of a ball of the cloth's
+  // own colour. A disc is filled from the broad one; the ring around it, which must be lit
+  // cloth, is judged by the strict one, so that a ball's softer shadow does not count against
+  // it.
   const darkMask = new Uint8Array(img.width * img.height);
+  const darkFill = new Uint8Array(img.width * img.height);
   const darkAt: number[] = [];
   for (let y = 0; y < img.height; y++) {
     for (let x = 0; x < img.width; x++) {
@@ -559,9 +564,14 @@ export function findBalls(
       // not cloth. Both count towards the disc; only the shade may be its centre.
       if (mask[at] === 1) {
         darkMask[at] = 1;
+        darkFill[at] = 1;
         continue;
       }
-      if (shade[at] !== 1 || (img.y[at] as number) > DARK_BALL_BRIGHT * cloth.y) continue;
+      if (shade[at] !== 1) continue;
+      // The lit side of a ball of the cloth's own colour (a blue ball on a blue cloth) is in
+      // shade too, only less dark: it fills the disc. Centres must be dark.
+      darkFill[at] = 1;
+      if ((img.y[at] as number) > DARK_BALL_BRIGHT * cloth.y) continue;
       darkMask[at] = 1;
       const p = toTable(x + 0.5, y + 0.5);
       if (!p || !onTable(p)) continue;
@@ -569,6 +579,12 @@ export function findBalls(
       darkAt.push(at);
     }
   }
+  /** Fill and room from the broad mask, ring from the strict one. */
+  const darkCoverage = (u: number, v: number, r: number) => {
+    const fill = coverage(darkFill, skip, img.width, img.height, u, v, r);
+    const ring = coverage(darkMask, skip, img.width, img.height, u, v, r).ring;
+    return { fill: fill.fill, free: fill.free, cu: fill.cu, cv: fill.cv, ring };
+  };
   const darkDiscs: Disc[] = [];
   for (const at of darkAt) {
     const x = at % img.width;
@@ -581,9 +597,9 @@ export function findBalls(
     // them is off the ball: move it onto the middle of what it covers, as above.
     let u = x + 0.5;
     let v = y + 0.5;
-    let c = coverage(darkMask, skip, img.width, img.height, u, v, r);
+    let c = darkCoverage(u, v, r);
     for (let pass = 0; pass < 2; pass++) {
-      const again = coverage(darkMask, skip, img.width, img.height, c.cu, c.cv, r);
+      const again = darkCoverage(c.cu, c.cv, r);
       if (again.fill - again.ring <= c.fill - c.ring) break;
       u = c.cu;
       v = c.cv;
@@ -597,7 +613,7 @@ export function findBalls(
   darkDiscs.sort((a, b) => b.score - a.score || a.v - b.v || a.u - b.u);
   for (const d of passes.darkPass === false ? [] : darkDiscs) {
     if (taken.some((t) => Math.hypot(t.x - d.x, t.y - d.y) < minGap)) continue;
-    const left = coverage(darkMask, skip, img.width, img.height, d.u, d.v, d.r);
+    const left = darkCoverage(d.u, d.v, d.r);
     if (left.fill < DARK_BALL_FILL || left.ring > DARK_BALL_RING || left.free < DARK_BALL_FREE) {
       continue;
     }
