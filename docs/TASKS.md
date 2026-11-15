@@ -128,6 +128,7 @@ Fixed at kickoff: one photo through the system camera or file picker; automatic 
 | 5.7 | Editor: "Import from photo" (camera on a phone, file picker on desktop), the guidance text, and the review screen: photo with the table outline and balls drawn over it, corner handles that can be dragged (also off the image), re-run when a corner moves | U | 5.5 | Component and browser tests with a synthetic photo; the photo is only in component state (test that the document, link and storage never hold it) | done |
 | 5.8 | Review edits: change a ball's identity, add a missed ball, delete a false one; confirm loads the layout as one undo step with `source: photo` and confidences | U | 5.7 | Interaction test; uncertain balls are marked after confirming | done |
 | 5.9 | Speed: downscaling, and a worker if the main thread is blocked too long | L | 5.7 | Time for a 12-megapixel photo measured and inside the 8 s limit on a throttled CPU | done (2026-11-15): a real photo at 12 MP takes 0.74 s, 2.6 s and 4.1 s with the CPU slowed 1x, 4x and 6x (`apps/web/scripts/measure-photo-speed.mjs`); the analysis now runs in a worker, and the page is blocked at most 0.16 s, 0.62 s and 0.96 s at a time. Not measured on a real phone |
+| 5.9a | Independent review of stage A, fixes, PROGRESS entry | R, L | 5.1-5.9 | Findings closed; `pnpm check` passes | done (2026-11-15): see PROGRESS |
 
 ### Stage B: needs the project's own photos
 

@@ -80,7 +80,7 @@ export function PhotoImportView(props: PhotoImportViewProps) {
 }
 
 interface Review {
-  image: PhotoImage;
+  image: Pick<PhotoImage, "widthPx" | "heightPx">;
   analyser: PhotoAnalyser;
   photoUrl: string;
   initial: PhotoReviewDialogProps["initial"];
@@ -125,7 +125,8 @@ export function PhotoImport() {
         const result = await analyser.run(scene.table, scene.ballSet);
         photoUrl = URL.createObjectURL(file);
         setReview({
-          image,
+          // Only the size: the pixels have been handed to the analyser.
+          image: { widthPx: image.widthPx, heightPx: image.heightPx },
           analyser,
           photoUrl,
           initial: {

@@ -142,6 +142,25 @@ export const MESSAGE_NOT_FOUND =
 export const MESSAGE_INVALID =
   "These corners do not make a table seen from above. Check that each handle is on the corner its label names.";
 export const MESSAGE_BAULK_END = "The end nearer the camera is taken as the baulk end.";
+export const MESSAGE_RUN_FAILED =
+  "The photo could not be checked again. Cancel and import it once more.";
+
+/**
+ * What the review shows and whether its balls may be used. After a run that failed, the
+ * corners on screen are newer than the balls, so the balls must not be used.
+ */
+export function reviewStatus(state: {
+  failed: boolean;
+  problem: ImportProblem | undefined;
+  hasCamera: boolean;
+  cornersDetected: boolean;
+}): { messages: string[]; canConfirm: boolean } {
+  if (state.failed) return { messages: [MESSAGE_RUN_FAILED], canConfirm: false };
+  return {
+    messages: reviewMessages(state.problem, state.cornersDetected),
+    canConfirm: state.problem === undefined && state.hasCamera,
+  };
+}
 export const NOTE_EDITS_LOST =
   "Moving a corner finds the balls again, so changes you made to balls by hand are lost.";
 

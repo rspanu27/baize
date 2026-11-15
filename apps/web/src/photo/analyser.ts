@@ -46,15 +46,25 @@ export function mainThreadAnalyser(image: PhotoImage): PhotoAnalyser {
 }
 
 /**
- * The import in a worker, so that the page stays responsive. The photo's pixels are copied to
- * the worker once; each run then sends only the table, the ball set and any corners. Falls
- * back to the main thread when a worker cannot be started.
+ * The import in a worker, so that the page stays responsive. The photo's pixels are handed
+ * over to the worker (not copied: after this call `image.data` is empty on the page, which
+ * keeps only one copy of a large photo in memory); each run then sends only the table, the
+ * ball set and any corners. Falls back to the main thread, with the pixels left in place,
+ * when a worker cannot be started or the pixels cannot be handed over.
  */
 export function createAnalyser(image: PhotoImage): PhotoAnalyser {
   let worker: Worker;
   try {
     worker = new Worker(new URL("./importWorker.ts", import.meta.url), { type: "module" });
   } catch {
+    return mainThreadAnalyser(image);
+  }
+  try {
+    const request: WorkerRequest = { type: "image", image };
+    worker.postMessage(request, [image.data.buffer]);
+  } catch {
+    // Nothing was handed over (the pixels are still here): end the worker and work on the page.
+    worker.terminate();
     return mainThreadAnalyser(image);
   }
   let nextId = 0;
@@ -80,8 +90,6 @@ export function createAnalyser(image: PhotoImage): PhotoAnalyser {
     event.preventDefault();
     failAll(new Error("The photo could not be analysed."));
   };
-  const request: WorkerRequest = { type: "image", image };
-  worker.postMessage(request);
   return {
     run(table, ballSet, options = {}) {
       if (failed) return Promise.reject(failed);

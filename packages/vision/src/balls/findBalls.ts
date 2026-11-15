@@ -222,6 +222,8 @@ export function findBalls(
   camera: Camera,
   /** Height above the cloth of the cushion tops and rails as seen; the nose height by default. */
   surroundHeightM: number = table.cushion.noseHeightM,
+  /** For tests: `darkPass: false` leaves out the second pass for dark balls. */
+  passes: { darkPass?: boolean } = {},
 ): FoundBall[] {
   const { widthM: W, lengthM: L } = table.playingArea;
   // Work on the part of the photo that holds the table and its rails, not on all of it: a
@@ -593,7 +595,7 @@ export function findBalls(
     darkDiscs.push({ x: q.x, y: q.y, u, v, r, score: c.fill - c.ring });
   }
   darkDiscs.sort((a, b) => b.score - a.score || a.v - b.v || a.u - b.u);
-  for (const d of darkDiscs) {
+  for (const d of passes.darkPass === false ? [] : darkDiscs) {
     if (taken.some((t) => Math.hypot(t.x - d.x, t.y - d.y) < minGap)) continue;
     const left = coverage(darkMask, skip, img.width, img.height, d.u, d.v, d.r);
     if (left.fill < DARK_BALL_FILL || left.ring > DARK_BALL_RING || left.free < DARK_BALL_FREE) {

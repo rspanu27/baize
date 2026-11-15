@@ -114,3 +114,26 @@ Known gaps carried forward:
 - The repeat hold and the print-theme export were checked by tests and one look in the browser, not on a phone.
 - No video export. CI still has not run; the local checks are the gate.
 
+## Phase 5, stage A: photo import without a trained model (finished 2026-11-15)
+
+Done: tasks 5.1 to 5.9 and the stage A review. Task 5.11 (measurement on real photos) has started on a public set; the project's own photos (5.10) and stage B (5.12 to 5.14) are still to come.
+
+What is new:
+- **Import from photo** in the editor: the photo is read in the page, the table and balls are found, and a review screen lets the person move corners, turn the table round, rename, add and remove balls before the layout is loaded as one undo step. The photo never leaves the device.
+- **Table finder** from the cloth colour, for any cloth; one corner may be out of frame (the owner's decision, 2026-11-15). **Ball finder** from what is on the cloth and not cloth, sized and placed through the recovered camera, with corners at cushion-nose height.
+- **Analysis in a worker**, so the page stays responsive.
+- **Measurement on real pictures:** 231 pictures of the public pix2pockets set, with the true positions worked out from the table's sights (`docs/DATASETS.md`), and a script for speed.
+
+Figures. Real pictures, corners given: 90.2 % of balls found, 83.5 % named to the group (cue, black, solid, striped), position error median 0.16 % and 95th percentile 0.87 % of the table length, 0.49 false balls per picture. Nothing given: the table is found right in 78 % of pictures (probably about 83 %: some of the misses are errors of the truth on bar tables). Synthetic photos: 94.8 % found, 99.4 % named, no false balls. Speed for a 12-megapixel photo: 0.74 s, 2.6 s and 4.1 s with the CPU slowed 1x, 4x and 6x, against an 8 s limit.
+
+Checks: `pnpm check` (tables 220, physics 401, vision 120, web 554 tests) and seven Playwright tests; CI runs on every push since 2026-11-14.
+
+Independent review (stage A): two correctness bugs and some gaps, all closed. A corner dragged inwards, or three corners in a line, had been accepted with a meaningless camera; now refused. The ball finder had worked one step coarser than intended; fixed and re-measured (balls found and named both up on real pictures). Also: the upload guard is tighter (only short script fetches from the site after a photo is chosen, and no sizeable WebSocket messages); the pixels are handed to the worker instead of copied; a failed re-run is shown and blocks confirming; tests for the worker messages, the dark-ball pass and the review status; two more lint bans in `packages/vision`.
+
+Known gaps carried forward:
+- Targets not met on real pictures: 95 % of balls found and 90 % named, and the table found unaided in 90 % of photos. Racks are found poorly; tables whose surroundings share the cloth's colour, or that are not in the middle of the picture, are often not found.
+- Measured on broadcast pictures and one real phone photo only; no real-phone timing. The project's own photos are needed.
+- With corners found automatically, the user's photo shows two doubled balls; placing the corners by hand avoids them. The dark-ball pass can add a false ball on a red cloth.
+- `CUSHION_TOP_DEPTH_M` is one constant, not a table field, and is a seen value; balls are placed through a camera that cannot match four imperfect corners exactly.
+- Unverified numbers remain in `packages/tables` (marked).
+

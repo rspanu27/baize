@@ -136,6 +136,13 @@ What is left:
   (0.09 points from the wider cushion band the renderer now draws, the rest from the new
   table finder); still inside the 1.5 % target.
 
+## After the stage A review (2026-11-15)
+
+The ball finder had worked one step coarser than intended; with that fixed, corners given:
+90.2 % found, 83.5 % named, position error median 0.16 % and 95th percentile 0.87 %, 0.49
+false balls per picture. Nothing given, table right (181 pictures): 88.3 % found, 85.2 %
+named, median 0.42 %, 95th percentile 1.71 %, 0.93 false balls per picture.
+
 ## What this changes in the plan
 
 - Task 5.11 (measure stage A on real photos) can start on pix2pockets before the project's

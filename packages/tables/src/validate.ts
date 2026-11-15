@@ -22,7 +22,8 @@ import type {
  * (https://wpapool.com/wp-content/uploads/2024/01/RECOMMENDED-EQUIPMENT-SPECIFICATIONS.pdf,
  * read 2026-11-15). The value here is larger because it is what a camera sees: the outline
  * of the cloth is taken to lie at nose height, while the cushion top rises towards the rail.
- * Measured, not from a drawing: 6 cm is the middle value found on 157 pictures of the
+ * UNVERIFIED as a physical size (it is a measured, seen value). Measured, not from a
+ * drawing: 6 cm is the middle value found on 157 pictures of the
  * public pix2pockets set (2026-11-14; a tenth of them below 5.5 cm, a tenth above 8.5 cm),
  * where the true place of the cushion noses was worked out from the table's sights. That
  * truth rests on `POOL_SIGHT_SETBACK_M`, which is itself unverified, and nearly all of those

@@ -3,6 +3,8 @@ import type { TableCorners } from "@baize/vision";
 import { describe, expect, test } from "vitest";
 import { fitWithin } from "./decode";
 import {
+  MESSAGE_RUN_FAILED,
+  reviewStatus,
   MESSAGE_BAULK_END,
   MESSAGE_INVALID,
   MESSAGE_NOT_FOUND,
@@ -145,5 +147,25 @@ describe("decode sizing", () => {
     expect(fitWithin(8000, 6000)).toEqual({ width: 4000, height: 3000 });
     expect(fitWithin(3000, 6000)).toEqual({ width: 2000, height: 4000 });
     expect(fitWithin(1200, 900)).toEqual({ width: 1200, height: 900 });
+  });
+});
+
+describe("review status", () => {
+  test("after a failed run the balls cannot be used, and the screen says why", () => {
+    const failed = reviewStatus({
+      failed: true,
+      problem: undefined,
+      hasCamera: true,
+      cornersDetected: true,
+    });
+    expect(failed).toEqual({ messages: [MESSAGE_RUN_FAILED], canConfirm: false });
+  });
+
+  test("otherwise the balls can be used when there is a camera and no problem", () => {
+    const ok = { failed: false, problem: undefined, hasCamera: true, cornersDetected: false };
+    expect(reviewStatus(ok)).toEqual({ messages: [], canConfirm: true });
+    expect(reviewStatus({ ...ok, hasCamera: false }).canConfirm).toBe(false);
+    expect(reviewStatus({ ...ok, problem: "corners-invalid" }).canConfirm).toBe(false);
+    expect(reviewStatus({ ...ok, cornersDetected: true }).messages).toEqual([MESSAGE_BAULK_END]);
   });
 });

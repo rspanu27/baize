@@ -34,6 +34,8 @@ describe("vision lint guard", () => {
     ],
     ["node: import", 'import { writeFileSync } from "node:fs";\nexport const a = writeFileSync;\n'],
     ["dynamic import of a package", 'export const a = import("onnxruntime-web");\n'],
+    ["require", 'export const a = require("node:fs");\n'],
+    ["importScripts", 'importScripts("https://example.test/x.js");\nexport const a = 1;\n'],
   ];
 
   test.each(banned)("rejects %s", async (_name, source) => {

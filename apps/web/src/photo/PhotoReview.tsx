@@ -22,7 +22,7 @@ import {
   paddedArea,
   removeReviewBall,
   reviewBalls,
-  reviewMessages,
+  reviewStatus,
   setBallKind,
   summaryText,
   turnCorners,
@@ -476,8 +476,8 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
 }
 
 export interface PhotoReviewDialogProps {
-  /** The decoded photo, kept only in memory for this review. */
-  image: PhotoImage;
+  /** The size of the photo; its pixels are with the analyser. */
+  image: Pick<PhotoImage, "widthPx" | "heightPx">;
   /** Runs the import on this photo again (in a worker); owned and ended by the caller. */
   analyser: PhotoAnalyser;
   /** Object URL of the chosen file, for showing it. Revoked by the owner on close. */
@@ -519,6 +519,8 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
   const [addKind, setAddKind] = useState<BallKind | undefined>(kinds[0]?.kind);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The last run failed: the corners on screen no longer match the balls shown.
+  const [failed, setFailed] = useState(false);
   const [runs, setRuns] = useState(0);
   const runId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -545,8 +547,12 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
       try {
         result = await analyser.run(table, ballSet, given ? { corners: given } : {});
       } catch {
-        // The review was closed, or the worker failed: keep what is on screen.
-        if (id === runId.current) setBusy(false);
+        // The review was closed (nothing to do), or the worker failed: say so, and do not
+        // let balls found for other corners be used.
+        if (id === runId.current) {
+          setFailed(true);
+          setBusy(false);
+        }
         return;
       }
       // A later run has started (or the review closed): this result is out of date.
@@ -560,6 +566,7 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
         cornersDetected: result.diagnostics.cornersDetected,
       });
       setBalls(reviewBalls(result.layout));
+      setFailed(false);
       setSelectedId(undefined);
       setAdding(false);
       setBusy(false);
@@ -569,6 +576,12 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
   );
 
   const markers = ballMarkers(analysis.camera, balls, ballSet);
+  const status = reviewStatus({
+    failed,
+    problem: analysis.problem,
+    hasCamera: analysis.camera !== undefined,
+    cornersDetected: analysis.cornersDetected,
+  });
 
   return (
     <PhotoReviewView
@@ -578,11 +591,11 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
       corners={corners}
       markers={markers}
       summary={summaryText(balls)}
-      messages={reviewMessages(analysis.problem, analysis.cornersDetected)}
+      messages={status.messages}
       hasCamera={analysis.camera !== undefined && analysis.problem === undefined}
       busy={busy}
       runs={runs}
-      canConfirm={analysis.problem === undefined && analysis.camera !== undefined}
+      canConfirm={status.canConfirm}
       kinds={kinds}
       selectedId={selectedId}
       addKind={addKind}

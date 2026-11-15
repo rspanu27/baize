@@ -141,6 +141,10 @@ export default tseslint.config(
           selector: "ImportExpression:not([source.value=/^[.]/])",
           message: "Vision may only dynamically import relative paths.",
         },
+        {
+          selector: "CallExpression[callee.name='require']",
+          message: "Vision must not use require(); use relative ES imports only.",
+        },
       ],
       "no-restricted-globals": [
         "error",
@@ -156,6 +160,7 @@ export default tseslint.config(
           "caches",
           "document",
           "window",
+          "importScripts",
         ].map((name) => ({
           name,
           message: `${name} is banned in vision: a photo must never be uploaded or stored, and the package must not reach outside the pixels it is given.`,

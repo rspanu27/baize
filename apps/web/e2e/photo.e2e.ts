@@ -83,15 +83,24 @@ async function openReview(page: Page) {
 test("import from a photo: review, confirm, undo, and nothing leaves the page", async ({
   page,
 }) => {
-  const requests: { url: string; method: string; body: boolean }[] = [];
+  const requests: { url: string; method: string; body: boolean; type: string }[] = [];
+  const framesSent: number[] = [];
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   const png = await syntheticPhoto(page);
   // Everything from here on is watched: choosing the photo, reviewing it, confirming.
   page.on("request", (r) =>
-    requests.push({ url: r.url(), method: r.method(), body: r.postDataBuffer() !== null }),
+    requests.push({
+      url: r.url(),
+      method: r.method(),
+      body: r.postDataBuffer() !== null,
+      type: r.resourceType(),
+    }),
   );
+  page.on("websocket", (ws) => {
+    ws.on("framesent", (f) => framesSent.push(f.payload.length));
+  });
 
   await expect(page.getByText("The photo stays on this device.")).toBeVisible();
   await page.getByLabel("Photo of the table").setInputFiles({
@@ -117,17 +126,27 @@ test("import from a photo: review, confirm, undo, and nothing leaves the page", 
   await page.getByRole("button", { name: /Undo/ }).click();
   await expect(balls).toHaveCount(0);
 
-  // Nothing was sent: no request carried a body, none used another method than GET, and none
-  // went anywhere but this site (the only ones are the page loading its own analysis worker).
-  // No image data was stored, and the link carries none.
+  // Nothing was sent. The only requests allowed are the page fetching its own code for the
+  // analysis worker: GET, no body, this site, a script, a short path and at most a short
+  // plain query (the dev server adds ones such as "?worker_file&type=module"). Anything that
+  // could carry the photo, in a body or in a URL, fails, and so does any sizeable message on
+  // a WebSocket (the dev server keeps one open for reloading). No image data was stored, and
+  // the link carries none.
   const origin = new URL(page.url()).origin;
-  const sent = requests.filter(
-    (r) =>
-      !r.url.startsWith("blob:") &&
-      !r.url.startsWith("data:") &&
-      (r.body || r.method !== "GET" || new URL(r.url).origin !== origin),
-  );
+  const sent = requests.filter((r) => {
+    if (r.url.startsWith("blob:") || r.url.startsWith("data:")) return false;
+    const url = new URL(r.url);
+    const ownCode =
+      r.method === "GET" &&
+      !r.body &&
+      url.origin === origin &&
+      r.type === "script" &&
+      r.url.length <= 300 &&
+      /^(\?[\w=&.-]{0,40})?$/.test(url.search);
+    return !ownCode;
+  });
   expect(sent).toEqual([]);
+  expect(framesSent.filter((n) => n > 256)).toEqual([]);
   const stored = await page.evaluate(() => {
     const out: string[] = [];
     for (const store of [localStorage, sessionStorage]) {
