@@ -1,6 +1,6 @@
 import { ballAppearance, ballSizeOf, sanitizeLayout } from "@baize/tables";
 import type { BallKind, BallSetSpec, Layout, TableSpec } from "@baize/tables";
-import { apparentRadiusPx, ballInPhoto } from "@baize/vision";
+import { CORNER_OUTSIDE_SHARE, apparentRadiusPx, ballInPhoto } from "@baize/vision";
 import type { Camera, ImagePoint, ImportProblem, TableCorners } from "@baize/vision";
 import { ballName, isLowConfidence } from "../view/ballLook";
 
@@ -9,8 +9,11 @@ import { ballName, isLowConfidence } from "../view/ballLook";
  * itself. Everything here works on corner positions in photo pixels and balls in table metres.
  */
 
-/** Room left around the photo on every side, as a share of its size, so that corners can lie outside it. */
-export const PAD_FRACTION = 0.12;
+/**
+ * Room left around the photo on every side, as a share of its size, so that corners can lie
+ * outside it: the same room the table finder allows a corner it found outside the photo.
+ */
+export const PAD_FRACTION = CORNER_OUTSIDE_SHARE;
 
 /** The default corner rectangle is this far in from the photo's edges, as a share of its size. */
 export const DEFAULT_INSET = 0.2;

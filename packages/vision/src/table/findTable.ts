@@ -11,7 +11,15 @@ import type { WorkImage } from "../image/pixels";
 import type { Camera, ImagePoint, PhotoImage, TableCorners } from "../types";
 import { clothMask, findClothModel, hasClothHue } from "./clothModel";
 import type { ClothModel } from "./clothModel";
-import { convexHull, cross, enclosingQuad, fitLine, intersectLines, polygonArea } from "./quad";
+import {
+  clipToRect,
+  convexHull,
+  cross,
+  enclosingQuad,
+  fitLine,
+  intersectLines,
+  polygonArea,
+} from "./quad";
 import type { Pt } from "./quad";
 
 /**
@@ -31,8 +39,10 @@ import type { Pt } from "./quad";
  * is a typical value, not this table's. Both move the corners by a centimetre or two at
  * worst. Which end of the table is the baulk
  * end cannot be seen from the outline: the end nearer the camera is taken as baulk, and the
- * result says that this was a guess. All four corners must be in the photo; otherwise
- * nothing is returned and the corners are placed by hand.
+ * result says that this was a guess. One corner may be outside the photo (decided with the
+ * user on 2026-11-15): the two sides that meet there are seen in part and are extended to
+ * find it. A table with more cut off, or with a side along the edge of the photo, gives
+ * nothing, and the corners are placed by hand.
  */
 
 export interface FoundTable {
@@ -52,7 +62,14 @@ const WORK_SIDE = 480;
 const MIN_AREA_SHARE = 0.06;
 /** The cloth area must fill at least this share of its four-sided outline. */
 const MIN_FILL = 0.8;
-/** Share of the outline's edge pixels that may lie on the border of the photo. */
+/**
+ * A corner found outside the photo may lie at most this share of the photo's width (or
+ * height) beyond its edge. The review screen leaves the same room around the photo.
+ */
+export const CORNER_OUTSIDE_SHARE = 0.12;
+/** Of each side that runs out of the photo, at least this share must be in view. */
+const MIN_SIDE_IN_VIEW = 0.5;
+/** Share of the outline's edge pixels that may lie on the border of the photo without its being cut off. */
 const MAX_BORDER_SHARE = 0.03;
 /** Two readings of the corners whose fits differ by less than this fit equally well. */
 const FIT_TIE = 1e-3;
@@ -170,19 +187,29 @@ function opened(
   return { region: grown, size };
 }
 
-/** Outer edge pixels of a region: the first and last pixel of every row and every column. */
-function outline(img: WorkImage, region: Uint8Array): { points: Pt[]; onBorder: number } {
+/**
+ * Outer edge pixels of a region: the first and last pixel of every row and every column.
+ * `inner` leaves out those on the border of the photo, which are where the photo ends, not
+ * where the table does.
+ */
+function outline(
+  img: WorkImage,
+  region: Uint8Array,
+): { points: Pt[]; inner: Pt[]; onBorder: number } {
   const { width, height } = img;
   const seen = new Uint8Array(width * height);
   const points: Pt[] = [];
+  const inner: Pt[] = [];
   let onBorder = 0;
   const add = (x: number, y: number): void => {
     const at = y * width + x;
     if (seen[at] === 1) return;
     seen[at] = 1;
     // Pixel centres.
-    points.push({ x: x + 0.5, y: y + 0.5 });
+    const p = { x: x + 0.5, y: y + 0.5 };
+    points.push(p);
     if (x === 0 || y === 0 || x === width - 1 || y === height - 1) onBorder++;
+    else inner.push(p);
   };
   for (let y = 0; y < height; y++) {
     let first = -1;
@@ -212,7 +239,7 @@ function outline(img: WorkImage, region: Uint8Array): { points: Pt[]; onBorder: 
       add(x, last);
     }
   }
-  return { points, onBorder };
+  return { points, inner, onBorder };
 }
 
 /** Refits the four sides to the edge pixels along them and returns the new corners. */
@@ -276,9 +303,35 @@ function refine(quad: readonly Pt[], edge: readonly Pt[], band: number): Pt[] | 
 }
 
 /**
+ * True when exactly one corner of the outline is outside the photo and the two sides that
+ * meet there are mostly in view, so that extending them is safe. (How far outside the
+ * playing area's own corner may be is checked once it is known.)
+ */
+function oneCornerOut(quad: readonly ImagePoint[], widthPx: number, heightPx: number): boolean {
+  const isOut = (p: ImagePoint): boolean => p.u < 0 || p.u > widthPx || p.v < 0 || p.v > heightPx;
+  const out = quad.flatMap((p, i) => (isOut(p) ? [i] : []));
+  if (out.length !== 1) return false;
+  const i = out[0] as number;
+  const o = quad[i] as ImagePoint;
+  // Share of each side from its other corner (in view) to `o` that lies inside the photo.
+  const inView = (n: ImagePoint): number => {
+    let t = 1;
+    if (o.u < 0) t = Math.min(t, (0 - n.u) / (o.u - n.u));
+    if (o.u > widthPx) t = Math.min(t, (widthPx - n.u) / (o.u - n.u));
+    if (o.v < 0) t = Math.min(t, (0 - n.v) / (o.v - n.v));
+    if (o.v > heightPx) t = Math.min(t, (heightPx - n.v) / (o.v - n.v));
+    return t;
+  };
+  return (
+    inView(quad[(i + 1) % 4] as ImagePoint) >= MIN_SIDE_IN_VIEW &&
+    inView(quad[(i + 3) % 4] as ImagePoint) >= MIN_SIDE_IN_VIEW
+  );
+}
+
+/**
  * Finds the table in a photo, or returns undefined when it cannot be found with confidence
- * (no clear cloth, the table is cut off by the edge of the photo, or the outline is not a
- * table seen from above).
+ * (no clear cloth, more than one corner cut off by the edge of the photo, or the outline is
+ * not a table seen from above).
  */
 export function findTable(
   image: PhotoImage,
@@ -310,16 +363,22 @@ export function findTable(
   const found = opened(img, whole.region);
   if (!found || found.size < MIN_AREA_SHARE * img.width * img.height) return undefined;
   const edge = outline(img, found.region);
-  // A table that runs off the photo has a corner or a side that cannot be seen.
-  if (edge.onBorder > MAX_BORDER_SHARE * edge.points.length) return undefined;
-  const hull = convexHull(edge.points);
+  // A table that runs off the photo. Its outline along the edge of the photo is left out;
+  // where one corner is cut off, the outline then has a short side across the corner, which
+  // the four-sided fit removes by extending its neighbours. Whether that is what happened
+  // is checked below, once the corners are known.
+  const cut = edge.onBorder > MAX_BORDER_SHARE * edge.points.length;
+  const points = cut ? edge.inner : edge.points;
+  const hull = convexHull(points);
   const rough = enclosingQuad(hull);
   if (!rough) return undefined;
-  if (found.size < MIN_FILL * polygonArea(rough)) return undefined;
+  if (found.size < MIN_FILL * polygonArea(clipToRect(rough, img.width, img.height))) {
+    return undefined;
+  }
   // From a wide band to a narrow one: the first outline can be a few pixels off where
   // something sticks out of the cloth area at a corner.
   let fine = rough;
-  for (const band of REFIT_BANDS) fine = refine(fine, edge.points, band) ?? fine;
+  for (const band of REFIT_BANDS) fine = refine(fine, points, band) ?? fine;
 
   // Into photo pixels, and into the order in which a table's corners appear from above:
   // clockwise on the screen (v grows downwards).
@@ -332,6 +391,7 @@ export function findTable(
   // Table corners (0,0), (W,0), (W,L), (0,L) are counter-clockwise in table coordinates with
   // y up, which is counter-clockwise in the image too only if v pointed up; v points down.
   if (turn > 0) quad = [...quad].reverse();
+  if (cut && !oneCornerOut(quad, image.widthPx, image.heightPx)) return undefined;
 
   const d = CUSHION_TOP_DEPTH_M;
   const outerW = table.playingArea.widthM + 2 * d;
@@ -417,6 +477,16 @@ export function findTable(
     { x: d, y: outerL - d },
   ].map((p) => tableToImage(h, p)) as unknown as TableCorners;
   // The camera in the playing area's own coordinates.
+  if (cut) {
+    // The corner the person sees and may move must be within the room the review screen
+    // leaves around the photo.
+    const mu = CORNER_OUTSIDE_SHARE * image.widthPx;
+    const mv = CORNER_OUTSIDE_SHARE * image.heightPx;
+    const far = inner.some(
+      (c) => c.u < -mu || c.u > image.widthPx + mu || c.v < -mv || c.v > image.heightPx + mv,
+    );
+    if (far) return undefined;
+  }
   const hInner = homographyFromCorners(inner, table.playingArea.widthM, table.playingArea.lengthM);
   // The outline is the top of the cushions, so its plane is at about nose height.
   const camera = hInner

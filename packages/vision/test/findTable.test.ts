@@ -170,6 +170,37 @@ describe("findTable on synthetic photos", () => {
     },
   );
 
+  // One corner out of frame is allowed (decided with the user, 2026-11-15): the two sides
+  // that meet there are extended. The camera stands low behind the baulk end and to the
+  // left, so the baulk-left corner falls below the photo.
+  test("one corner below the photo is found by extending the two sides that meet there", () => {
+    const table = TABLE_PRESETS.find((t) => t.id === "pool-9@1") as TableSpec;
+    const cam = camera(table, { x: 0, y: -0.3, z: 0.5, tx: 0.7, ty: 0.5, focal: 600 });
+    const photo = renderPhoto(cam, table, setOf(table), EMPTY, { cloth: "#1f6b3a" });
+    const outside = photo.corners.filter((p) => p.u < 0 || p.u > WIDTH || p.v < 0 || p.v > HEIGHT);
+    expect(outside).toHaveLength(1);
+    const found = findTable(photo.image, table, 0);
+    if (!found) throw new Error("table not found");
+    const [a, b, c, d] = photo.corners;
+    const turned: TableCorners = [c, d, a, b];
+    const error = Math.min(
+      cornerError(found.corners, photo.corners),
+      cornerError(found.corners, turned),
+    );
+    expect(error).toBeLessThan(3);
+  });
+
+  test("a corner farther outside the photo than the review screen has room for is not guessed at", () => {
+    const table = TABLE_PRESETS.find((t) => t.id === "pool-9@1") as TableSpec;
+    const cam = camera(table, { x: 0.5, y: 0.1, z: 0.9, tx: 0.15, ty: 0.5 });
+    const photo = renderPhoto(cam, table, setOf(table), EMPTY, { cloth: "#1f6b3a" });
+    const outside = photo.corners.filter(
+      (p) => p.u < 0 || p.u > WIDTH || p.v < -0.12 * HEIGHT || p.v > 1.12 * HEIGHT,
+    );
+    expect(outside).toHaveLength(1);
+    expect(findTable(photo.image, table, 0)).toBeUndefined();
+  });
+
   test("a table that runs off the photo is not guessed at", () => {
     const table = TABLE_PRESETS.find((t) => t.id === "snooker-12@1") as TableSpec;
     // Too close: the far corners are in view but the near ones are cut off.

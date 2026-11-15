@@ -50,6 +50,42 @@ export function polygonArea(poly: readonly Pt[]): number {
   return Math.abs(a) / 2;
 }
 
+/**
+ * The part of a convex polygon inside the rectangle [0, width] x [0, height]
+ * (Sutherland-Hodgman, one edge of the rectangle at a time). Empty when none of it is inside.
+ */
+export function clipToRect(poly: readonly Pt[], width: number, height: number): Pt[] {
+  const edges: { inside: (p: Pt) => boolean; cut: (a: Pt, b: Pt) => Pt }[] = [
+    { inside: (p) => p.x >= 0, cut: (a, b) => at(a, b, (0 - a.x) / (b.x - a.x)) },
+    { inside: (p) => p.x <= width, cut: (a, b) => at(a, b, (width - a.x) / (b.x - a.x)) },
+    { inside: (p) => p.y >= 0, cut: (a, b) => at(a, b, (0 - a.y) / (b.y - a.y)) },
+    { inside: (p) => p.y <= height, cut: (a, b) => at(a, b, (height - a.y) / (b.y - a.y)) },
+  ];
+  let out: Pt[] = [...poly];
+  for (const edge of edges) {
+    const input = out;
+    out = [];
+    for (let i = 0; i < input.length; i++) {
+      const cur = input[i] as Pt;
+      const prev = input[(i + input.length - 1) % input.length] as Pt;
+      const curIn = edge.inside(cur);
+      const prevIn = edge.inside(prev);
+      if (curIn) {
+        if (!prevIn) out.push(edge.cut(prev, cur));
+        out.push(cur);
+      } else if (prevIn) {
+        out.push(edge.cut(prev, cur));
+      }
+    }
+    if (out.length === 0) return [];
+  }
+  return out;
+}
+
+function at(a: Pt, b: Pt, t: number): Pt {
+  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+}
+
 /** Where the line through a1, a2 meets the line through b1, b2; undefined if parallel. */
 export function intersectLines(a1: Pt, a2: Pt, b1: Pt, b2: Pt): Pt | undefined {
   const dax = a2.x - a1.x;

@@ -13,7 +13,7 @@ export { describeSummary, quantile, scorePhoto, summarise } from "./evaluate";
 export type { PhotoScore, PlacedBall, SetSummary } from "./evaluate";
 export { ballInPhoto, findBalls } from "./balls/findBalls";
 export type { FoundBall } from "./balls/findBalls";
-export { findTable } from "./table/findTable";
+export { CORNER_OUTSIDE_SHARE, findTable } from "./table/findTable";
 export type { FoundTable } from "./table/findTable";
 export type { ClothModel } from "./table/clothModel";
 export {
