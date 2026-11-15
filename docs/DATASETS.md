@@ -112,10 +112,26 @@ What is left:
 - **Racks.** Most of the balls still missed are in racks, where balls hide each other.
 - **Tables that are small in the picture.** 18 pictures get no table. 12 of them are wide
   shots in which the playing area covers under 5 % of the picture (three of those also
-  touch its edge), which is refused on purpose. The other 6 (pictures 6, 7, 14a, 15, 15a
-  and 181, 5.5 to 16 % of the picture) should have been found and were not.
-- **Corners off by 3 to 13 % of the length** in about 30 pictures: the long sides are
-  found but the ends are placed wrong, mostly in views from low along the table.
+  touch its edge), which is refused on purpose. The other 6 are described below.
+- **Corners off by 3 to 13 % of the length** in about 30 pictures. Looked at one by one
+  (2026-11-15), they are of two kinds:
+  - About 13 (pictures 77 to 84, 92 and 189 to 193: Valley bar tables and one Diamond
+    table) are errors of the truth, not of the finder. The corners found sit where the
+    cushion noses meet; the "true" ones sit on the rail beyond the pocket mouths. Those
+    tables have wider rails, and their sights are farther behind the nose than the
+    3 11/16 in that `POOL_SIGHT_SETBACK_M` assumes. The share of tables found right is
+    therefore understated, probably by about five points.
+  - The rest are real. In end views of the Predator tables (pictures 109 to 130) the
+    surroundings have the cloth's own hue (dark-blue carpet and banners), which the cloth
+    test accepts as cloth in shadow, while a dark line along the cushion noses parts the
+    cushion tops from the bed. Admitting pixels of the cloth's hue only near the cloth, and
+    closing gaps of one or two pixels, made things worse (71 % and 48 % right against 76 %)
+    and was not kept. This needs another way to find the outline, for example straight
+    edges rather than an area of colour.
+- **Tables away from the middle of the picture.** The cloth colour is read from the middle
+  of the picture. In the six broadcast frames that should have been found (6, 7, 14a, 15,
+  15a, 181) the middle shows a large banner, whose colour is taken for the cloth. A photo
+  taken at the table, as the guidance asks, has the table in the middle.
 - On synthetic photos the 95th percentile of position error rose from 0.58 % to 0.80 %
   (0.09 points from the wider cushion band the renderer now draws, the rest from the new
   table finder); still inside the 1.5 % target.
