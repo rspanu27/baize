@@ -13,8 +13,8 @@ Each task is sized at 30 to 90 minutes. Every task ends with `pnpm check` green 
 | 0.1 | Write ARCHITECTURE.md, TASKS.md, PROGRESS.md, LICENSE | L | - | Files committed | done |
 | 0.2 | Monorepo scaffold: pnpm workspace, strict TS, Vitest, stub `physics` and `tables`, Vite + React placeholder, `pnpm check` | I | 0.1 | `pnpm check` and `pnpm --filter web build` pass | done |
 | 0.3 | ESLint + Prettier, physics purity rules | I | 0.2 | A banned call in `packages/physics/src` fails lint; `pnpm check` passes | done |
-| 0.4 | GitHub Actions: one job, install, check, build | I | 0.2 | Run is green on GitHub | blocked: workflow committed; every run fails at startup, even a one-line workflow, so it is an account-level Actions problem (You) |
-| 0.5 | `docs/DEPLOY.md` with exact Cloudflare Pages settings | I | 0.2 | You connect the repo; the placeholder URL loads | doc done; waiting for You to connect the repo |
+| 0.4 | GitHub Actions: one job, install, check, build | I | 0.2 | Run is green on GitHub | done: Actions works again since 2026-11-14; every push runs install, check, build and the end-to-end tests |
+| 0.5 | `docs/DEPLOY.md` with exact Cloudflare Pages settings | I | 0.2 | You connect the repo; the placeholder URL loads | done: connected through the Workers flow in DEPLOY.md; every push to `main` publishes the site |
 
 Parallel: 0.3, 0.4, 0.5.
 
