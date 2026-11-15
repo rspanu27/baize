@@ -77,6 +77,12 @@ describe("rules found with the first real test set (pix2pockets, 2026-11-14)", (
     const cr = (x: number, y: number): number => part.cr[y * part.width + x] as number;
     expect(cr(4, 4)).toBeGreaterThan(50);
     expect(cr(1, 4)).toBeLessThan(0);
+    // A given block is used as it is, whatever the longest side would suggest.
+    const exact = toWorkImage(image, 1, { u0: 0, v0: 0, u1: 101, v1: 50 }, 3);
+    expect([exact.scale, exact.width, exact.height]).toEqual([3, 33, 16]);
+    // A block larger than the part is cut to the part, never read past it.
+    const tiny = toWorkImage(image, 1, { u0: 10, v0: 10, u1: 14, v1: 30 }, 50);
+    expect([tiny.scale, tiny.width, tiny.height]).toEqual([4, 1, 5]);
     // A part reaching beyond the photo is cut to it.
     const cut = toWorkImage(image, 400, { u0: -50, v0: 150, u1: 900, v1: 900 });
     expect([cut.originU, cut.originV, cut.width, cut.height]).toEqual([0, 150, 200, 50]);

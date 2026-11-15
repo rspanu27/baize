@@ -4,6 +4,7 @@ import { findBalls } from "./balls/findBalls";
 import { cameraFromCorners } from "./geometry/camera";
 import { homographyFromCorners } from "./geometry/homography";
 import { findTable } from "./table/findTable";
+import { cross } from "./table/quad";
 import type { Camera, ImportOptions, ImportResult, PhotoImage, TableCorners } from "./types";
 
 /**
@@ -20,6 +21,28 @@ import type { Camera, ImportOptions, ImportResult, PhotoImage, TableCorners } fr
  * `now` supplies a clock for the timings (for example `() => performance.now()`); without it
  * the timings are left empty, which keeps this function free of any global.
  */
+/**
+ * True when the corners make a strictly convex four-sided figure, turning the way a table's
+ * corners turn on the screen in the order of `TableCorners`. A dragged corner can fold the
+ * figure or put three corners in a line; no table looks like that.
+ */
+function convexClockwise(corners: TableCorners): boolean {
+  let size = 0;
+  for (const c of corners) size = Math.max(size, Math.abs(c.u), Math.abs(c.v), 1);
+  for (let i = 0; i < 4; i++) {
+    const a = corners[i] as { u: number; v: number };
+    const b = corners[(i + 1) % 4] as { u: number; v: number };
+    const c = corners[(i + 2) % 4] as { u: number; v: number };
+    // Negative for a turn the table's way (v grows downwards); clearly away from zero.
+    const turn = cross({ x: a.u, y: a.v }, { x: b.u, y: b.v }, { x: c.u, y: c.v });
+    if (!(turn < -MIN_TURN * size * size)) return false;
+  }
+  return true;
+}
+
+/** Smallest turn at a corner, as a share of the square of the photo's size (a near-straight corner). */
+const MIN_TURN = 1e-4;
+
 export function importPhoto(
   image: PhotoImage,
   table: TableSpec,
@@ -45,6 +68,7 @@ export function importPhoto(
   if (corners) {
     const given = corners;
     camera = timed("camera", () => {
+      if (!convexClockwise(given)) return undefined;
       const h = homographyFromCorners(given, widthM, lengthM);
       return h ? cameraFromCorners(h, image.widthPx, image.heightPx, cornerHeightM) : undefined;
     });

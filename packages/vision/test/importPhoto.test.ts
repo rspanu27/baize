@@ -81,6 +81,64 @@ describe("importPhoto", () => {
     expect(result.layout.balls).toEqual([]);
   });
 
+  // Found in the Stage A review (2026-11-15): these two passed, with a camera a few
+  // centimetres above the cloth, and the review offered "Use these balls".
+  test("a corner dragged inwards (a folded figure) is a named problem", () => {
+    const [a, b, c, d] = photo.corners;
+    const inside = { u: (a.u + b.u + c.u + d.u) / 4, v: (a.v + b.v + c.v + d.v) / 4 };
+    const folded: TableCorners = [
+      a,
+      b,
+      {
+        u: (inside.u + c.u) / 2 - 0.3 * (c.u - inside.u),
+        v: (inside.v + c.v) / 2 - 0.3 * (c.v - inside.v),
+      },
+      d,
+    ];
+    const result = importPhoto(photo.image, table, set, { corners: folded, ...FLAT });
+    expect(result.problem).toBe("corners-invalid");
+    expect(result.layout.balls).toEqual([]);
+  });
+
+  test("three corners in a line are a named problem", () => {
+    const [a, b, , d] = photo.corners;
+    const inLine = { u: b.u + (b.u - a.u), v: b.v + (b.v - a.v) };
+    const result = importPhoto(photo.image, table, set, {
+      corners: [a, b, inLine, d],
+      ...FLAT,
+    });
+    expect(result.problem).toBe("corners-invalid");
+    expect(result.layout.balls).toEqual([]);
+  });
+
+  test("corners placed a little off by hand are still accepted", () => {
+    // By eye, corners are some pixels off, and four such corners fit no camera exactly. They
+    // must not be refused for that (a check on how well the camera sees them again refused
+    // the user's real photo and was dropped).
+    const [a, b, c, d] = photo.corners;
+    const off: TableCorners = [
+      { u: a.u + 12, v: a.v - 9 },
+      b,
+      { u: c.u - 10, v: c.v + 14 },
+      { u: d.u + 15, v: d.v + 6 },
+    ];
+    const result = importPhoto(photo.image, table, set, { corners: off, ...FLAT });
+    expect(result.problem).toBeUndefined();
+  });
+
+  test("corners from a real view pass the check whatever the view", () => {
+    // From the far end and from a side, not only the usual one.
+    for (const pose of [
+      { position: { x: 0.6, y: 3.2, z: 1.5 }, target: { x: 0.6, y: 1.2 } },
+      { position: { x: 2.6, y: 1.3, z: 1.8 }, target: { x: 0.6, y: 1.3 } },
+    ]) {
+      const cam = cameraOf({ ...pose, rollRad: 0.05, focalPx: 900, widthPx: 1200, heightPx: 900 });
+      const view = renderPhoto(cam, table, set, { balls: [] }, { cloth: "#1f6b3a" });
+      const result = importPhoto(view.image, table, set, { corners: view.corners, ...FLAT });
+      expect(result.problem).toBeUndefined();
+    }
+  });
+
   test("a photo with no table is a named problem, with no balls", () => {
     const blank = {
       widthPx: 200,

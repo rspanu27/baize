@@ -265,18 +265,25 @@ export function findBalls(
     const r = apparentRadiusPx(camera, { x, y, z: ballR }, ballR);
     if (r !== undefined) farRadiusPx = Math.min(farRadiusPx, r);
   }
-  const partSide = part
-    ? Math.max(
-        Math.min(image.widthPx, part.u1) - Math.max(0, part.u0),
-        Math.min(image.heightPx, part.v1) - Math.max(0, part.v0),
-      )
+  // Whole pixels, inside the photo: the same bounds the copy below uses, so that the detail
+  // chosen is the detail used.
+  const bounds = part
+    ? {
+        u0: Math.max(0, Math.min(image.widthPx - 1, Math.floor(part.u0))),
+        v0: Math.max(0, Math.min(image.heightPx - 1, Math.floor(part.v0))),
+        u1: Math.max(1, Math.min(image.widthPx, Math.ceil(part.u1))),
+        v1: Math.max(1, Math.min(image.heightPx, Math.ceil(part.v1))),
+      }
+    : undefined;
+  const partSide = bounds
+    ? Math.max(bounds.u1 - bounds.u0, bounds.v1 - bounds.v0)
     : Math.max(image.widthPx, image.heightPx);
   const block = Math.max(
     1,
     Math.ceil(partSide / MAX_WORK_SIDE),
     Math.min(wholeBlock, Math.floor(farRadiusPx / FAR_BALL_RADIUS_PX)),
   );
-  const img = toWorkImage(image, Math.max(1, partSide / block), part);
+  const img = toWorkImage(image, MAX_WORK_SIDE, bounds, block);
   const cloth = findClothModel(img);
   if (!cloth) return [];
   // Pixels taken for cloth in shadow: darker than the cloth, with its hue. A dark ball that
