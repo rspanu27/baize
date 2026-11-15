@@ -121,6 +121,27 @@ describe("nose-impulse cushion model", () => {
     expect(b.spin.z).toBeCloseTo(a.spin.z, 11);
   });
 
+  test("the case CI found: a slow ball on a rail a hair off the axis is not sent into it", () => {
+    // fast-check counterexample from CI (2026-11-15), pinned so that it runs every time.
+    const radius = 0.025625545964270552;
+    const angle = 8.624677082612921e-8;
+    const n = { x: Math.cos(angle), y: Math.sin(angle) };
+    // Built exactly as the property below builds it (speed 1 mm/s, no sideways speed).
+    const tangent = { x: -n.y, y: n.x };
+    const velocity = { x: -0.001 * n.x + 0 * tangent.x, y: -0.001 * n.y + 0 * tangent.y };
+    const b = ball(velocity, { x: 0, y: 0.08223328120348734, z: 0 }, radius);
+    const out = noseImpulseCushion.resolve(b, n, {
+      noseHeightM: 0.7199999999999994 * 2 * radius,
+      restitution: 0.5,
+      friction: 0.35364871404573706,
+    });
+    const vn = out.velocity.x * n.x + out.velocity.y * n.y;
+    expect(vn).toBeGreaterThanOrEqual(-1e-12 * (0.001 + radius * 0.0823));
+    expect(kineticEnergy(M, radius, out.velocity, out.spin)).toBeLessThanOrEqual(
+      kineticEnergy(M, radius, b.velocity, b.spin) * (1 + 1e-12) + 1e-15,
+    );
+  });
+
   test("never gains energy and never leaves the ball heading into the cushion", () => {
     const v = fc.double({ min: -10, max: 10, noNaN: true });
     const w = fc.double({ min: -300, max: 300, noNaN: true });
@@ -146,7 +167,15 @@ describe("nose-impulse cushion model", () => {
           const before = kineticEnergy(M, radius, b.velocity, b.spin);
           const after = kineticEnergy(M, radius, out.velocity, out.spin);
           expect(after).toBeLessThanOrEqual(before * (1 + 1e-12) + 1e-15);
-          expect(out.velocity.x * n.x + out.velocity.y * n.y).toBeGreaterThanOrEqual(0);
+          // The model clamps the outgoing normal speed to zero or more in the cushion's own
+          // frame; turned back into table axes and dotted with n again, it can come out a few
+          // units of round-off below zero (CI found -3.9e-34 m/s, 2026-11-15). Round-off is
+          // allowed; anything physical is not.
+          const scale =
+            speedIn + Math.abs(vt) + radius * (Math.abs(wx) + Math.abs(wy) + Math.abs(wz));
+          expect(out.velocity.x * n.x + out.velocity.y * n.y).toBeGreaterThanOrEqual(
+            -1e-12 * scale,
+          );
           expect(Number.isFinite(out.spin.x + out.spin.y + out.spin.z)).toBe(true);
         },
       ),
