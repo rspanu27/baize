@@ -134,11 +134,14 @@ const POOL_SHORT_RAIL_DIVISIONS = 4;
 
 /**
  * How far behind the cushion nose the centre of a pool sight is, on the rail top, metres.
- * UNVERIFIED: 3 11/16 in (tolerance 1/8 in), recalled from the WPA Tournament Table &
- * Equipment Specifications section on sights; the page could not be re-read when this was
- * added (2026-11-14). Bar tables and older tables differ. Nothing in the editor depends on
- * it (sights are drawn at a fixed place on the drawn rail); the photo evaluation uses it to
- * work out true ball positions from labelled sights, and checks it against the pictures.
+ * WPA Recommended Equipment Specifications (effective November 2001), section 6: "The
+ * center of each sight should be located 3 11/16 (+ ) inches [93.6625 mm (+ 3.175 mm)]
+ * from the nose of the cushion", i.e. up to 1/8 in farther back, never nearer
+ * (https://wpapool.com/wp-content/uploads/2024/01/RECOMMENDED-EQUIPMENT-SPECIFICATIONS.pdf,
+ * read 2026-11-15). Bar tables with wide rails do not follow it: on the Valley tables in
+ * the pix2pockets pictures the sights are clearly farther back (docs/DATASETS.md). Nothing in
+ * the editor depends on it (sights are drawn at a fixed place on the drawn rail); the photo
+ * evaluation uses it to work out true ball positions from labelled sights.
  */
 export const POOL_SIGHT_SETBACK_M = (3 + 11 / 16) * 0.0254;
 

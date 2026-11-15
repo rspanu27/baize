@@ -16,6 +16,12 @@ import type {
  * Distance from the cushion nose back to where the cloth-covered cushion meets the top of
  * the wooden rail, seen from above, metres. The photo import needs it: in a photo the area of
  * cloth colour ends at the rail, not at the nose, and the playing area is this much inside.
+ * The WPA Recommended Equipment Specifications (section 7) give the cloth-covered cushion
+ * as 1 7/8 to 2 in (4.8 to 5.1 cm) wide "measured from the outer edge of the featherstrip
+ * to the nose of the cushion"
+ * (https://wpapool.com/wp-content/uploads/2024/01/RECOMMENDED-EQUIPMENT-SPECIFICATIONS.pdf,
+ * read 2026-11-15). The value here is larger because it is what a camera sees: the outline
+ * of the cloth is taken to lie at nose height, while the cushion top rises towards the rail.
  * Measured, not from a drawing: 6 cm is the middle value found on 157 pictures of the
  * public pix2pockets set (2026-11-14; a tenth of them below 5.5 cm, a tenth above 8.5 cm),
  * where the true place of the cushion noses was worked out from the table's sights. That
