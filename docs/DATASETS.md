@@ -170,7 +170,11 @@ The black is now compared with how bright it is seen (0.17 of the brightest ball
 measured on this set; its paint is 0.08) and its tint counts at 0.3. Corners given: named
 90.4 % (was 83.9 %); nothing given, table right: 90.6 % (85.5 %). Found and false balls
 unchanged. The brightness was measured on the same pictures it is judged on, so it needs
-confirming on other photos.
+confirming on other photos. Neither this change nor the one for blue balls has a synthetic
+test that fails without it: the test renderer paints balls flat, without the cloth mirrored
+in them, and a dark navy ball drawn there is not found at all. They are guarded only by the
+measurement on this set. The black rule applies to the pool 8 only; the snooker and
+blackball black were not in the set.
 
 ## What this changes in the plan
 

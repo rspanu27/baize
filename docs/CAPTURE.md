@@ -22,8 +22,9 @@ tournament tables. The photos that help most are the ones nobody else has.
 - **How many:** at least 100 photos across at least 5 different tables (the done-check of
   task 5.10). Twenty photos of one table teach less than five photos of each of four tables.
 
-Take the photo with the phone's normal camera, not zoomed, without filters. Keep the
-original file (it holds the orientation).
+Take the photo with the phone's normal camera, not zoomed, without filters. Save it as
+JPEG: an iPhone saves HEIC by default, which the tools here cannot read (Settings, Camera,
+Formats, "Most Compatible"). Keep the original file (it holds the orientation).
 
 ## Labelling: pool tables with diamonds (preferred)
 
@@ -39,7 +40,10 @@ the diamonds, so nothing needs measuring. Mark them, and the balls, as boxes:
 | `Striped` | balls 9 to 15 |
 
 This is the class list of the public pix2pockets set, so its files and yours can be used
-together. Export in **YOLO format** (one `.txt` per photo, each line
+together. Keep the classes in exactly this order in the tool: the label files store each
+class as its number (0 for `Black`, 2 for `Dot` and so on). If your tool numbers them
+differently, give the order to the measurement with `BAIZE_REAL_CLASSES`, for example
+`BAIZE_REAL_CLASSES=Cue,Black,Dot,Solid,Striped`. Export in **YOLO format** (one `.txt` per photo, each line
 `class x_centre y_centre width height` as shares of the photo's width and height).
 
 A free tool that runs in the browser: [makesense.ai](https://www.makesense.ai/) (it says the
@@ -66,19 +70,24 @@ yet; it will come when there are photos for it.
 
 ## Measuring the import on your photos
 
-1. Put the photos in one folder and their YOLO label files in another, outside this
-   repository (for example `baize-data/mine/images` and `baize-data/mine/labels`).
-2. Decode the photos once:
+1. Put the photos in one folder and their YOLO label files in another, **outside** this
+   repository: for example `baize-data/mine/images` and `baize-data/mine/labels` in the
+   folder that holds the repository (next to it, as the public set is now). The label file
+   of `IMG_1234.JPG` is `IMG_1234.txt`.
+2. Decode the photos once. From the repository's folder, `..` is the folder next to it; the
+   script refuses an output folder inside the repository:
 
    ```
-   node apps/web/scripts/decode-photos.mjs baize-data/mine/images baize-data/mine/pixels
+   node apps/web/scripts/decode-photos.mjs ../baize-data/mine/images ../baize-data/mine/pixels
    ```
 
-3. Run the measurement:
+3. Run the measurement. Give **full paths**: the test runs from `packages/vision`, so a
+   relative path would point somewhere else.
 
    ```
-   BAIZE_REAL_LABELS=baize-data/mine/labels BAIZE_REAL_PIXELS=baize-data/mine/pixels \
-   BAIZE_EVAL_REPORT=baize-data/mine/report.txt \
+   BAIZE_REAL_LABELS=/full/path/to/baize-data/mine/labels \
+   BAIZE_REAL_PIXELS=/full/path/to/baize-data/mine/pixels \
+   BAIZE_EVAL_REPORT=/full/path/to/baize-data/mine/report.txt \
    pnpm --filter @baize/vision exec vitest run test/realSet.test.ts
    ```
 
@@ -91,4 +100,6 @@ first.
 
 The photos and labels stay on your machine. Do not add them to this repository: keep them in
 a folder outside it (the `baize-data` folder next to the repository is where the public set
-lives now). The measuring tools read them from there and write only figures.
+lives now). The measuring tools read them from there and write only figures. As a second
+guard, a `baize-data` folder inside the repository is ignored by git, and the decoding script
+will not write into the repository.

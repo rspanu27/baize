@@ -641,7 +641,8 @@ const WHITE_BRIGHT = 0.62;
  * How bright a black ball is seen against the brightest ball pixels, and how much its tint
  * counts. Measured on the pix2pockets pictures (2026-11-15): the 8 ball's median is 0.17
  * against 0.08 for its paint, and on a blue cloth it looks bluish enough to be named the 2
- * or the 4 when its tint counts fully (half of all 8 balls were named so).
+ * or the 4 when its tint counts fully (half of all 8 balls were named so). Applied to the
+ * pool 8 only: the black of snooker and blackball was not in that set and is left as it was.
  */
 const BLACK_SEEN_BRIGHTNESS = 0.17;
 const BLACK_TINT_WEIGHT = 0.3;
@@ -773,13 +774,10 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
       left: count,
       striped: a.striped,
       cue: kind === "cue",
-      black: kind === "8" || kind === "black",
+      black: kind === "8",
       // A black ball shows the lamp and the cloth mirrored in it: it is seen brighter than
       // its paint.
-      y:
-        kind === "8" || kind === "black"
-          ? Math.max(c.y / whiteRef, BLACK_SEEN_BRIGHTNESS)
-          : c.y / whiteRef,
+      y: kind === "8" ? Math.max(c.y / whiteRef, BLACK_SEEN_BRIGHTNESS) : c.y / whiteRef,
       tintB: tintOf(c.y, c.cb),
       tintR: tintOf(c.y, c.cr),
     };

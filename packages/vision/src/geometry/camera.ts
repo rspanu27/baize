@@ -168,7 +168,11 @@ export function projectPoint(
   const s = (camera.plane.heightM - c.z) / dz;
   if (!(s > 0)) return exact;
   const onPlane = { x: c.x + s * (p.x - c.x), y: c.y + s * (p.y - c.y) };
-  return tableToImage(camera.plane.toImage, onPlane);
+  const m = camera.plane.toImage;
+  const w = m[6] * onPlane.x + m[7] * onPlane.y + m[8];
+  // Beyond the horizon of the corners' perspective: no place in the photo.
+  if (!(w * camera.plane.imageSign > 0)) return undefined;
+  return tableToImage(m, onPlane);
 }
 
 /** `projectPoint` through the camera alone. */
@@ -205,8 +209,13 @@ export function imageToTableAtHeight(
 ): TablePoint | undefined {
   const exact = imageToTableExactly(camera, p, heightM);
   if (!exact || !camera.plane) return exact;
-  const q = imageToTable(camera.plane.toTable, p);
-  if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) return exact;
+  const m = camera.plane.toTable;
+  const w = m[6] * p.u + m[7] * p.v + m[8];
+  // Above the horizon of the corners' perspective (the camera's own horizon differs from it
+  // by as much as the corners miss the camera): the point is on no part of the plane.
+  if (!(w * camera.plane.tableSign > 0)) return undefined;
+  const q = imageToTable(m, p);
+  if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) return undefined;
   const c = camera.position;
   const dz = camera.plane.heightM - c.z;
   if (!(dz < 0)) return exact;
@@ -267,9 +276,18 @@ export function cameraFromCorners(
   const camera = cameraFromHomography(h, widthPx, heightPx);
   if (!camera) return undefined;
   const toTable = invertHomography(h);
+  if (!toTable)
+    return { ...camera, position: { ...camera.position, z: camera.position.z + cornerHeightM } };
+  // The table's corner (0, 0) is in front of the camera: the signs of the scale there mark
+  // the table's side of the horizon, in both directions.
+  const imageSign = Math.sign(h[8]);
+  const corner = tableToImage(h, { x: 0, y: 0 });
+  const tableSign = Math.sign(toTable[6] * corner.u + toTable[7] * corner.v + toTable[8]);
   return {
     ...camera,
     position: { ...camera.position, z: camera.position.z + cornerHeightM },
-    ...(toTable ? { plane: { toImage: h, toTable, heightM: cornerHeightM } } : {}),
+    ...(imageSign !== 0 && tableSign !== 0
+      ? { plane: { toImage: h, toTable, heightM: cornerHeightM, imageSign, tableSign } }
+      : {}),
   };
 }

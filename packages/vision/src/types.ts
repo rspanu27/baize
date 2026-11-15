@@ -69,7 +69,18 @@ export interface Camera {
    * mapped through this, which honours the corners exactly; the camera itself only carries
    * a point to that height along its line of sight. Absent for a camera known exactly.
    */
-  plane?: { toImage: Mat3; toTable: Mat3; heightM: number };
+  plane?: {
+    toImage: Mat3;
+    toTable: Mat3;
+    heightM: number;
+    /**
+     * Signs of the homogeneous scale of `toImage` and `toTable` on the table's side of the
+     * horizon. A point whose scale has the other sign is beyond the horizon of the corners'
+     * perspective and maps to a mirrored, meaningless place.
+     */
+    imageSign: number;
+    tableSign: number;
+  };
 }
 
 export type ImportProblem =

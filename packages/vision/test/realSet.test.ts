@@ -166,7 +166,8 @@ describe.skipIf(!LABELS || !PIXELS)("the import on real marked pictures", () => 
       .filter((n) => n.endsWith(".txt"))
       .sort();
     if (LIMIT > 0) names = names.slice(0, LIMIT);
-    const stored = new Set(readdirSync(pixels));
+    // Photo names keep their case (a phone writes IMG_1234.JPG); match them without it.
+    const stored = new Map(readdirSync(pixels).map((n) => [n.toLowerCase(), n] as const));
 
     const given: PhotoScore[] = [];
     const automatic: PhotoScore[] = [];
@@ -184,8 +185,8 @@ describe.skipIf(!LABELS || !PIXELS)("the import on real marked pictures", () => 
     for (const name of names) {
       const base = name.slice(0, -4);
       const file = [".jpg", ".jpeg", ".png"]
-        .map((ext) => `${base}${ext}.rgba.gz`)
-        .find((n) => stored.has(n));
+        .map((ext) => stored.get(`${base}${ext}.rgba.gz`.toLowerCase()))
+        .find((n) => n !== undefined);
       if (!file) {
         noPixels++;
         continue;

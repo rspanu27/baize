@@ -10,7 +10,8 @@
 /* global createImageBitmap, document -- used inside the browser page, not in Node */
 import { chromium } from "@playwright/test";
 import { mkdirSync, readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const [, , input, output] = process.argv;
@@ -18,11 +19,24 @@ if (!input || !output) {
   console.error("usage: decode-photos.mjs <folder of pictures> <output folder>");
   process.exit(2);
 }
+// Photos must never end up in the repository: refuse an output folder inside it.
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const fromRepo = relative(repo, resolve(output));
+if (!fromRepo.startsWith("..") && !isAbsolute(fromRepo)) {
+  console.error(
+    `the output folder ${resolve(output)} is inside the repository; choose one outside it`,
+  );
+  process.exit(2);
+}
 mkdirSync(output, { recursive: true });
 const types = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png" };
-const names = readdirSync(input)
-  .filter((n) => extname(n).toLowerCase() in types)
-  .sort();
+const all = readdirSync(input).sort();
+const names = all.filter((n) => extname(n).toLowerCase() in types);
+const skipped = all.filter((n) => !(extname(n).toLowerCase() in types));
+if (skipped.length > 0) {
+  // HEIC (an iPhone's default) and other formats are not read: say so rather than drop them.
+  console.warn(`not pictures this can read (JPEG and PNG only), skipped: ${skipped.join(", ")}`);
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

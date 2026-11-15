@@ -445,6 +445,56 @@ describe("balls placed through the corners' own perspective", () => {
     expect(errorWith(camera)).toBeLessThan(0.004);
   });
 
+  test("both directions are inverses at any height, and nothing beyond the horizon is mirrored", () => {
+    // Up the middle of the photo, from below the table to well above the horizon: each point
+    // is either refused, or found on the table and seen again where it was.
+    for (const height of [0, r, nose, 2 * nose]) {
+      for (let v = pose.heightPx * 1.1; v > -pose.heightPx; v -= 37) {
+        for (const u of [0.2 * pose.widthPx, 0.5 * pose.widthPx, 0.85 * pose.widthPx]) {
+          const onTable = imageToTableAtHeight(camera, { u, v }, height);
+          if (!onTable) continue;
+          const back = projectPoint(camera, { ...onTable, z: height });
+          expect(back).toBeDefined();
+          expect(Math.hypot((back?.u ?? 1e9) - u, (back?.v ?? 1e9) - v)).toBeLessThan(1e-6);
+        }
+      }
+    }
+  });
+
+  test("between the two horizons a point is refused, not mirrored", () => {
+    // The camera's horizon and the corners' perspective's horizon differ by as much as the
+    // corners miss the camera (82 px on the user's photo). Pixels between them: the camera
+    // alone still sees the cloth, but the perspective puts them on the mirrored side of the
+    // table (review, 2026-11-15). Built here directly: a camera with the perspective of a view
+    // tilted a little differently, so that the two horizons are well apart.
+    const tilted = cameraOf({ ...pose, target: { x: pose.target.x, y: pose.target.y + 0.9 } });
+    const corners = [
+      { x: 0, y: 0 },
+      { x: table.widthM, y: 0 },
+      { x: table.widthM, y: table.lengthM },
+      { x: 0, y: table.lengthM },
+    ].map((c) => projectPoint(tilted, { ...c, z: nose })) as unknown as TableCorners;
+    const hh = homographyFromCorners(corners, table.widthM, table.lengthM);
+    const plane = hh ? cameraFromCorners(hh, pose.widthPx, pose.heightPx, nose)?.plane : undefined;
+    if (!plane) throw new Error("no plane");
+    const mixed: Camera = { ...exact, plane };
+    // The table's side of the perspective's horizon, worked out here from the corner (0, 0).
+    const m = plane.toTable;
+    const c0 = corners[0];
+    const tableSide = Math.sign(m[6] * c0.u + m[7] * c0.v + m[8]);
+    let between = 0;
+    for (let v = pose.heightPx; v > -2 * pose.heightPx; v -= 2) {
+      for (const u of [0, 0.5 * pose.widthPx, pose.widthPx]) {
+        const beyond = (m[6] * u + m[7] * v + m[8]) * tableSide <= 0;
+        if (!beyond || !imageToTableAtHeight(exact, { u, v }, r)) continue;
+        between++;
+        expect(imageToTableAtHeight(mixed, { u, v }, r)).toBeUndefined();
+      }
+    }
+    // The band exists in this view, so the check above is exercised.
+    expect(between).toBeGreaterThan(0);
+  });
+
   test("through the camera alone the same balls are centimetres off", () => {
     const cameraOnly: Camera = { ...camera };
     delete cameraOnly.plane;

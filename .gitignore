@@ -4,3 +4,5 @@ dist
 .claude/settings.local.json
 test-results
 playwright-report
+# Photos and decoded pixels for the photo import evaluation: never in the repository.
+baize-data/
