@@ -133,7 +133,7 @@ Independent review (stage A): two correctness bugs and some gaps, all closed. A 
 Later the same day, balls were placed through the corners' own perspective instead of the recovered camera alone: on real pictures with nothing given, 92.6 % of balls found, 0.37 false balls per picture and a median error of 0.22 %, with the table found right in 81 % (see `docs/DATASETS.md`).
 
 Known gaps carried forward:
-- Targets not met on real pictures: 95 % of balls found and 90 % named, and the table found unaided in 90 % of photos. Racks are found poorly; tables whose surroundings share the cloth's colour, or that are not in the middle of the picture, are often not found.
+- Targets not met on real pictures: 95 % of balls found (92.5 % with corners given, 94.2 % unaided where the table is found right) and the table found unaided in 90 % of photos (81 %). Naming reached 90 % on the same pictures after the black ball was treated by how it is seen, but that was measured on the pictures it was tuned on. Racks are found poorly; tables whose surroundings share the cloth's colour, or that are not in the middle of the picture, are often not found.
 - Measured on broadcast pictures and one real phone photo only; no real-phone timing. The project's own photos are needed.
 - With corners found automatically, the user's photo shows two doubled balls; placing the corners by hand avoids them. The dark-ball pass can add a false ball on a red cloth.
 - `CUSHION_TOP_DEPTH_M` is one constant, not a table field, and is a seen value; balls are placed through a camera that cannot match four imperfect corners exactly.

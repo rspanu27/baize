@@ -161,6 +161,17 @@ It now fills the disc (the ring around it is still judged strictly). Corners giv
 found (was 91.1 %), 0.34 false balls per picture (0.32). Nothing given, table right: 94.2 %
 found (92.6 %), 0.38 false balls (0.37).
 
+## The black ball (2026-11-15)
+
+Naming by group, from a table of what each true group was named: cue 95 % right, solids
+86 %, striped 83 %, the black only 50 %. The black on a blue cloth mirrors the cloth and
+was named the blue 2 or the purple 4, and the one black slot then went to another solid.
+The black is now compared with how bright it is seen (0.17 of the brightest ball pixels,
+measured on this set; its paint is 0.08) and its tint counts at 0.3. Corners given: named
+90.4 % (was 83.9 %); nothing given, table right: 90.6 % (85.5 %). Found and false balls
+unchanged. The brightness was measured on the same pictures it is judged on, so it needs
+confirming on other photos.
+
 ## What this changes in the plan
 
 - Task 5.11 (measure stage A on real photos) can start on pix2pockets before the project's

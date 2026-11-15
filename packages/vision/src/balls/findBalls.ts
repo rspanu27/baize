@@ -637,6 +637,14 @@ interface Seen {
 /** A pixel is "white" when it is bright against the brightest ball and has almost no tint. */
 const WHITE_TINT = 0.09;
 const WHITE_BRIGHT = 0.62;
+/**
+ * How bright a black ball is seen against the brightest ball pixels, and how much its tint
+ * counts. Measured on the pix2pockets pictures (2026-11-15): the 8 ball's median is 0.17
+ * against 0.08 for its paint, and on a blue cloth it looks bluish enough to be named the 2
+ * or the 4 when its tint counts fully (half of all 8 balls were named so).
+ */
+const BLACK_SEEN_BRIGHTNESS = 0.17;
+const BLACK_TINT_WEIGHT = 0.3;
 /** Below this brightness (against white) the tint of a ball is trusted less, down to this share. */
 const DARK_TINT_BRIGHT = 0.3;
 const DARK_TINT_TRUST = 0.2;
@@ -752,6 +760,7 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
     left: number;
     striped: boolean;
     cue: boolean;
+    black: boolean;
     y: number;
     tintB: number;
     tintR: number;
@@ -764,7 +773,13 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
       left: count,
       striped: a.striped,
       cue: kind === "cue",
-      y: c.y / whiteRef,
+      black: kind === "8" || kind === "black",
+      // A black ball shows the lamp and the cloth mirrored in it: it is seen brighter than
+      // its paint.
+      y:
+        kind === "8" || kind === "black"
+          ? Math.max(c.y / whiteRef, BLACK_SEEN_BRIGHTNESS)
+          : c.y / whiteRef,
       tintB: tintOf(c.y, c.cb),
       tintR: tintOf(c.y, c.cr),
     };
@@ -783,7 +798,9 @@ function nameBalls(img: WorkImage, discs: readonly Disc[], ballSet: BallSetSpec)
     // A very dark ball has little colour of its own: what tint it shows is the cloth
     // mirrored in it. Its darkness says more than its tint.
     const trust = Math.max(DARK_TINT_TRUST, Math.min(1, b.y / whiteY / DARK_TINT_BRIGHT));
-    return 1.6 * trust * tint + 0.6 * bright + 0.9 * Math.abs(b.white - whiteWanted);
+    // A black ball has no colour of its own: what tint it shows is mirrored.
+    const tintWeight = k.black ? BLACK_TINT_WEIGHT : 1;
+    return 1.6 * trust * tintWeight * tint + 0.6 * bright + 0.9 * Math.abs(b.white - whiteWanted);
   };
 
   // Hand out kinds best match first, never more of a kind than the set has.
