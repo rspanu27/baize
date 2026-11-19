@@ -194,6 +194,8 @@ export function departureError(
 }
 
 const AIM_TOLERANCE_RAD = 2e-5;
+/** Tips tried in turn for the shot the window is measured on: stun, follow, draw. */
+const BASE_VERTICALS = [0, 0.3, -0.3] as const;
 const MAX_REFINE = 5;
 const EDGE_BISECTIONS = 6;
 const MAX_EDGE_RAD = 0.1;
@@ -347,7 +349,12 @@ export function potCandidates(
   for (const pair of potPairs(ctx, pos).slice(0, options.maxPairs)) {
     const least = leastSpeedMps(pair.estimate, ctx.cloth);
     const baseSpeed = Math.min(options.maxSpeedMps, least * (options.speedFactors[1] ?? 1.8));
-    const base = centrePot(ctx, pos, pair, baseSpeed, { side: 0, vertical: 0 });
+    // The window is measured on a stun shot; if that scratches or misses, on follow, then draw.
+    let base: CentredPot | undefined;
+    for (const vertical of BASE_VERTICALS) {
+      base = centrePot(ctx, pos, pair, baseSpeed, { side: 0, vertical });
+      if (base) break;
+    }
     if (!base) continue;
     // The direction the object ball leaves in at the middle of the base window.
     const wanted = base.slope * (base.centreRad - base.aimRad);

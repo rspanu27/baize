@@ -1,4 +1,6 @@
 import { leaveValue, positionAfter } from "./position";
+import { DEFAULT_SAFETY_OPTIONS, safetyShots } from "./safety";
+import type { SafetyOptions } from "./safety";
 import { DEFAULT_SHOT_OPTIONS, makeContext, potCandidates } from "./shots";
 import type { PlanContext, PotCandidate, Position, ShotOptions } from "./shots";
 import type { PlanInput, PlanProgress, PlannedShot, Route } from "./types";
@@ -23,6 +25,9 @@ export interface SearchOptions {
   /** Simulator calls allowed in all. */
   readonly budget: number;
   readonly shot: ShotOptions;
+  /** Safeties are looked for when the best route's first pot is less likely than this. */
+  readonly safetyBelow: number;
+  readonly safety: SafetyOptions;
 }
 
 export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
@@ -31,6 +36,8 @@ export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   branching: 4,
   budget: 20_000,
   shot: DEFAULT_SHOT_OPTIONS,
+  safetyBelow: 0.4,
+  safety: DEFAULT_SAFETY_OPTIONS,
 };
 
 interface Node {
@@ -148,6 +155,11 @@ export function* planRoutes(
       .map(({ n }) => n)
       .filter((n) => !n.terminal)
       .slice(0, options.beamWidth);
+  }
+  const first = best?.steps[0];
+  if (!first || first.chance < options.safetyBelow) {
+    const safeties = safetyShots(ctx, root.pos, options.safety);
+    if (safeties.length > 0) return { ...progress(true), safeties };
   }
   return progress(true);
 }

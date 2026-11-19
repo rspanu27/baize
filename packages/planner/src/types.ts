@@ -79,6 +79,8 @@ export interface PlannedShot {
   readonly result: SimResult;
   /** Where the cue ball stops. */
   readonly cueStop: Vec2;
+  /** Safeties only: expected value of the opponent's best pot afterwards. */
+  readonly leaves?: number;
 }
 
 export interface Route {
@@ -94,5 +96,10 @@ export interface PlanProgress {
   /** Runner calls used so far. */
   readonly runnerCalls: number;
   readonly best?: Route;
+  /**
+   * Safety shots, least left for the opponent first: given when no route was found or its
+   * first pot is less likely than the search's `safetyBelow` (only on the last report).
+   */
+  readonly safeties?: readonly PlannedShot[];
   readonly done: boolean;
 }
