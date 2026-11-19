@@ -31,3 +31,5 @@ export type {
   ShotOutcome,
 } from "./shots";
 export { GEOMETRIC_WINDOW_SCALE, leaveValue, positionAfter, positionValue } from "./position";
+export { DEFAULT_SEARCH_OPTIONS, planRoute, planRoutes } from "./search";
+export type { SearchOptions } from "./search";
