@@ -286,28 +286,11 @@ function centrePot(
   const aimRad = a1;
   if (!play(ctx, pos, pair, aimRad, speedMps, tip).success) return undefined;
 
-  // Each edge: step out until the pot fails, then bisect between the last pot and the miss.
-  const start = Math.max(2e-4, pair.estimate.aimHalfWindowRad / 2);
-  const edge = (sign: number): number => {
-    let inside = 0;
-    let outside = start;
-    while (
-      outside < MAX_EDGE_RAD &&
-      play(ctx, pos, pair, aimRad + sign * outside, speedMps, tip).success
-    ) {
-      inside = outside;
-      outside *= 2;
-    }
-    if (outside >= MAX_EDGE_RAD) return inside;
-    for (let i = 0; i < EDGE_BISECTIONS; i++) {
-      const mid = (inside + outside) / 2;
-      if (play(ctx, pos, pair, aimRad + sign * mid, speedMps, tip).success) inside = mid;
-      else outside = mid;
-    }
-    return (inside + outside) / 2;
-  };
-  const high = edge(1);
-  const low = edge(-1);
+  const { low, high } = windowAround(
+    (aim) => play(ctx, pos, pair, aim, speedMps, tip).success,
+    aimRad,
+    Math.max(2e-4, pair.estimate.aimHalfWindowRad / 2),
+  );
   return {
     aimRad,
     centreRad: aimRad + (high - low) / 2,
@@ -315,6 +298,34 @@ function centrePot(
     slope,
     desired,
   };
+}
+
+/**
+ * The window of aims around `aimRad` at which `success` holds (it must hold at `aimRad`): each
+ * edge is found by stepping out from `startRad`, doubling, until it fails, then bisecting.
+ * Returns how far each edge is from `aimRad` (both positive or zero).
+ */
+export function windowAround(
+  success: (aimRad: number) => boolean,
+  aimRad: number,
+  startRad: number,
+): { low: number; high: number } {
+  const edge = (sign: number): number => {
+    let inside = 0;
+    let outside = startRad;
+    while (outside < MAX_EDGE_RAD && success(aimRad + sign * outside)) {
+      inside = outside;
+      outside *= 2;
+    }
+    if (outside >= MAX_EDGE_RAD) return inside;
+    for (let i = 0; i < EDGE_BISECTIONS; i++) {
+      const mid = (inside + outside) / 2;
+      if (success(aimRad + sign * mid)) inside = mid;
+      else outside = mid;
+    }
+    return (inside + outside) / 2;
+  };
+  return { high: edge(1), low: edge(-1) };
 }
 
 /** The speeds and tips tried for a pot, in a fixed order. */

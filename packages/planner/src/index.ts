@@ -35,3 +35,6 @@ export { DEFAULT_SAFETY_OPTIONS, opponentState, opponentValueNow, safetyShots } 
 export type { SafetyOptions, SafetyShot } from "./safety";
 export { DEFAULT_SEARCH_OPTIONS, planRoute, planRoutes } from "./search";
 export type { SearchOptions } from "./search";
+export { rateShot } from "./rate";
+export type { ShotRating } from "./rate";
+export { windowAround } from "./shots";
