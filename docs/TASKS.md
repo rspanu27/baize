@@ -157,7 +157,7 @@ SPEC section 10, ARCHITECTURE section 10. The planner is handed a shot runner bu
 | 6.8 | Planner worker in the editor, with progress and a main-thread fallback | I | 6.6 | Worker message tests; the page is never blocked more than 100 ms while planning (measured) | done |
 | 6.9 | Planner panel and route layer: game, ball on, group and level; find a route; numbered steps with chances; use this shot; play the route | U | 6.8 | Interaction tests; e2e: a 9-ball ending gives a route and "Use this shot" pots the first ball | done |
 | 6.10 | Rating of the user's own shot (pot chance, position left) | U | 6.5, 6.9 | Component test; the rating matches `rate` for a fixed shot | done |
-| 6.11 | Speed in the browser: first route and 3-shot route timed on a production build | I | 6.9 | Measured within 1 s and 5 s on a desktop, or the shortfall stated | todo |
+| 6.11 | Speed in the browser: first route and 3-shot route timed on a production build | I | 6.9 | Measured within 1 s and 5 s on a desktop, or the shortfall stated | done (2026-11-19, `apps/web/scripts/planner-speed.config.ts`): first route 0.24 to 0.37 s; 3-shot route 1.2 s for a 9-ball ending and 2.2 to 2.9 s for a full snooker table; no long task on the page (none of 50 ms or more). Chromium's CPU slow-down does not reach the worker, so slow phones are not measured |
 | 6.12 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
 
 Parallel: 6.2 alongside 6.3; 6.10 alongside 6.11.
