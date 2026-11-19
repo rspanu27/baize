@@ -70,8 +70,9 @@ describe("search", () => {
     expect(two.best?.steps.map((s) => s.shot)).toEqual(one.best?.steps.map((s) => s.shot));
   });
 
-  test("reports progress with a route early, and the route only improves", () => {
+  test("reports progress with a route early, and the reported route gets deeper", () => {
     const seen: number[] = [];
+    const steps: number[] = [];
     const it = planRoutes(inputOf(b), OPTIONS);
     let depthAtFirstRoute = -1;
     let reports = 0;
@@ -82,6 +83,7 @@ describe("search", () => {
       if (p.best) {
         if (depthAtFirstRoute < 0) depthAtFirstRoute = p.depth;
         seen.push(p.best.expectedValue);
+        steps.push(p.best.steps.length);
       }
       if (r.done) break;
     }
@@ -89,8 +91,9 @@ describe("search", () => {
     // the search reports between pots, so there are many reports.
     expect(depthAtFirstRoute).toBe(0);
     expect(reports).toBeGreaterThan(OPTIONS.maxDepth * 3);
-    for (let i = 1; i < seen.length; i++) {
-      expect(must(seen[i], "value")).toBeGreaterThanOrEqual(must(seen[i - 1], "value"));
+    expect(seen.length).toBeGreaterThan(0);
+    for (let i = 1; i < steps.length; i++) {
+      expect(must(steps[i], "steps")).toBeGreaterThanOrEqual(must(steps[i - 1], "steps"));
     }
   });
 
@@ -144,5 +147,27 @@ describe("review fixes", () => {
       });
       expect(j.intendedPotted && !j.foul).toBe(true);
     }
+  });
+});
+
+describe("routes are carried on", () => {
+  test("a two-ball 9-ball ending is planned to the end, not stopped after the 8", () => {
+    const b = must(BENCHMARKS[0], "benchmark");
+    const W = b.table.playingArea.widthM;
+    const L = b.table.playingArea.lengthM;
+    const balls = b.balls.filter((x) => x.id === "cue" || x.id === "8" || x.id === "9");
+    const at = (id: string, fx: number, fy: number) => {
+      const x = must(
+        balls.find((y) => y.id === id),
+        id,
+      );
+      return { ...x, x: W * fx, y: L * fy };
+    };
+    const input = {
+      ...inputOf(b),
+      balls: [at("cue", 0.5, 0.25), at("8", 0.4, 0.5), at("9", 0.55, 0.75)],
+    };
+    const r = must(planRoute(input, OPTIONS).best, "a route");
+    expect(r.steps.map((s) => s.targetId)).toEqual(["8", "9"]);
   });
 });

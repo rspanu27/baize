@@ -138,8 +138,27 @@ export function* planRoutes(
   let frontier: Node[] = [root];
   let depth = 0;
   let outOfBudget = false;
-  const consider = (n: Node) => {
-    if (n.steps.length > 0 && (!best || score(n) > score(best))) best = n;
+  // A route's score ends in the geometric estimate of the next shot, which runs above the
+  // simulated chances, so a short route must not be compared with longer ones on that estimate.
+  // The best route is taken from the routes that end where the search really ended: finished
+  // racks, routes whose carrying on found no pot (their next shot is then worth 0), and the
+  // routes of the deepest level reached. A route that was carried on is replaced by its
+  // continuations; one cut from the beam is left out while deeper routes exist.
+  const open: Node[] = [];
+  const extended = new Set<Node>();
+  const deadEnds = new Set<Node>();
+  const pickBest = () => {
+    best = undefined;
+    let deepest = 0;
+    for (const n of open) if (n.steps.length > deepest) deepest = n.steps.length;
+    for (const n of open) {
+      if (extended.has(n)) continue;
+      const dead = deadEnds.has(n);
+      if (!n.terminal && !dead && n.steps.length < deepest) continue;
+      const s = dead ? n.collected : score(n);
+      const b = best && (deadEnds.has(best) ? best.collected : score(best));
+      if (!best || b === undefined || s > b) best = dead ? { ...n, leave: 0 } : n;
+    }
   };
   const progress = (done: boolean): PlanProgress => ({
     depth,
@@ -161,10 +180,13 @@ export function* planRoutes(
         yield progress(false);
         r = it.next();
       }
+      if (r.value.length > 0) extended.add(node);
+      else deadEnds.add(node);
       for (const child of r.value) {
         children.push(child);
-        consider(child);
+        open.push(child);
       }
+      pickBest();
       yield progress(false);
     }
     if (outOfBudget && children.length === 0) break;

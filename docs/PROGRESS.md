@@ -139,3 +139,25 @@ Known gaps carried forward:
 - `CUSHION_TOP_DEPTH_M` is one constant, not a table field, and is a seen value; balls are placed through a camera that cannot match four imperfect corners exactly.
 - Unverified numbers remain in `packages/tables` (marked).
 
+## Phase 6: position-play planner (finished 2026-11-19)
+
+Done: tasks 6.1 to 6.12. The vision's planner (SPEC section 1) became SPEC section 10 and this phase, with the video overlays as Phase 7.
+
+What is new:
+- **`@baize/planner`**, a package that depends only on the physics and tables and follows the physics' determinism rules. Given a layout it plans a route a few shots deep: which ball, which pocket, how hard, with what tip, and where the cue ball should stop. Games: snooker break-building, 9-ball, 8-ball and blackball, straight pool, with the basic fouls and snooker respotting.
+- **Shots are played through the editor's own physics** (a shot runner built by the editor), so throw, squirt, the cushion model and nap are all allowed for, and a planned shot is exactly what the editor draws.
+- **Pot chances** come from the window of aims that still pot, searched with the simulator, against a player level's aim and speed error. Against replays of the same shots with the player's errors, predicted and observed rates agree to a mean of 0.005 to 0.034 per bin across four tables, levels and spins (target 0.10). The player levels are estimates (UNVERIFIED).
+- **Safeties** when the best pot is under 40 %: legal shots ranked by what they leave the opponent.
+- **In the editor**: a Plan panel (game, ball on, level, depth), Find a route in a worker with the best route shown as it improves, the route drawn on the table, "Use this shot" and "Next shot", safeties, and "Rate my shot" for a hand-set shot.
+
+Speed (production build, Chromium, desktop): first route in 0.24 to 0.37 s; a 3-shot route in 1.2 s for a 9-ball ending and 2.2 to 2.9 s for a full snooker table; the page never blocked by a long task.
+
+Checks: `pnpm check` (tables 220, physics 402, vision 124, planner 124, web 607 tests) and eight Playwright tests, including the planner's (a route found, its first shot used and played, the planned ball potted).
+
+Independent review (6.12): no hard-rule violations; fixed from it: the easiest pots got a chance of 0 (the window search started past its own limit); a shot used during a search could be followed by a step from a later route; "Next shot" could add duplicate balls when the editor's result differed at all; the 8 and the black counted the opponent's balls; the faster speed node was clamped back to the planned speed at the speed limit; settings and debug-panel changes did not drop a route; the planner could take an object ball as the cue ball; a rating took an opponent's ball as the pot; the search did not pause between pots for a page fallback. After the fixes, a two-ball 9-ball ending was planned as one shot (a short route's score ended in an optimistic estimate); routes are now compared only where the search really ended.
+
+Known gaps carried forward:
+- Player levels and the geometric window scale are estimates or measured on this project's own simulator, not on real players.
+- Not planned: kicks, combinations, plants; ball in hand, push-outs, free balls; the opponent's reply beyond their next pot.
+- On the main-thread fallback (no worker) the page is blocked for up to one pot's simulations at a time; the 100 ms target holds with the worker.
+- Slow phones are not measured (Chromium's CPU slow-down does not reach the worker).
