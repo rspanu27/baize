@@ -1,7 +1,7 @@
 import { leaveValue, positionAfter } from "./position";
-import { DEFAULT_SAFETY_OPTIONS, safetyShots } from "./safety";
+import { DEFAULT_SAFETY_OPTIONS, safetyShotSteps } from "./safety";
 import type { SafetyOptions } from "./safety";
-import { DEFAULT_SHOT_OPTIONS, makeContext, potCandidates } from "./shots";
+import { DEFAULT_SHOT_OPTIONS, makeContext, potCandidateSteps, remeasureChance } from "./shots";
 import type { PlanContext, PotCandidate, Position, ShotOptions } from "./shots";
 import type { PlanInput, PlanProgress, PlannedShot, Route } from "./types";
 
@@ -78,16 +78,31 @@ function plannedShot(ctx: PlanContext, pos: Position, c: PotCandidate): PlannedS
   };
 }
 
-/** The children of a node: its best pots, by chance times (value plus the position left). */
-function expand(ctx: PlanContext, node: Node, options: SearchOptions): Node[] {
-  const scored = potCandidates(ctx, node.pos, options.shot).map((c, i) => {
+/**
+ * The children of a node: its best pots, by chance times (value plus the position left). The
+ * shots kept have their chance measured again with their own window. Yields between pieces of
+ * work so a caller on the page can pause.
+ */
+function* expand(
+  ctx: PlanContext,
+  node: Node,
+  options: SearchOptions,
+): Generator<undefined, Node[], undefined> {
+  const candidates = yield* potCandidateSteps(ctx, node.pos, options.shot);
+  const scored = candidates.map((c, i) => {
     const leave = leaveValue(ctx, node.pos, c);
     return { c, leave, s: c.chance * (c.value + leave), i };
   });
   scored.sort((a, b) => b.s - a.s || a.i - b.i);
-  // One way of playing each pot at most per pocket and ball would hide position play: keep
-  // the best variants overall, whatever pot they play.
-  return scored.slice(0, options.branching).map(({ c, leave }) => {
+  // The best variants overall, whatever pot they play: one per pot would hide position play.
+  const kept: typeof scored = [];
+  for (const k of scored.slice(0, options.branching)) {
+    yield;
+    const c = remeasureChance(ctx, node.pos, k.c);
+    kept.push({ ...k, c, s: c.chance * (c.value + k.leave) });
+  }
+  kept.sort((a, b) => b.s - a.s || a.i - b.i);
+  return kept.map(({ c, leave }) => {
     const planned = c.outcomes[0];
     if (!planned) throw new Error("a candidate without its planned outcome");
     const reach = node.reach * c.chance;
@@ -140,7 +155,13 @@ export function* planRoutes(
         outOfBudget = true;
         break;
       }
-      for (const child of expand(ctx, node, options)) {
+      const it = expand(ctx, node, options);
+      let r = it.next();
+      while (!r.done) {
+        yield progress(false);
+        r = it.next();
+      }
+      for (const child of r.value) {
         children.push(child);
         consider(child);
       }
@@ -158,8 +179,13 @@ export function* planRoutes(
   }
   const first = best?.steps[0];
   if (!first || first.chance < options.safetyBelow) {
-    const safeties = safetyShots(ctx, root.pos, options.safety);
-    if (safeties.length > 0) return { ...progress(true), safeties };
+    const it = safetyShotSteps(ctx, root.pos, options.safety);
+    let r = it.next();
+    while (!r.done) {
+      yield progress(false);
+      r = it.next();
+    }
+    if (r.value.length > 0) return { ...progress(true), safeties: r.value };
   }
   return progress(true);
 }

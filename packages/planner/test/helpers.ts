@@ -35,6 +35,8 @@ export function ballSetFor(table: TableSpec): BallSetSpec {
 }
 
 export const MEDIUM: ClothSpec = makeCloth("#1f7a4d", "medium");
+export const SLOW: ClothSpec = makeCloth("#1f7a4d", "slow");
+export const FAST: ClothSpec = makeCloth("#1f7a4d", "fast");
 
 /** A runner with the editor's physics (version 2 models and squirt), without nap. */
 export function runnerFor(table: TableSpec, cloth: ClothSpec = MEDIUM): ShotRunner {

@@ -416,9 +416,10 @@ describe("judgeShot: pool rules", () => {
   test("eight-ball: the 8 after the group wins, unless it is potted on a foul", () => {
     const balls = poolBalls("11", "8", "12");
     const win = fake(balls, [{ hit: ["cue", "b8"] }, { pocket: "b8" }]);
+    // Worth the balls the player could still pot: the 8 alone (the stripes are not theirs).
     expect(judgeShot(win, balls, "cue", SOLIDS)).toMatchObject({
       foul: false,
-      scored: 3,
+      scored: 1,
       continues: true,
       finished: true,
     });
@@ -447,9 +448,10 @@ describe("judgeShot: pool rules", () => {
     });
     const noReds = bb.slice(0, 3);
     const win = fake(noReds, [{ hit: ["cue", "blk"] }, { pocket: "blk" }]);
+    // The black alone: the yellow is the opponent's.
     expect(judgeShot(win, noReds, "cue", REDS_GROUP)).toMatchObject({
       foul: false,
-      scored: 2,
+      scored: 1,
       finished: true,
     });
   });

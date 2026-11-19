@@ -3,7 +3,7 @@ import type { SimResult, Vec2 } from "@baize/physics";
 import { chanceInWindow, estimatePot, pathClear, pocketTargets } from "./geometry";
 import type { PocketTarget, PotEstimate } from "./geometry";
 import { atan2 } from "./math";
-import { ballsOn, judgeShot, potValue } from "./rules";
+import { ballsLeftFor, ballsOn, judgeShot, potValue } from "./rules";
 import type { ShotJudgement } from "./rules";
 import type { GameState, PlanBall, PlanInput, PlayerLevel, ShotParams, ShotRunner } from "./types";
 
@@ -65,15 +65,18 @@ function cueOf(pos: Position): PlanBall {
   return cue;
 }
 
+/** cos(80 degrees): thinner cuts are not tried (ARCHITECTURE section 10). */
+const MIN_CUT_COS = 0.17364817766693033;
+
 /**
  * Every pot that is on in straight lines: lines to the contact and to the pocket clear, a cut
- * below 90 degrees, a lane the ball fits. Best first (geometric chance times value), ties in
+ * of at most 80 degrees, a lane the ball fits. Best first (geometric chance times value), ties in
  * ball order then pocket order.
  */
 export function potPairs(ctx: PlanContext, pos: Position): PotPair[] {
   const cue = cueOf(pos);
   const on = ballsOn(pos.balls, pos.cueBallId, pos.state);
-  const objectBallsLeft = pos.balls.length - 1;
+  const objectBallsLeft = ballsLeftFor(pos.balls, pos.cueBallId, pos.state);
   const pairs: PotPair[] = [];
   for (const target of on) {
     const value = potValue(target.kind, pos.state, objectBallsLeft);
@@ -85,7 +88,7 @@ export function potPairs(ctx: PlanContext, pos: Position): PotPair[] {
         targetRadiusM: target.radiusM,
         pocket,
       });
-      if (estimate.aimHalfWindowRad <= 0) continue;
+      if (estimate.aimHalfWindowRad <= 0 || estimate.cutCos < MIN_CUT_COS) continue;
       const ids = [cue.id, target.id];
       if (!pathClear(cue, estimate.ghost, cue.radiusM, pos.balls, ids)) continue;
       if (!pathClear(target, pocket.aim, target.radiusM, pos.balls, ids)) continue;
@@ -106,11 +109,13 @@ export function potPairs(ctx: PlanContext, pos: Position): PotPair[] {
     .map(({ p }) => p);
 }
 
+const SPEED_NODE_Z = Math.sqrt(3);
+
 /** Directions from the player's speed error: 3-point Gauss-Hermite nodes and weights. */
 export const SPEED_NODES: readonly { readonly z: number; readonly weight: number }[] = [
-  { z: -Math.sqrt(3), weight: 1 / 6 },
+  { z: -SPEED_NODE_Z, weight: 1 / 6 },
   { z: 0, weight: 2 / 3 },
-  { z: Math.sqrt(3), weight: 1 / 6 },
+  { z: SPEED_NODE_Z, weight: 1 / 6 },
 ];
 
 /** One way of playing a pot, with what happens at the three speeds. */
@@ -226,6 +231,18 @@ function play(
   speedMps: number,
   tip: ShotParams["tipOffset"],
 ): { result: SimResult; judgement: ShotJudgement; success: boolean } {
+  return playPot(ctx, pos, pair.target.id, pair.pocket.id, aimRad, speedMps, tip);
+}
+
+function playPot(
+  ctx: PlanContext,
+  pos: Position,
+  targetId: string,
+  pocketId: PocketTarget["id"],
+  aimRad: number,
+  speedMps: number,
+  tip: ShotParams["tipOffset"],
+): { result: SimResult; judgement: ShotJudgement; success: boolean } {
   const result = ctx.run(pos.balls, {
     ballId: pos.cueBallId,
     aimAngleRad: aimRad,
@@ -233,10 +250,32 @@ function play(
     tipOffset: tip,
   });
   const judgement = judgeShot(result, pos.balls, pos.cueBallId, pos.state, {
-    targetId: pair.target.id,
-    pocketId: pair.pocket.id,
+    targetId,
+    pocketId,
   });
   return { result, judgement, success: judgement.intendedPotted && !judgement.foul };
+}
+
+/**
+ * The candidate's chance with its own window: the aim window is searched again with the
+ * candidate's own speed and tip, around its own aim (which may sit off the window's middle).
+ * The generator measures one window per pot and shares it among that pot's variants, which can
+ * overstate a variant's chance; the search calls this for the shots it keeps.
+ */
+export function remeasureChance(ctx: PlanContext, pos: Position, c: PotCandidate): PotCandidate {
+  const { aimAngleRad, speedMps, tipOffset } = c.shot;
+  const w = windowAround(
+    (a) => playPot(ctx, pos, c.targetId, c.pocketId, a, speedMps, tipOffset).success,
+    aimAngleRad,
+    Math.max(2e-4, c.halfWindowRad / 2),
+  );
+  let speedShare = 0;
+  for (const o of c.outcomes) if (o.success) speedShare += o.weight;
+  return {
+    ...c,
+    chance: chanceInWindow(w.low, w.high, ctx.level.aimErrorRad) * speedShare,
+    halfWindowRad: (w.low + w.high) / 2,
+  };
 }
 
 /**
@@ -302,8 +341,9 @@ function centrePot(
 
 /**
  * The window of aims around `aimRad` at which `success` holds (it must hold at `aimRad`): each
- * edge is found by stepping out from `startRad`, doubling, until it fails, then bisecting.
- * Returns how far each edge is from `aimRad` (both positive or zero).
+ * edge is found by stepping out from `startRad` (at most half of `MAX_EDGE_RAD`), doubling,
+ * until it fails, then bisecting. Returns how far each edge is from `aimRad` (both positive or
+ * zero), at most `MAX_EDGE_RAD`.
  */
 export function windowAround(
   success: (aimRad: number) => boolean,
@@ -312,12 +352,13 @@ export function windowAround(
 ): { low: number; high: number } {
   const edge = (sign: number): number => {
     let inside = 0;
-    let outside = startRad;
-    while (outside < MAX_EDGE_RAD && success(aimRad + sign * outside)) {
+    let outside = Math.min(startRad, MAX_EDGE_RAD / 2);
+    while (success(aimRad + sign * outside)) {
       inside = outside;
-      outside *= 2;
+      // A window this wide is as good as certain for any player: report the cap.
+      if (outside >= MAX_EDGE_RAD) return MAX_EDGE_RAD;
+      outside = Math.min(MAX_EDGE_RAD, outside * 2);
     }
-    if (outside >= MAX_EDGE_RAD) return inside;
     for (let i = 0; i < EDGE_BISECTIONS; i++) {
       const mid = (inside + outside) / 2;
       if (success(aimRad + sign * mid)) inside = mid;
@@ -331,10 +372,11 @@ export function windowAround(
 /** The speeds and tips tried for a pot, in a fixed order. */
 function variants(
   least: number,
+  topSpeed: number,
   options: ShotOptions,
 ): { speedMps: number; tip: ShotParams["tipOffset"] }[] {
   const out: { speedMps: number; tip: ShotParams["tipOffset"] }[] = [];
-  const speeds = options.speedFactors.map((f) => Math.min(options.maxSpeedMps, f * least));
+  const speeds = options.speedFactors.map((f) => Math.min(topSpeed, f * least));
   for (const speedMps of speeds) {
     for (const vertical of options.verticals) out.push({ speedMps, tip: { side: 0, vertical } });
   }
@@ -356,10 +398,26 @@ export function potCandidates(
   pos: Position,
   options: ShotOptions = DEFAULT_SHOT_OPTIONS,
 ): PotCandidate[] {
+  const it = potCandidateSteps(ctx, pos, options);
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** `potCandidates` one pot at a time: yields before each pot, so a caller can pause between. */
+export function* potCandidateSteps(
+  ctx: PlanContext,
+  pos: Position,
+  options: ShotOptions = DEFAULT_SHOT_OPTIONS,
+): Generator<undefined, PotCandidate[], undefined> {
   const out: PotCandidate[] = [];
   for (const pair of potPairs(ctx, pos).slice(0, options.maxPairs)) {
+    yield;
     const least = leastSpeedMps(pair.estimate, ctx.cloth);
-    const baseSpeed = Math.min(options.maxSpeedMps, least * (options.speedFactors[1] ?? 1.8));
+    // The fastest planned speed leaves room for the player hitting it harder by mistake.
+    const topSpeed = options.maxSpeedMps / (1 + SPEED_NODE_Z * ctx.level.speedError);
+    const baseSpeed = Math.min(topSpeed, least * (options.speedFactors[1] ?? 1.8));
     // The window is measured on a stun shot; if that scratches or misses, on follow, then draw.
     let base: CentredPot | undefined;
     for (const vertical of BASE_VERTICALS) {
@@ -369,17 +427,14 @@ export function potCandidates(
     if (!base) continue;
     // The direction the object ball leaves in at the middle of the base window.
     const wanted = base.slope * (base.centreRad - base.aimRad);
-    for (const v of variants(least, options)) {
+    for (const v of variants(least, topSpeed, options)) {
       // Re-aim the variant so its object ball leaves where the base window's middle sends it.
       const probe = play(ctx, pos, pair, base.centreRad, v.speedMps, v.tip);
       const f = departureError(probe.result, pos.cueBallId, pair.target.id, base.desired);
       if (f === undefined) continue;
       const aimRad = base.centreRad + (wanted - f) / base.slope;
       const outcomes: ShotOutcome[] = SPEED_NODES.map((node) => {
-        const speedMps = Math.min(
-          options.maxSpeedMps,
-          v.speedMps * (1 + node.z * ctx.level.speedError),
-        );
+        const speedMps = v.speedMps * (1 + node.z * ctx.level.speedError);
         const r =
           node.z === 0 && Math.abs(aimRad - base.centreRad) < 1e-9
             ? probe

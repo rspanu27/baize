@@ -98,9 +98,25 @@ export function ballsOn(
 }
 
 /**
+ * The balls the player can still pot in this game: every object ball, except in eight-ball,
+ * where it is the player's own group and the game ball (the opponent's balls are not theirs to
+ * pot). This is what the game-winning ball is worth (`potValue`).
+ */
+export function ballsLeftFor(
+  balls: readonly PlanBall[],
+  cueBallId: string,
+  state: GameState,
+): number {
+  const objects = balls.filter((b) => isObject(b, cueBallId));
+  if (state.game !== "eight-ball") return objects.length;
+  const game = gameBall(state.group);
+  return objects.filter((b) => b.kind === game || inGroup(b.kind, state.group)).length;
+}
+
+/**
  * Points (snooker) or balls (pool) a legal pot of this ball is worth in this state.
- * `objectBallsLeft` = object balls on the table before the shot; the game-winning ball (the 9
- * in nine-ball, the 8 or black in eight-ball) is worth all of them.
+ * `objectBallsLeft` = the balls the player can still pot before the shot (`ballsLeftFor`); the
+ * game-winning ball (the 9 in nine-ball, the 8 or black in eight-ball) is worth all of them.
  */
 export function potValue(kind: BallKind, state: GameState, objectBallsLeft: number): number {
   if (kind === "cue") return 0;
@@ -229,7 +245,7 @@ export function judgeShot(
   const kinds = new Map<string, BallKind>();
   for (const b of balls) kinds.set(b.id, b.kind);
   const kindOf = (id: string): BallKind | undefined => kinds.get(id);
-  const objectBallsLeft = balls.filter((b) => isObject(b, cueBallId)).length;
+  const objectBallsLeft = ballsLeftFor(balls, cueBallId, state);
   const onIds = ballsOn(balls, cueBallId, state).map((b) => b.id);
   const facts = readFacts(result, cueBallId);
 

@@ -2,7 +2,7 @@ import { STANDARD_GRAVITY, sampleAt } from "@baize/physics";
 import { pathClear } from "./geometry";
 import { atan2 } from "./math";
 import { positionAfter, positionValue } from "./position";
-import { ballsOn, judgeShot, potValue } from "./rules";
+import { ballsLeftFor, ballsOn, judgeShot, potValue } from "./rules";
 import { SPEED_NODES } from "./shots";
 import type { PlanContext, Position, ShotOutcome } from "./shots";
 import type { GameState, PlanBall, PlannedShot, ShotParams } from "./types";
@@ -78,7 +78,7 @@ function foulCost(pos: Position): number {
   const opp = opponentState(pos.state, pos.balls, pos.cueBallId);
   let best = 0;
   for (const b of ballsOn(pos.balls, pos.cueBallId, opp)) {
-    best = Math.max(best, potValue(b.kind, opp, pos.balls.length - 1));
+    best = Math.max(best, potValue(b.kind, opp, ballsLeftFor(pos.balls, pos.cueBallId, opp)));
   }
   return best;
 }
@@ -110,6 +110,19 @@ export function safetyShots(
   pos: Position,
   options: SafetyOptions = DEFAULT_SAFETY_OPTIONS,
 ): SafetyShot[] {
+  const it = safetyShotSteps(ctx, pos, options);
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** `safetyShots` one ball at a time: yields before each ball, so a caller can pause between. */
+export function* safetyShotSteps(
+  ctx: PlanContext,
+  pos: Position,
+  options: SafetyOptions = DEFAULT_SAFETY_OPTIONS,
+): Generator<undefined, SafetyShot[], undefined> {
   const cue = pos.balls.find((b) => b.id === pos.cueBallId);
   if (!cue) return [];
   const cost = foulCost(pos);
@@ -129,6 +142,7 @@ export function safetyShots(
   ];
   const out: { s: SafetyShot; i: number }[] = [];
   for (const target of targets) {
+    yield;
     const sumR = cue.radiusM + target.radiusM;
     for (const contact of options.contacts) {
       const aim = aimWithOffset(cue, target, contact * sumR);

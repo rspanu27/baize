@@ -1,6 +1,6 @@
 export type * from "./types";
 export { atan2, erf, normalCdf, wrapAngle } from "./math";
-export { afterShot, ballsOn, defaultGameState, judgeShot, potValue } from "./rules";
+export { afterShot, ballsLeftFor, ballsOn, defaultGameState, judgeShot, potValue } from "./rules";
 export type { FoulReason, ShotJudgement } from "./rules";
 export {
   chanceInWindow,
@@ -19,7 +19,9 @@ export {
   departureError,
   leastSpeedMps,
   makeContext,
+  potCandidateSteps,
   potCandidates,
+  remeasureChance,
   potPairs,
 } from "./shots";
 export type {
@@ -31,7 +33,13 @@ export type {
   ShotOutcome,
 } from "./shots";
 export { GEOMETRIC_WINDOW_SCALE, leaveValue, positionAfter, positionValue } from "./position";
-export { DEFAULT_SAFETY_OPTIONS, opponentState, opponentValueNow, safetyShots } from "./safety";
+export {
+  DEFAULT_SAFETY_OPTIONS,
+  opponentState,
+  opponentValueNow,
+  safetyShotSteps,
+  safetyShots,
+} from "./safety";
 export type { SafetyOptions, SafetyShot } from "./safety";
 export { DEFAULT_SEARCH_OPTIONS, planRoute, planRoutes } from "./search";
 export type { SearchOptions } from "./search";

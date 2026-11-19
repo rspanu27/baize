@@ -1,7 +1,7 @@
 import type { PocketId, SimResult } from "@baize/physics";
 import { chanceInWindow } from "./geometry";
 import { positionAfter, positionValue } from "./position";
-import { judgeShot } from "./rules";
+import { ballsLeftFor, judgeShot, potValue } from "./rules";
 import type { ShotJudgement } from "./rules";
 import { SPEED_NODES, makeContext, windowAround } from "./shots";
 import type { Position } from "./shots";
@@ -42,7 +42,13 @@ export function rateShot(input: PlanInput, shot: ShotParams): ShotRating {
     });
   const result = run(shot.aimAngleRad, shot.speedMps);
   const judgement = judgeShot(result, input.balls, input.cueBallId, input.state);
-  const firstPot = result.events.find((e) => e.type === "pocket" && e.ballId !== input.cueBallId);
+  const left = ballsLeftFor(input.balls, input.cueBallId, input.state);
+  const scores = (id: string): boolean => {
+    const b = input.balls.find((x) => x.id === id);
+    return b !== undefined && id !== input.cueBallId && potValue(b.kind, input.state, left) > 0;
+  };
+  // The ball meant is the first one potted that scores (an opponent's ball is not it).
+  const firstPot = result.events.find((e) => e.type === "pocket" && scores(e.ballId));
   if (judgement.foul || !firstPot || firstPot.type !== "pocket") {
     return { result, judgement, chance: 0, leaves: 0, runnerCalls: ctx.calls };
   }
