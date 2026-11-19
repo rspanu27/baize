@@ -2,12 +2,13 @@ import { sampleAt } from "@baize/physics";
 import { rateShot } from "@baize/planner";
 import type { GameState, PlannedShot, Route, ShotRating } from "@baize/planner";
 import { create } from "zustand";
-import { addBall, continueFromShot, setShot } from "../doc/ops";
+import { continueFromShot, restoreBall, setShot } from "../doc/ops";
 import { resolveDoc } from "../doc/resolve";
 import { sameExceptStyle } from "../doc/types";
 import type { DiagramDoc } from "../doc/types";
 import { simulationFor } from "../sim/useSimulation";
-import { currentTuning } from "../sim/tuning";
+import { currentTuning, useTuningStore } from "../sim/tuning";
+import type { Tuning } from "../sim/tuning";
 import { useEditor } from "../store/store";
 import { cueBallIdOf, planErrorMessage, planInputOf } from "./planInput";
 import type { PlanRequest } from "./planInput";
@@ -17,8 +18,10 @@ import {
   DEFAULT_LEVEL_ID,
   appliedAt,
   gameStateFor,
+  isSnookerColour,
   ownsDoc,
   sameLayout,
+  sameTuning,
   shotPatch,
 } from "./plannerModel";
 import type { AppliedShot } from "./plannerModel";
@@ -27,8 +30,8 @@ import type { AppliedShot } from "./plannerModel";
  * The planner panel's state: its settings, the plan it found and the rating of the user's shot.
  * Transient like the selection: nothing here goes into the document, the link, the undo history
  * or storage. A plan belongs to the document it was planned for (and to the documents its own
- * "Use this shot" and "Next shot" made); the panel drops it as soon as the document is anything
- * else.
+ * "Use this shot" and "Next shot" made) and to the settings and debug-panel tuning it was planned
+ * with; the panel drops it as soon as any of them is anything else.
  */
 
 export interface Plan {
@@ -38,6 +41,9 @@ export interface Plan {
   /** The cue ball the plan plays. */
   cueBallId: string;
   state: GameState;
+  /** The debug-panel tuning the search was asked with. */
+  tuning: Tuning;
+  /** True while progress from the search is taken in; a stopped search changes nothing more. */
   running: boolean;
   /** Shots deep the search has finished. */
   depth: number;
@@ -53,6 +59,7 @@ export interface Rating {
   doc: DiagramDoc;
   levelId: string;
   state: GameState;
+  tuning: Tuning;
   rating?: ShotRating;
   error?: string;
 }
@@ -65,9 +72,12 @@ export interface PlannerState {
   plan: Plan | undefined;
   rating: Rating | undefined;
 
+  /** The settings: a change drops the plan (and stops its search), as it no longer fits them. */
   setChosenState: (state: GameState) => void;
   setLevel: (levelId: string) => void;
   setDepth: (depth: number) => void;
+  /** Drops the plan and the rating if they were made with other debug-panel tuning. */
+  tuningChanged: (tuning: Tuning) => void;
   /** Starts a search for the current document. */
   findRoute: (client: PlannerClient) => Promise<void>;
   /** Stops a running search; the best route so far stays. */
@@ -75,7 +85,10 @@ export interface PlannerState {
   /** Drops the plan and the rating if they belong to another document. */
   docChanged: (doc: DiagramDoc, client: PlannerClient | undefined) => void;
   select: (index: number | undefined) => void;
-  /** Puts a route step or a safety into the document as its shot (one undo step). */
+  /**
+   * Puts a route step or a safety into the document as its shot (one undo step). A running
+   * search is stopped, so the route stays the one the shot came from.
+   */
   useShot: (kind: "route" | "safety", index: number) => void;
   /** Plays the route's current step on (continue from its result) and sets the next one. */
   nextShot: () => void;
@@ -85,6 +98,8 @@ export interface PlannerState {
 }
 
 let runs = 0;
+/** The client of the latest search, so that a settings change or a used shot can stop it. */
+let searching: PlannerClient | undefined;
 
 const INITIAL = {
   chosenState: undefined,
@@ -103,6 +118,8 @@ export function nextStepOf(plan: Plan, doc: DiagramDoc): number | undefined {
   const at = appliedAt(plan, doc);
   if (!at || at.kind !== "route") return undefined;
   const steps = plan.route?.steps ?? [];
+  // Only on from the route the shot came from.
+  if (steps[at.index] !== at.shot) return undefined;
   return at.index + 1 < steps.length ? at.index + 1 : undefined;
 }
 
@@ -121,56 +138,74 @@ export function ratingFor(rating: Rating | undefined, doc: DiagramDoc): Rating |
   return rating && sameExceptStyle(rating.doc, doc) ? rating : undefined;
 }
 
-/** Same position within a micrometre: a ball the editor already has. */
-const SAME_PLACE_M = 1e-6;
-
 /**
- * The document after `step` is played and before `next`: every ball where the editor's own
- * simulation leaves it (`continueFromShot`), then any ball the planner put back that the editor
- * does not (a snooker colour respotted while reds remain), then the next shot.
+ * The document after the current step is played and before `next`: every ball where the
+ * editor's own simulation leaves it (`continueFromShot`), then each snooker colour the planner
+ * put back on the table (respotted while reds remain, or after a foul) at the planner's spot,
+ * with its own id, then the next shot. No other ball is ever added.
  */
 function docForNextStep(doc: DiagramDoc, plan: Plan, next: PlannedShot): DiagramDoc | undefined {
-  const paths = simulationFor(doc, currentTuning()).paths;
+  const paths = simulationFor(doc, plan.tuning).paths;
   if (!paths) return undefined;
   let out = continueFromShot(doc, paths.finals);
-  const kindOf = new Map(plan.planDoc.balls.map((b) => [b.id, b.kind] as const));
-  for (const planned of sampleAt(next.result, 0)) {
-    const kind = kindOf.get(planned.id);
-    if (kind === undefined) continue;
-    const there = out.balls.some(
-      (b) =>
-        b.kind === kind &&
-        Math.abs(b.x - planned.position.x) < SAME_PLACE_M &&
-        Math.abs(b.y - planned.position.y) < SAME_PLACE_M,
-    );
-    if (!there) out = addBall(out, kind, planned.position);
+  if (plan.state.game === "snooker") {
+    for (const planned of sampleAt(next.result, 0)) {
+      if (out.balls.some((b) => b.id === planned.id)) continue;
+      const i = doc.balls.findIndex((b) => b.id === planned.id);
+      const ball = doc.balls[i];
+      if (!ball || !isSnookerColour(ball.kind)) continue;
+      // Back where it was in the list, as the planner keeps the balls' order.
+      const index = doc.balls
+        .slice(0, i)
+        .filter((b) => out.balls.some((o) => o.id === b.id)).length;
+      out = restoreBall(out, { ...ball, x: planned.position.x, y: planned.position.y }, index);
+    }
   }
   return setShot(out, shotPatch(plan.cueBallId, next));
 }
 
 export const usePlanner = create<PlannerState>((set, get) => {
-  /** Applies a change to the plan only while the search `runId` is still the current one. */
+  /** Applies a change to the plan only while the search `runId` is current and still running. */
   const patchRun = (runId: number, patch: Partial<Plan>): void => {
-    set((s) => (s.plan?.runId === runId ? { plan: { ...s.plan, ...patch } } : s));
+    set((s) => (s.plan?.runId === runId && s.plan.running ? { plan: { ...s.plan, ...patch } } : s));
+  };
+
+  /** Drops the plan, stopping its search if it is still running. */
+  const dropPlan = (): void => {
+    if (get().plan?.running) searching?.cancel();
+    set({ plan: undefined });
   };
 
   return {
     ...INITIAL,
 
     setChosenState: (state) => {
+      if (JSON.stringify(state) === JSON.stringify(get().chosenState)) return;
+      dropPlan();
       set({ chosenState: state });
     },
     setLevel: (levelId) => {
+      if (levelId === get().levelId) return;
+      dropPlan();
       set({ levelId });
     },
     setDepth: (depth) => {
+      if (depth === get().maxDepth) return;
+      dropPlan();
       set({ maxDepth: depth });
+    },
+    tuningChanged: (tuning) => {
+      const { plan, rating } = get();
+      if (plan && !sameTuning(plan.tuning, tuning)) dropPlan();
+      if (rating && !sameTuning(rating.tuning, tuning)) set({ rating: undefined });
     },
 
     findRoute: async (client) => {
       const doc = presentDoc();
       const resolved = resolveDoc(doc);
       const runId = ++runs;
+      const tuning = currentTuning();
+      searching = client;
       if (!resolved.ok) {
         client.cancel();
         set({
@@ -179,6 +214,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
             planDoc: doc,
             cueBallId: "",
             state: { game: "straight" },
+            tuning,
             running: false,
             depth: 0,
             error: resolved.problems.join(" "),
@@ -193,13 +229,22 @@ export const usePlanner = create<PlannerState>((set, get) => {
       const cueBallId = cueBallIdOf(scene) ?? "";
       const request: PlanRequest = {
         scene,
-        tuning: currentTuning(),
+        tuning,
         state,
         levelId,
         options: { maxDepth },
       };
       set({
-        plan: { runId, planDoc: doc, cueBallId, state, running: true, depth: 0, applied: [] },
+        plan: {
+          runId,
+          planDoc: doc,
+          cueBallId,
+          state,
+          tuning,
+          running: true,
+          depth: 0,
+          applied: [],
+        },
       });
       if (cueBallId === "") {
         client.cancel();
@@ -229,7 +274,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
     },
 
     stop: (client) => {
-      client?.cancel();
+      (client ?? searching)?.cancel();
       set((s) => (s.plan?.running ? { plan: { ...s.plan, running: false } } : s));
     },
 
@@ -251,6 +296,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
       if (!plan || !canUseShots(plan, presentDoc())) return;
       const step = kind === "route" ? plan.route?.steps[index] : plan.safeties?.[index];
       if (!step) return;
+      // The route is frozen at the one this shot came from.
+      if (plan.running) searching?.cancel();
       useEditor.getState().setShot(shotPatch(plan.cueBallId, step));
       const doc = presentDoc();
       set((s) =>
@@ -258,7 +305,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
           ? {
               plan: {
                 ...s.plan,
-                applied: [...s.plan.applied, { doc, kind, index }],
+                running: false,
+                applied: [...s.plan.applied, { doc, kind, index, shot: step }],
                 ...(kind === "route" ? { selected: index } : {}),
               },
             }
@@ -283,7 +331,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
           ? {
               plan: {
                 ...s.plan,
-                applied: [...s.plan.applied, { doc: made, kind: "route", index: k }],
+                applied: [...s.plan.applied, { doc: made, kind: "route", index: k, shot: next }],
                 selected: k,
               },
             }
@@ -294,35 +342,41 @@ export const usePlanner = create<PlannerState>((set, get) => {
     rateCurrentShot: () => {
       const doc = presentDoc();
       const { chosenState, levelId } = get();
+      const tuning = currentTuning();
       const resolved = resolveDoc(doc);
       if (!resolved.ok) {
-        set({
-          rating: { doc, levelId, state: { game: "straight" }, error: resolved.problems.join(" ") },
-        });
+        const state: GameState = { game: "straight" };
+        set({ rating: { doc, levelId, state, tuning, error: resolved.problems.join(" ") } });
         return;
       }
       const { scene } = resolved;
       const state = gameStateFor(scene, chosenState);
       const shot = scene.shot;
       if (!shot) {
-        set({ rating: { doc, levelId, state, error: "There is no shot to rate." } });
+        set({ rating: { doc, levelId, state, tuning, error: "There is no shot to rate." } });
         return;
       }
       try {
-        const input = planInputOf({ scene, tuning: currentTuning(), state, levelId });
+        const input = planInputOf({ scene, tuning, state, levelId });
         const rating = rateShot(input, {
           aimAngleRad: shot.aimAngleRad,
           speedMps: shot.speedMps,
           tipOffset: shot.tipOffset,
         });
-        set({ rating: { doc, levelId, state, rating } });
+        set({ rating: { doc, levelId, state, tuning, rating } });
       } catch (e) {
-        set({ rating: { doc, levelId, state, error: planErrorMessage(e) } });
+        set({ rating: { doc, levelId, state, tuning, error: planErrorMessage(e) } });
       }
     },
 
     reset: () => {
+      searching = undefined;
       set({ ...INITIAL });
     },
   };
+});
+
+// A plan made with other debug-panel numbers no longer matches what the editor draws.
+useTuningStore.subscribe((s) => {
+  usePlanner.getState().tuningChanged(s.tuning);
 });

@@ -6,13 +6,16 @@ import { planFor, usePlanner } from "../planner/plannerStore";
 import { buildPathModel } from "../sim/pathModel";
 import type { PathPiece, Point } from "../sim/pathModel";
 import { useDoc } from "../store/store";
-import { ballName } from "../view/ballLook";
+import { ballLook, ballName } from "../view/ballLook";
 import { useDrawStyle } from "../view/drawStyleContext";
 import {
+  FAINT_OPACITY,
+  FAINT_WIDTH_M,
   FINAL_OUTLINE_DASH_M,
   FINAL_OUTLINE_WIDTH_M,
   STRONG_WIDTH_M,
   dashArray,
+  pathColour,
   pathData,
 } from "../view/pathArt";
 import { useViewTransform } from "../view/viewContext";
@@ -20,8 +23,8 @@ import { useViewTransform } from "../view/viewContext";
 /**
  * The planner's route drawn on the table: for each step its number at the target ball, a line
  * from that ball to its pocket, the cue ball's path and a numbered outline where the cue ball
- * stops. The selected step stands out. Nothing here takes pointer events, so balls can still be
- * dragged through it.
+ * stops. The selected step stands out, with the paths of the other balls it moves drawn faintly.
+ * Nothing here takes pointer events, so balls can still be dragged through it.
  */
 
 /** Radius of a step number's badge, metres: a little larger than a ball, to read on a phone. */
@@ -39,6 +42,8 @@ export interface RouteStepArt {
   pocket: Point | undefined;
   cuePieces: PathPiece[];
   cueStop: Point;
+  /** The paths of the other balls the step moves (drawn only while the step is selected). */
+  otherPaths: { ballId: string; kind: string; pieces: PathPiece[] }[];
 }
 
 /** The drawable parts of a route; pure, so the layer and its tests share it. */
@@ -59,6 +64,9 @@ export function routeArt(
       pocket: drop && drop.type === "pocket" ? { x: drop.point.x, y: drop.point.y } : undefined,
       cuePieces: model.paths.find((p) => p.ballId === cueBallId)?.pieces ?? [],
       cueStop: { x: step.cueStop.x, y: step.cueStop.y },
+      otherPaths: model.paths
+        .filter((p) => p.ballId !== cueBallId && p.pieces.length > 0)
+        .map((p) => ({ ballId: p.ballId, kind: p.kind, pieces: p.pieces })),
     };
   });
 }
@@ -128,6 +136,21 @@ export function RouteLayerView({ art, selected, cueRadiusM, ballRadiusM }: Route
             opacity={opacityOf(s.index)}
           >
             <title>{`Shot ${String(n)}: ${s.targetName}`}</title>
+            {selected === s.index
+              ? s.otherPaths.map((p) => (
+                  <path
+                    key={p.ballId}
+                    data-route-ball-path={p.ballId}
+                    d={pathData(p.pieces, view)}
+                    fill="none"
+                    stroke={pathColour("other", ballLook(p.kind).colour, colours)}
+                    strokeWidth={FAINT_WIDTH_M}
+                    strokeOpacity={FAINT_OPACITY}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ))
+              : null}
             {target && pocket ? (
               <line
                 data-route-pocket-line=""

@@ -24,13 +24,16 @@ export interface PlanRequest {
 }
 
 /**
- * The cue ball the planner plays: the shot's cue ball if there is a shot (and that ball is on
- * the table), else the first ball of kind "cue". Undefined if there is none.
+ * The cue ball the planner plays: the first ball of kind "cue"; only if there is none, the ball
+ * the shot strikes (if it is on the table). Undefined if there is neither.
  */
 export function cueBallIdOf(scene: Scene): string | undefined {
+  const cue = scene.balls.find((b) => b.kind === "cue")?.id;
+  if (cue !== undefined) return cue;
   const shotBall = scene.shot?.cueBallId;
-  if (shotBall !== undefined && scene.balls.some((b) => b.id === shotBall)) return shotBall;
-  return scene.balls.find((b) => b.kind === "cue")?.id;
+  return shotBall !== undefined && scene.balls.some((b) => b.id === shotBall)
+    ? shotBall
+    : undefined;
 }
 
 /**

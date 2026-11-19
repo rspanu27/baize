@@ -5,6 +5,7 @@ import type { GameType } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 import { sameExceptStyle } from "../doc/types";
 import type { DiagramDoc, DocShot } from "../doc/types";
+import type { Tuning } from "../sim/tuning";
 import { makeViewTransform } from "../view/transform";
 import type { Orientation } from "../view/transform";
 
@@ -109,6 +110,8 @@ export interface AppliedShot {
   kind: "route" | "safety";
   /** Index into the route's steps or the safeties. */
   index: number;
+  /** The planned shot used, so a route that changed since is not followed on from it. */
+  shot: PlannedShot;
 }
 
 /** Which documents a plan belongs to: the one it was planned for and those its shots made. */
@@ -127,4 +130,24 @@ export function ownsDoc(plan: PlanOwnership, doc: DiagramDoc): boolean {
 /** The planned shot this document holds, if the panel put it there. */
 export function appliedAt(plan: PlanOwnership, doc: DiagramDoc): AppliedShot | undefined {
   return plan.applied.find((a) => sameExceptStyle(a.doc, doc));
+}
+
+/** The snooker colours, which the planner respots while reds remain (or after a foul). */
+const SNOOKER_COLOURS: ReadonlySet<string> = new Set([
+  "yellow",
+  "green",
+  "brown",
+  "blue",
+  "pink",
+  "black",
+]);
+
+export function isSnookerColour(kind: string): boolean {
+  return SNOOKER_COLOURS.has(kind);
+}
+
+/** Whether two debug-panel tunings set the same values. */
+export function sameTuning(a: Tuning, b: Tuning): boolean {
+  const keys = Object.keys(a) as (keyof Tuning)[];
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
 }

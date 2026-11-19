@@ -1,16 +1,18 @@
-import { rateShot } from "@baize/planner";
-import type { PlanProgress, PlannedShot } from "@baize/planner";
+import { sampleAt } from "@baize/physics";
+import { PLAYER_LEVELS, rateShot } from "@baize/planner";
+import type { PlanProgress, PlannedShot, Route } from "@baize/planner";
+import { spotsFor } from "@baize/tables";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { placeBall, setStyle } from "../doc/ops";
 import { newDoc, resolveDoc } from "../doc/resolve";
 import type { Scene } from "../doc/resolve";
 import type { DiagramDoc, DocBall } from "../doc/types";
-import { planInputOf } from "../planner/planInput";
+import { cueBallIdOf, planInputOf } from "../planner/planInput";
 import { mainThreadPlanner } from "../planner/plannerClient";
 import type { PlannerClient } from "../planner/plannerClient";
 import { gameStateFor, pocketWords, shotPatch, valueWords } from "../planner/plannerModel";
-import { planFor, ratingFor, usePlanner } from "../planner/plannerStore";
+import { nextStepOf, planFor, ratingFor, usePlanner } from "../planner/plannerStore";
 import { editorRunner } from "../sim/simulator";
 import { NO_TUNING, useTuningStore } from "../sim/tuning";
 import { simulationFor } from "../sim/useSimulation";
@@ -48,16 +50,45 @@ const NINE_BALL_ENDING: readonly Placed[] = [
   ["9", "9", 0.55, 0.75],
 ];
 
-/** The planner on this thread with a small budget, so tests are quick and deterministic. */
-function fastClient(): PlannerClient {
+const SNOOKER_COLOURS = ["yellow", "green", "brown", "blue", "pink", "black"] as const;
+
+/** A snooker position: the cue ball, two reds near the top corners, the colours on their spots. */
+function twoRedsAndTheColours(): DiagramDoc {
+  const base = docWith("snooker-12@1", [["cue", "cue", 0.5, 0.5]]);
+  const table = sceneOf(base).table;
+  const { widthM, lengthM } = table.playingArea;
+  const spots = spotsFor(table);
+  return {
+    ...base,
+    balls: [
+      { id: "cue", kind: "cue", x: widthM * 0.5, y: lengthM * 0.62 },
+      { id: "r1", kind: "red", x: widthM * 0.2, y: lengthM * 0.86 },
+      { id: "r2", kind: "red", x: widthM * 0.8, y: lengthM * 0.86 },
+      ...SNOOKER_COLOURS.map((kind) => {
+        const spot = spots.find((p) => p.name === kind);
+        if (!spot) throw new Error(`no ${kind} spot`);
+        return { id: kind, kind, x: spot.x, y: spot.y };
+      }),
+    ],
+  };
+}
+
+/**
+ * The planner on this thread with a small budget, so tests are quick and deterministic. Tests
+ * that need routes of two or three shots pass a larger one.
+ */
+function fastClient(budget = 1_500): PlannerClient {
   const inner = mainThreadPlanner();
   return {
     plan: (req, onProgress) =>
-      inner.plan({ ...req, options: { ...req.options, budget: 1_500 } }, onProgress),
+      inner.plan({ ...req, options: { ...req.options, budget } }, onProgress),
     cancel: inner.cancel,
     dispose: inner.dispose,
   };
 }
+
+/** Enough runner calls for a route of two or three shots. */
+const MULTI_SHOT_BUDGET = 6_000;
 
 /** A client that answers every plan with the given final progress. */
 function fixedClient(progress: PlanProgress): PlannerClient {
@@ -283,6 +314,29 @@ describe("finding a route", () => {
     expect(markup).toContain("data-route-stop");
     expect(markup).toContain("Shot 1: 8 ball");
   });
+
+  test("the selected step also shows the paths of the other balls it moves, faintly", async () => {
+    await usePlanner.getState().findRoute(fastClient());
+    const plan = usePlanner.getState().plan;
+    if (!plan?.route) throw new Error("no route");
+    const scene = sceneOf(present());
+    const kindOf = new Map(plan.planDoc.balls.map((b) => [b.id, b.kind] as const));
+    const art = routeArt(plan.route.steps, scene, plan.cueBallId, kindOf);
+    expect(art[0]?.otherPaths.map((p) => p.ballId)).toContain("8");
+    const view = makeViewTransform(scene.table.playingArea, "landscape");
+    const draw = (selected: number | undefined) =>
+      renderToStaticMarkup(
+        <ViewTransformContext.Provider value={view}>
+          <svg>
+            <RouteLayerView art={art} selected={selected} cueRadiusM={0.028} ballRadiusM={0.028} />
+          </svg>
+        </ViewTransformContext.Provider>,
+      );
+    const selected = draw(0);
+    expect(selected).toMatch(/<path data-route-ball-path="8" d="M[^"]+"[^>]*stroke-opacity="0.45"/);
+    expect(selected).not.toContain('data-route-ball-path="cue"');
+    expect(draw(undefined)).not.toContain("data-route-ball-path");
+  });
 });
 
 describe("using the route", () => {
@@ -306,8 +360,9 @@ describe("using the route", () => {
   });
 
   test("Next shot continues from the result and sets step 2", async () => {
+    useEditor.getState().openDoc(twoRedsAndTheColours());
     usePlanner.getState().setDepth(2);
-    await usePlanner.getState().findRoute(fastClient());
+    await usePlanner.getState().findRoute(fastClient(MULTI_SHOT_BUDGET));
     const steps = usePlanner.getState().plan?.route?.steps ?? [];
     expect(steps.length).toBe(2);
     const [first, second] = steps;
@@ -320,7 +375,9 @@ describe("using the route", () => {
     usePlanner.getState().nextShot();
     const doc = present();
     expect(useEditor.getState().history.past.length).toBe(pastBefore + 1);
-    expect(doc.balls.map((b) => b.id)).toEqual(["cue", "9"]);
+    // The balls of the planner's position after step 1: the potted red is gone.
+    expect(doc.balls.map((b) => b.id)).toEqual(sampleAt(second.result, 0).map((b) => b.id));
+    expect(doc.balls.filter((b) => b.kind === "red")).toHaveLength(1);
     expect(doc.shot).toEqual(shotPatch("cue", second));
     expect(simulationFor(doc, NO_TUNING).outcome.result).toEqual(second.result);
     expect(planFor(usePlanner.getState().plan, doc)?.selected).toBe(1);
@@ -370,6 +427,151 @@ describe("using the route", () => {
     const before = present();
     await usePlanner.getState().findRoute(fastClient());
     expect(present()).toBe(before);
+  });
+});
+
+describe("a route that changes while it is used", () => {
+  test("Use this shot stops the search, the route stays, and Next shot follows it", async () => {
+    useEditor.getState().openDoc(twoRedsAndTheColours());
+    usePlanner.getState().setDepth(2);
+    await usePlanner.getState().findRoute(fastClient(MULTI_SHOT_BUDGET));
+    const first = usePlanner.getState().plan?.route;
+    if (!first || first.steps.length !== 2) throw new Error("no two-step route");
+    // Another route of the same balls, as a later report of the search might bring.
+    const other: Route = {
+      steps: first.steps.map((s) => ({ ...s })),
+      expectedValue: first.expectedValue / 2,
+    };
+
+    let report: ((p: PlanProgress) => void) | undefined;
+    let rejectRun: ((e: Error) => void) | undefined;
+    let cancelled = 0;
+    const client: PlannerClient = {
+      plan: (_req, onProgress) => {
+        report = onProgress;
+        onProgress({ depth: 1, runnerCalls: 10, done: false, best: first });
+        return new Promise<PlanProgress>((_resolve, reject) => {
+          rejectRun = reject;
+        });
+      },
+      cancel: () => {
+        cancelled++;
+        rejectRun?.(new Error("cancelled"));
+      },
+      dispose: () => undefined,
+    };
+    const running = usePlanner.getState().findRoute(client);
+    expect(usePlanner.getState().plan?.running).toBe(true);
+    expect(usePlanner.getState().plan?.route).toBe(first);
+
+    usePlanner.getState().useShot("route", 0);
+    expect(cancelled).toBe(1);
+    // A report that was already on its way changes nothing.
+    report?.({ depth: 2, runnerCalls: 20, done: false, best: other });
+    await running;
+    const plan = planFor(usePlanner.getState().plan, present());
+    if (!plan) throw new Error("no plan");
+    expect(plan.running).toBe(false);
+    expect(plan.route).toBe(first);
+    expect(nextStepOf(plan, present())).toBe(1);
+    expect(panelMarkup()).toContain("Next shot (2 of 2)");
+
+    // Were the route replaced anyway, Next shot would not play a step of another route.
+    usePlanner.setState({ plan: { ...plan, route: other } });
+    const replaced = usePlanner.getState().plan;
+    if (!replaced) throw new Error("no plan");
+    expect(nextStepOf(replaced, present())).toBeUndefined();
+  });
+});
+
+describe("Next shot on a snooker route", () => {
+  test("respots the potted colour and adds no other ball", async () => {
+    useEditor.getState().openDoc(twoRedsAndTheColours());
+    usePlanner.getState().setDepth(3);
+    await usePlanner.getState().findRoute(fastClient(MULTI_SHOT_BUDGET));
+    const steps = usePlanner.getState().plan?.route?.steps ?? [];
+    expect(steps.length).toBe(3);
+    const [, colourStep, redStep] = steps;
+    if (!colourStep || !redStep) throw new Error("no three steps");
+    const colour = colourStep.targetId;
+    expect(SNOOKER_COLOURS as readonly string[]).toContain(colour);
+
+    usePlanner.getState().useShot("route", 0);
+    usePlanner.getState().nextShot();
+    usePlanner.getState().nextShot();
+    const after = present();
+    const ids = after.balls.map((b) => b.id);
+    const planned = sampleAt(redStep.result, 0);
+    // Exactly the balls of the planner's position: same ids, none twice.
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(planned.map((b) => b.id).sort());
+    expect(after.balls.filter((b) => b.kind === "red")).toHaveLength(1);
+    // The potted colour is back where the planner put it.
+    const back = after.balls.find((b) => b.id === colour);
+    const there = planned.find((b) => b.id === colour);
+    expect(back?.kind).toBe(colour);
+    expect(back?.x).toBeCloseTo(there?.position.x ?? NaN, 9);
+    expect(back?.y).toBeCloseTo(there?.position.y ?? NaN, 9);
+    expect(after.shot).toEqual(shotPatch("cue", redStep));
+    // So the editor plays step 3 exactly as planned.
+    expect(simulationFor(after, NO_TUNING).outcome.result).toEqual(redStep.result);
+  });
+});
+
+describe("what a plan belongs to", () => {
+  test("a change of the debug-panel tuning drops the plan; the same values keep it", async () => {
+    await usePlanner.getState().findRoute(fastClient());
+    expect(usePlanner.getState().plan?.route).toBeDefined();
+    useTuningStore.getState().setTuning({});
+    expect(usePlanner.getState().plan?.route).toBeDefined();
+    useTuningStore.getState().setTuning({ cushionRestitution: 0.5 });
+    expect(usePlanner.getState().plan).toBeUndefined();
+  });
+
+  test("a change of player level, game or depth drops the plan and stops its search", async () => {
+    const otherLevel = PLAYER_LEVELS.find((l) => l.id !== "club")?.id ?? "";
+    await usePlanner.getState().findRoute(fastClient());
+    usePlanner.getState().setLevel("club");
+    expect(usePlanner.getState().plan).toBeDefined();
+    usePlanner.getState().setLevel(otherLevel);
+    expect(usePlanner.getState().plan).toBeUndefined();
+
+    await usePlanner.getState().findRoute(fastClient());
+    usePlanner.getState().setChosenState({ game: "straight" });
+    expect(usePlanner.getState().plan).toBeUndefined();
+
+    await usePlanner.getState().findRoute(fastClient());
+    usePlanner.getState().setDepth(2);
+    expect(usePlanner.getState().plan).toBeUndefined();
+
+    let cancelled = 0;
+    const inner = fastClient();
+    const client: PlannerClient = {
+      ...inner,
+      cancel: () => {
+        cancelled++;
+        inner.cancel();
+      },
+    };
+    const running = usePlanner.getState().findRoute(client);
+    expect(usePlanner.getState().plan?.running).toBe(true);
+    usePlanner.getState().setLevel("club");
+    await running;
+    expect(cancelled).toBe(1);
+    expect(usePlanner.getState().plan).toBeUndefined();
+  });
+
+  test("the planner plays the ball of kind cue, even if the shot strikes another", () => {
+    const doc: DiagramDoc = {
+      ...docWith("pool-9@1", [
+        ["9", "9", 0.5, 0.75],
+        ["cue", "cue", 0.5, 0.25],
+      ]),
+      shot: { cueBallId: "9", aimAngleRad: 0, speedMps: 1, tipOffset: { side: 0, vertical: 0 } },
+    };
+    expect(cueBallIdOf(sceneOf(doc))).toBe("cue");
+    const noCue: DiagramDoc = { ...doc, balls: doc.balls.filter((b) => b.kind !== "cue") };
+    expect(cueBallIdOf(sceneOf(noCue))).toBe("9");
   });
 });
 

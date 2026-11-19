@@ -112,6 +112,28 @@ export function addBall(
   return next.balls.some((b) => b.id === id) ? next : doc;
 }
 
+/**
+ * Puts a ball back with its own id (a snooker colour respotted), at `index` in the ball list.
+ * Returns the document unchanged if the id is taken or the set has no more of that kind.
+ */
+export function restoreBall(
+  doc: DiagramDoc,
+  ball: DocBall,
+  index: number = doc.balls.length,
+): DiagramDoc {
+  if (doc.balls.some((b) => b.id === ball.id)) return doc;
+  if (!Number.isFinite(ball.x) || !Number.isFinite(ball.y)) return doc;
+  const resolved = resolveDoc(doc);
+  if (!resolved.ok) return doc;
+  const allowed = resolved.scene.ballSet.kinds.find((k) => k.kind === ball.kind)?.count ?? 0;
+  const have = doc.balls.filter((b) => b.kind === ball.kind).length;
+  if (have >= allowed) return doc;
+  const balls = [...doc.balls];
+  balls.splice(Math.max(0, Math.min(index, balls.length)), 0, ball);
+  const next = settle({ ...doc, balls }, new Set([ball.id]));
+  return next.balls.some((b) => b.id === ball.id) ? next : doc;
+}
+
 export function removeBall(doc: DiagramDoc, id: string): DiagramDoc {
   if (!doc.balls.some((b) => b.id === id)) return doc;
   return withValidShot({ ...doc, balls: doc.balls.filter((b) => b.id !== id) });

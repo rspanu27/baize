@@ -60,9 +60,14 @@ const SHOT: DocShot = {
 };
 
 describe("the cue ball the planner plays", () => {
-  test("is the shot's cue ball when there is a shot", () => {
+  test("is the ball of kind cue, even when the shot strikes another ball", () => {
     const scene = poolScene(OPEN_LAYOUT, { ...SHOT, cueBallId: "8" });
-    expect(cueBallIdOf(scene)).toBe("8");
+    expect(cueBallIdOf(scene)).toBe("cue");
+  });
+
+  test("is the shot's ball only when no ball is of kind cue", () => {
+    const scene = poolScene([["9", "9", 0.6, 0.8]], { ...SHOT, cueBallId: "9" });
+    expect(cueBallIdOf(scene)).toBe("9");
   });
 
   test("is the first ball of kind cue when there is no shot", () => {
