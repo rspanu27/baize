@@ -1,6 +1,6 @@
 # Baize architecture
 
-Companion to [SPEC.md](SPEC.md). Where this file and the spec disagree, this file wins; every such difference is in the [decisions log](#10-decisions-log).
+Companion to [SPEC.md](SPEC.md). Where this file and the spec disagree, this file wins; every such difference is in the [decisions log](#12-decisions-log).
 
 ## 1. Package layout and module boundaries
 
@@ -8,10 +8,11 @@ Companion to [SPEC.md](SPEC.md). Where this file and the spec disagree, this fil
 packages/tables   No dependencies at all. Types, preset data, pure helpers.
 packages/physics  No runtime dependencies. devDependencies: @baize/tables (tests only), vitest, fast-check.
 packages/vision   Phase 5. Depends on @baize/tables (types). ONNX Runtime Web allowed.
-apps/web          Vite + React + Zustand. Depends on physics and tables (vision later).
+packages/planner  Phase 6. Depends on @baize/physics and @baize/tables only. No runtime dependencies of its own.
+apps/web          Vite + React + Zustand. Depends on physics, tables, vision and planner.
 ```
 
-Dependency direction: `web -> physics`, `web -> tables`, `vision -> tables`. Nothing depends on `web`. `physics` never imports `tables` from `src/`.
+Dependency direction: `web -> physics`, `web -> tables`, `web -> vision`, `web -> planner`, `vision -> tables`, `planner -> physics`, `planner -> tables`. Nothing depends on `web`. `physics` never imports `tables` from `src/`.
 
 ### packages/tables
 
@@ -318,7 +319,69 @@ Phase 5 must be additive. These pieces exist from Phases 1-2:
 
 Phase 5 parameters fixed at kickoff: single photo through the system camera or file picker; automatic table detection needs all four corners, otherwise the user places four corner handles, which may sit outside the image (changed with the user on 2026-11-15: one corner may be out of frame, see the decisions log); position targets scale with table length (median <= 0.6%, 95th percentile <= 1.5%); time <= 3 s with WebGPU, <= 8 s on WASM. Photo collection starts in Phase 5.
 
-## 10. Decisions log
+## 10. Position-play planner (Phase 6)
+
+### Package and boundaries
+
+`packages/planner` is pure TypeScript with the physics package's determinism rules, enforced by the same lint guards: no `Math.random`, no clocks, no `Math` transcendentals (it has its own deterministic `atan2`, and uses `sinCos` and `expNeg` from physics), no iteration over unordered collections where order matters. It has no network, storage or page access. It runs in a Web Worker in the editor.
+
+The planner does not choose the physics. It is handed a **shot runner**, a function `(balls, shot) => SimResult`, built by the caller. The editor builds it with the same code that builds its own simulation (version 2 models, squirt from the cue end mass, nap drift, and any debug-panel numbers), so a route the planner finds is exactly what the editor will draw when the shot is used. Tests build runners directly from `@baize/physics`, with the version 1 or version 2 models.
+
+| Module | Contents |
+|---|---|
+| `types.ts` | `PlanInput`, `PlanBall`, `GameState`, `PlayerLevel`, `PlannedShot`, `Route`, `PlanProgress`, `ShotRunner` |
+| `math.ts` | Deterministic `atan2`, the normal distribution function, small vector helpers |
+| `rules.ts` | Which balls are on, what a pot is worth, the basic fouls judged from a `SimResult`, the next game state, snooker respotting |
+| `geometry.ts` | Pocket aim points, ghost ball, blocked lines, cut angle, the geometric pot-chance estimate |
+| `shots.ts` | Shot candidates for one position, aim refined with the runner |
+| `chance.ts` | Pot window by searching the aim angle; pot chance against a player level |
+| `position.ts` | Where the cue ball stops under speed error; the value of a position |
+| `search.ts` | Beam search over shot sequences with a simulation budget, reporting the best route so far |
+| `safety.ts` | Safety candidates and their score |
+| `rate.ts` | Rating of one given shot (pot chance and the position it leaves) |
+
+### Game state
+
+```ts
+type GameState =
+  | { game: 'snooker'; phase: 'red' | 'colour' | 'colours'; nextColour?: BallKind }
+  | { game: 'nine-ball' }
+  | { game: 'eight-ball'; group: 'solids' | 'stripes' | 'reds' | 'yellows'; }
+  | { game: 'straight' };
+```
+
+The game is inferred from the ball set (snooker sets, 9-ball rack, 8-ball and blackball, the 15-ball rack) and can be changed in the panel; the group for 8-ball and blackball is the user's choice. The state is not stored in the document: it belongs to the planner panel only, so the URL format does not change.
+
+### Shots, chance and position
+
+1. For each ball on and each pocket: the aim point in the pocket mouth, the ghost ball, skipped if a line is blocked or the cut is beyond 80 degrees; pairs ranked by the geometric estimate and only the best few go on to the simulator.
+2. For each kept pair: the aim angle is refined with the runner (secant steps on where the object ball crosses the pocket line) for a stun shot at a middle speed; the pot window is the range of aim angles that still pots, found by bisection on each side.
+3. Variants: a spread of speeds and tip positions, each re-centred in one or two runner calls, sharing the window width of the pair.
+4. Pot chance: the window against the player's aim error, `Phi(hi / sigma) - Phi(lo / sigma)`, times the share of the speed-error offsets at which the ball still drops.
+5. Position: the cue ball's stopping place at the planned speed and at fixed speed offsets; the value of each is the best geometric next-shot estimate, averaged.
+
+Player levels (`PlayerLevel`: aim error in radians at the cue, speed error as a share) are estimates kept in `packages/planner` with a source note and the UNVERIFIED mark; they are not table, ball or cloth values.
+
+### Search
+
+Beam search: each node is a game state with ball positions; it is expanded into its best shots, and the routes are scored by expected value, `sum_k (prod_{j<=k} p_j) v_k`, plus the end-of-route estimate times the chance of getting there. `v_k` is points (snooker), or one per ball potted with the game ball worth all the balls left (pool). Depth grows one shot at a time (1, 2, 3, ...), so a usable route exists early; the run stops at a budget of runner calls, never at a time, so the result does not depend on the machine. Ties are broken by a fixed order (ball id, pocket id, variant index).
+
+### Editor
+
+`apps/web/src/planner/`: the worker (`plannerWorker.ts`, behind a small client like the photo analyser, falling back to the main thread in slices), the panel, and the route layer drawn over the table. "Use this shot" writes `doc.shot` (one undo step); "Play the route" uses `continueFromShot` step by step. Nothing from the planner is stored in the document or the link.
+
+## 11. Video overlays (Phase 7)
+
+Settled now, the rest at the start of the phase (task 7.1):
+
+- The clip is processed in the page and a worker only, never uploaded or stored, with the same three guards as photos: lint bans in the packages, a store test, and the browser test that fails on any upload.
+- Tracking, shot timing and the physics fit live in `packages/vision` (pure, testable). The physics fit needs the simulator, so `vision` may then also depend on `@baize/physics`. Decoding, encoding and the screen live in `apps/web/src/video/`.
+- The camera is still in version 1: the table and camera are found once, on a still frame, with the photo-import code.
+- Tests use synthetic clips: a shot simulated by the physics and drawn through a known camera by the photo renderer, frame by frame, with motion blur and a moving occluder. They give exact ground truth for every frame.
+- Overlays are drawn by the editor's own drawing code (the same SVG layers and themes), rasterised onto the frames.
+- Open at 7.1: WebCodecs or a video element for decoding (and what Firefox and Safari can do), which MP4/WebM muxer (licence checked), and frame rate and size limits.
+
+## 12. Decisions log
 
 | Date | Decision | Why |
 |---|---|---|
@@ -405,4 +468,6 @@ Phase 5 parameters fixed at kickoff: single photo through the system camera or f
 | 2026-11-15 | Stage A review fixes. Hand-placed corners must make a strictly convex figure turning the table's way (a folded figure or three corners in a line had passed). A check that the recovered camera sees the four corners again was tried and not kept: measured corners never fit a camera exactly (up to 82 px at the far end on the user's photo), so it refused good corners. The ball finder now uses the detail it chose (it had worked one block coarser). The photo's pixels are handed over to the worker, not copied, and the review keeps only the photo's size; a re-run that fails says so and blocks "Use these balls". The upload guard allows, after the photo is chosen, only short same-origin GETs of scripts, and fails on any sizeable WebSocket message. `require` and `importScripts` are banned in `packages/vision`. | The camera recovered from four corners is made a true camera (perpendicular axes, one focal length), so when the corners are not exactly those of a table of the given size seen by such a camera, balls far from the camera are placed with some error; placing balls through the homography instead is an open question for stage B. `CUSHION_TOP_DEPTH_M` is one constant for all tables: a custom table cannot set its own cushion depth, which falls short of the rule that every feature works for any custom table; acceptable while it only steers automatic table finding, which the person can always correct by hand. Recorded here as a known limit. |
 | 2026-11-15 | A camera recovered from four corners carries the corners' own perspective at their height (`Camera.plane`). `projectPoint` and `imageToTableAtHeight` map points at that height through it, so the corners are honoured exactly, and use the camera only to carry a point along its line of sight to or from another height. Cameras known exactly (the synthetic test cameras) have no such perspective and behave as before. | Four measured corners never fit a pinhole camera with its optical centre in the middle of the photo exactly (82 px off at the far end on the user's photo); before, balls were placed through that compromise camera. With an optical centre 12 % off the middle, balls now land within 4 mm, against several times that through the camera alone (test). Measured: synthetic 95th-percentile error 0.83 % to 0.38 % of the table length; real pictures with nothing given, balls found 88.3 % to 92.6 %, false balls 0.93 to 0.37 per picture, median error 0.42 % to 0.22 %, tables found right 78.4 % to 81.4 %. The truth for real pictures moved too: it now honours the fit of the 18 sights exactly at rail height, which is more faithful to the labels. The doubled far balls on the user's photo with automatic corners remain (three now, from two); they come from a far ball and its shadow forming one stretched patch, not from the camera. |
 | 2026-11-15 | In naming, the black ball is compared with how bright it is seen (0.17 of the brightest ball pixels) rather than its paint (0.08), and its tint counts at 0.3 of other balls'. Lighter shade of the cloth's colour now fills a dark-ball disc (the ring around it still judged strictly). | A naming confusion table on the 231 real pictures showed half of the 8 balls named the blue 2 or purple 4 (a black ball mirrors a blue cloth), with the black slot then given to another solid. Named to the group: 83.9 % to 90.4 % with corners given. Most balls still missed were blue balls and the black on blue cloth, alone in the open: found 91.1 % to 92.5 %. Both constants were measured on the set they are judged on. |
+| 2026-11-19 | Two phases added with the project owner: Phase 6, the position-play planner, and Phase 7, broadcast-style video overlays (SPEC sections 10 and 11). The planner comes first. | Both were always part of the vision (SPEC section 1) but were outside the build plan. The planner builds directly on the finished physics and needs no new data; the overlays need the project's own clips and benefit from the learned detector of stage B. |
+| 2026-11-19 | The planner is a separate package, `packages/planner`, with the physics package's determinism rules; it is handed a shot runner instead of choosing the physics; its search is limited by a count of simulations, not by time; game state lives in the planner panel, not in the document. | A runner keeps the planner's shots identical to what the editor draws, with the debug-panel numbers included, and keeps the planner testable with either model version. A simulation budget makes the route the same on every machine. Keeping game state out of the document leaves the URL format unchanged. |
 

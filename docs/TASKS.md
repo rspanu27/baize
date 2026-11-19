@@ -140,3 +140,43 @@ Fixed at kickoff: one photo through the system camera or file picker; automatic 
 | 5.13 | Run the model in the browser with ONNX Runtime Web (WebGPU, falling back to WASM), loaded only when a photo is imported, served as a static file | I | 5.12 | Targets met or the shortfall stated; time limits met; the app works with the model missing | todo |
 | 5.14 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
 
+
+## Phase 6: position-play planner
+
+SPEC section 10, ARCHITECTURE section 10. The planner is handed a shot runner built with the editor's own physics, so its routes are what the editor draws. Benchmark layouts are kept as fixtures in `packages/planner/test`.
+
+| ID | Task | Owner | Deps | Done-check | Status |
+|---|---|---|---|---|---|
+| 6.1 | `packages/planner` scaffold: types, `ShotRunner` contract, deterministic `atan2` and normal distribution function, lint guards as for physics; the editor's runner built by the same code as its simulator | L | 3.5 | Typecheck and lint pass; a lint test proves the bans; the editor's runner gives the same result as the editor's simulator for a fixed shot | todo |
+| 6.2 | Rules: balls on per game, values, basic fouls judged from a `SimResult`, next state, snooker respotting | I | 6.1 | Unit tests per game and per foul; respotting covers an occupied own spot and all spots taken | todo |
+| 6.3 | Geometry: pocket aim points, ghost ball, blocked lines, cut angle, geometric pot-chance estimate | L | 6.1 | Unit tests with known angles; on any table; the estimate falls with cut angle and distance | todo |
+| 6.4 | Shots: aim refined with the runner, pot window by bisection, variants of speed and tip, pot chance against a player level; player levels with a source note | L | 6.2, 6.3 | A refined straight and a refined cut shot pot in the runner; window shrinks with distance; calibration test against replays with fixed noise offsets within 10 points | todo |
+| 6.5 | Position: cue-ball stopping place under speed error and its value | L | 6.4 | Unit tests; a shot that leaves an easy next ball scores above one that leaves none | todo |
+| 6.6 | Search: beam search with a runner-call budget, routes by expected value, best route so far reported; benchmark fixtures | L | 6.5 | Every step of every benchmark route pots its ball without a foul when replayed; same input gives the same route; runs on the smallest and largest presets and a random custom table | todo |
+| 6.7 | Safety suggestions when no pot is reasonable | L | 6.6 | On safety fixtures the suggestion is legal and leaves the opponent a lower best pot chance than the best pot attempt does | todo |
+| 6.8 | Planner worker in the editor, with progress and a main-thread fallback | I | 6.6 | Worker message tests; the page is never blocked more than 100 ms while planning (measured) | todo |
+| 6.9 | Planner panel and route layer: game, ball on, group and level; find a route; numbered steps with chances; use this shot; play the route | U | 6.8 | Interaction tests; e2e: a 9-ball ending gives a route and "Use this shot" pots the first ball | todo |
+| 6.10 | Rating of the user's own shot (pot chance, position left) | U | 6.5, 6.9 | Component test; the rating matches `rate` for a fixed shot | todo |
+| 6.11 | Speed in the browser: first route and 3-shot route timed on a production build | I | 6.9 | Measured within 1 s and 5 s on a desktop, or the shortfall stated | todo |
+| 6.12 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
+
+Parallel: 6.2 alongside 6.3; 6.10 alongside 6.11.
+
+## Phase 7: video overlays
+
+SPEC section 11, ARCHITECTURE section 11. Tasks after 7.1 are refined when 7.1 is done.
+
+| ID | Task | Owner | Deps | Done-check | Status |
+|---|---|---|---|---|---|
+| 7.1 | Decisions: decoding (WebCodecs or video element) per browser, muxer and its licence, size and frame-rate limits; ARCHITECTURE section 11 completed | L | 5.9 | Decisions recorded; a frame read and a frame encoded in Chromium in a spike | todo |
+| 7.2 | Synthetic clips: a simulated shot drawn through a known camera frame by frame, with motion blur and a moving occluder, with exact truth | I | 7.1 | Rendered ball centres match the simulation to a pixel on every frame | todo |
+| 7.3 | Clip capture protocol and the labelled clips | You, L | 7.1 | At least 30 clips with ball positions on sampled frames and shot start and end marked | todo |
+| 7.4 | Video loading in the browser and first-frame calibration with the photo-import tools | U | 7.1 | Browser test: a clip loads, the table is found or corners placed, nothing is uploaded | todo |
+| 7.5 | Ball tracking: still-table model, moving balls from the difference, a motion model, blur streaks, hidden balls | L | 7.2 | On synthetic clips every moving ball within two radii in 95 % of visible frames | todo |
+| 7.6 | Shot start and end | L | 7.5 | Synthetic clips: start within 2 frames, end within 0.5 s | todo |
+| 7.7 | Physics fit: the strike that makes the simulated shot match the tracks | L | 7.5 | Synthetic clips: speed within 5 %, direction within 0.5 degrees | todo |
+| 7.8 | Overlay renderer: trails, ghost ball, minimap, speed, slow motion around the contact, themes | U | 7.7 | Component tests per overlay; frames with overlays match the editor's drawing | todo |
+| 7.9 | Video export in the browser: encoder and muxer, MediaRecorder fallback | I | 7.1, 7.8 | A playable file is produced in Chromium; other browsers get a plain message or the fallback | todo |
+| 7.10 | Video screen: load, calibrate, pick shot and overlays, preview, save; "Open in editor" | U | 7.4, 7.8, 7.9 | Interaction tests; e2e on a synthetic clip | todo |
+| 7.11 | Measurement on the labelled clips | L | 7.3, 7.7 | Metrics table in PROGRESS; shortfalls stated | todo |
+| 7.12 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |

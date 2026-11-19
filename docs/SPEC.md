@@ -10,12 +10,12 @@ Coaches, content creators and players place balls on a correctly scaled table, s
 
 A headline feature after the editor: **snap a photo of your own table (even a mediocre phone photo) and get the real ball positions in the editor**, ready to analyse.
 
-Longer term, the same table model and simulator power:
-1. **Photo → diagram** (Phase 5, specified below).
-2. **Video overlays**: broadcast-style ball trails and minimaps on creators' own footage.
-3. **Position-play planner**: search over shots using the simulator to suggest a clearance route (snooker break-building, 9-ball runouts).
+The same table model and simulator then power three larger features:
+1. **Photo → diagram** (Phase 5, section 9).
+2. **Position-play planner** (Phase 6, section 10): given a layout, search over shots with the simulator to suggest a route (which ball, which pocket, how to hit it and where the cue ball should land for the next one) for snooker break-building and pool runouts, and suggest safety shots when no pot is on.
+3. **Broadcast-style video overlays** (Phase 7, section 11): a creator loads a clip of a shot; the balls are tracked and TV-style graphics are drawn over it (cue-ball trails, ghost-ball marker, slow motion with traced paths, a synced top-down minimap, the shot's speed), and the result is saved as a new video. "Hawk-Eye for billiards content."
 
-Video overlays and the planner are out of scope for this spec. Photo import is in scope as Phase 5, and Phases 1–2 must be designed so it plugs in without rewrites.
+All three are part of Baize. Each builds on the earlier phases without rewriting them.
 
 ### Why this exists
 - Existing ball-tracking apps (DrillRoom, Railbird) target players logging stats. They are closed, paid and iOS-only.
@@ -58,6 +58,10 @@ Video overlays and the planner are out of scope for this spec. Photo import is i
 ### In scope (Phase 5)
 - **Photo → diagram import** (section 9).
 
+### In scope (Phases 6–7)
+- **Position-play planner** (section 10).
+- **Video overlays** (section 11).
+
 ### Stretch (only if the above is solid)
 - Animated GIF/WebM export.
 - Drill library: classic drills as built-in templates.
@@ -65,11 +69,10 @@ Video overlays and the planner are out of scope for this spec. Photo import is i
 - Multi-shot sequences.
 
 ### Explicitly out of scope for now
-- Video analysis and overlays.
-- Planner / AI shot suggestions.
+- Analysis of whole matches (many shots, scoring, players), live streams, and footage whose camera pans or zooms during the shot (Phase 7 starts with a camera that stays still).
 - Accounts, cloud storage, any backend.
 - Native mobile apps. The site must work well on mobile browsers (including camera capture for Phase 5) and be installable as a PWA later.
-- Game rules enforcement (fouls, scoring).
+- Game rules enforcement in the editor (fouls, scoring). The planner knows only what it needs: which ball is on, what a pot is worth, and the basic fouls (section 10).
 
 ## 4. Tech stack
 
@@ -78,6 +81,8 @@ Video overlays and the planner are out of scope for this spec. Photo import is i
   - `packages/physics` — the simulator. Zero runtime dependencies. Pure functions where possible.
   - `packages/tables` — table, ball, pocket and cloth presets as typed data, plus validation for custom tables.
   - `packages/vision` — added in Phase 5. Photo → layout pipeline. Allowed dependencies: ONNX Runtime Web, and OpenCV.js only if a specific step needs it.
+  - `packages/planner` — added in Phase 6. Shot search. Depends only on `physics` and `tables`; no runtime dependencies of its own.
+  - Video (Phase 7) — tracking reuses `packages/vision`; decoding and encoding use the browser's own media APIs, with a small MP4/WebM muxer as the only allowed new dependency.
   - `apps/web` — the editor.
 - **Web app:** Vite + React. Diagram rendered as **SVG** (crisp at any size, trivial vector export, easy hit-testing). Use `<canvas>` only if animation performance demands it.
 - **State:** a small store (Zustand or similar). The diagram document is a plain serialisable object with a schema version.
@@ -253,6 +258,14 @@ Each phase ends with: all checks green in CI, a short demo note in `docs/PROGRES
 
 ### Phase 5 — Photo → diagram (section 9)
 
+### Phase 6 — Position-play planner (section 10)
+- Ball-on rules and the basic fouls per game; a shot generator; pot-chance and position scoring; a search over shot sequences; safety suggestions; a planner panel in the editor; a rating of the user's own shot.
+**Done when:** on the benchmark layouts (section 10), on the smallest and largest presets and a random custom table, the planner returns a route in which every step, replayed in the editor's physics, pots the intended ball without a foul; the same input always gives the same route; and the speed targets hold in the browser.
+
+### Phase 7 — Video overlays (section 11)
+- Video loading in the browser, table calibration, ball tracking, shot start and end detection, fitting the physics to the tracks, overlay rendering, video export, and "open this shot in the editor".
+**Done when:** on the project's labelled clips the tracking and timing targets in section 11 are met (or the shortfall is stated), a clip with overlays is saved as a video file in at least Chromium, and the clip never leaves the device.
+
 ## 9. Photo → diagram import (Phase 5)
 
 ### User flow
@@ -285,7 +298,65 @@ Each phase ends with: all checks green in CI, a short demo note in `docs/PROGRES
 - `confidence` on balls in `DiagramDoc` and the UI treatment for low-confidence balls.
 - A clean "load a layout into the editor" API, so photo import is just another layout source.
 
-## 10. Open decisions (resolve in the kickoff interview)
+## 10. Position-play planner (Phase 6)
+
+### User flow
+1. With a layout on the table (placed, loaded from a drill or imported from a photo), the user opens the planner and checks what it inferred: the game, which ball is on (for 8-ball and blackball, which group is theirs), and the player level.
+2. "Find a route" searches in the background. The best route so far is shown while it searches and improves as it goes; the page stays responsive.
+3. The route is drawn on the table: numbered shots, each with its target ball and pocket, the cue ball's path and where it lands, the pot chance and (snooker) the points. Tapping a step shows its simulated paths.
+4. "Use this shot" puts the first shot into the diagram as the shot (one undo step); "Play the route" plays it shot after shot using continue-from-result.
+5. When no pot is reasonable, the planner suggests safety shots instead, ranked by how little they leave the opponent.
+6. For any shot the user sets up by hand, a rating shows its pot chance and how good the position it leaves is, so "my shot vs the planner's" can be compared.
+
+### Games
+- **Snooker break-building:** a red, then a colour, until the reds are gone, then the colours in order. A potted colour is respotted while reds remain (on its own spot, or the rules' alternatives when that is taken). Value: points.
+- **9-ball runout:** the lowest-numbered ball first. Value: chance of clearing the table (the 9 ends it).
+- **8-ball and blackball:** the player's group, then the 8 or the black. Value: chance of clearing.
+- **Straight pool (15 balls):** any ball. Value: balls potted.
+- Rules beyond these (other fouls, ball in hand, push-outs, free balls, nominating) are not modelled. Basic fouls: hitting a ball that is not on first, missing every ball, potting the cue ball, potting a ball that is not on (snooker), and (pool) no ball reaching a cushion or a pocket after the contact.
+
+### How it works
+1. **Shots** are generated for each ball that is on and each pocket it can reach: the ghost-ball line, refined with the simulator so throw and squirt are allowed for; then a spread of speeds and tip positions (stun, follow, draw, side). Blocked lines and impossible cuts are skipped. Later: kicks off a cushion, combinations, plants.
+2. **Pot chance** comes from the simulator: the range of aim angles that still pots the ball (found by searching the angle) against the player level's aim error, together with speed error. Player levels hold an aim error and a speed error; their values are estimates, marked as such.
+3. **Position** is scored by how good the next shot from where the cue ball stops is, under speed error (the cue ball's stopping place is simulated at a little more and a little less speed).
+4. **Search** is a beam search over shot sequences, a few shots deep, scored by expected value (pot chance times value, compounded along the route), with a fast geometric estimate of the next shot at the end of the route.
+5. **Safety:** shots that hit a ball on legally, scored by the best pot chance the opponent would have afterwards, and by not leaving a foul.
+6. **Determinism:** no randomness, no clocks. Noise is modelled with fixed offsets, and the search is limited by the number of simulations, not by time, so the same input always gives the same route.
+
+### Targets
+- First route shown within 1 s and a 3-shot route within 5 s on a desktop browser; the page is never blocked for more than 100 ms.
+- Benchmark layouts (kept as fixtures): open-table 9-ball endings with 3 and 5 balls, snooker endings on the colours, a few reds with colours on their spots. On each, a route is found whose every step pots the intended ball in the editor's physics.
+- Pot chances are honest: against a check that replays the shot with many fixed noise offsets, predicted and observed pot rates agree within 10 percentage points on average across bins.
+- Works on any valid table and cloth.
+
+## 11. Video overlays (Phase 7)
+
+### User flow
+1. The creator picks a table (preset or custom) and loads a clip from the phone or computer. Guidance: camera still (a tripod or propped phone), the whole table in frame, high frame rate if the phone has it.
+2. The clip is processed **entirely in the browser**. It is never uploaded or stored.
+3. The table is calibrated on the first frame with the photo-import tools (automatic, or four corners dragged by hand).
+4. The balls are tracked through the clip; each shot is found (from the cue ball starting to move until every ball is still).
+5. The creator picks the shot and the overlays: cue-ball trail, all trails, ghost-ball marker at the contact, slow motion around the contact with the paths traced, a top-down minimap in sync, the shot's speed, and labels. The styles follow the editor's themes.
+6. The result is saved as a video. "Open in editor" turns the shot into a diagram: the layout before the shot and the shot the physics fits best.
+
+### Pipeline
+1. **Decoding:** the browser's own video decoding (WebCodecs where available, otherwise stepping a video element frame by frame).
+2. **Calibration:** table and camera from the first still frame, as in photo import, held fixed for the clip.
+3. **Detection and tracking:** balls are found on still frames with the photo-import ball finder (or the learned detector once it exists); moving balls are followed frame to frame with a motion model, using the difference from the still table, and allowing for motion blur (a ball becomes a streak) and for the player hiding a ball.
+4. **Shot timing:** a shot starts when the cue ball leaves rest and ends when every ball is still.
+5. **Physics fit:** the cue ball's speed, direction and spin are found so that the simulated shot matches the tracks. This gives clean paths, fills in where a ball was hidden, and gives the speed readout.
+6. **Rendering and export:** overlays are drawn with the editor's own drawing code onto the frames, and encoded with the browser's encoder (WebCodecs, or MediaRecorder as a fallback), muxed into MP4 or WebM.
+
+### Targets (on the project's labelled clips)
+- A moving ball's tracked centre within two ball radii of the truth in at least 95 % of frames in which it can be seen.
+- Shot start within 2 frames; shot end within 0.5 s.
+- Shot speed within 10 % of the truth (from frame-by-frame measurement of a high-frame-rate clip).
+- Processing at most twice the clip's length on a desktop browser for 1080p at 30 fps.
+
+### Evaluation
+- A labelled set of at least 30 clips from the project owner's own table (fixed camera, several cloths and lights, normal and slow-motion frame rates), with ball positions marked on sampled frames and shot start and end frames. Clips stay outside the repository like the photos.
+
+## 12. Open decisions (resolve in the kickoff interview)
 1. Final project name and license.
 2. Exact dimensions for the 10 ft and 6 ft snooker and 8 ft and 7 ft pool presets.
 3. Which custom-table fields are required vs advanced (e.g. cushion height, jaw shape).
@@ -298,7 +369,7 @@ Each phase ends with: all checks green in CI, a short demo note in `docs/PROGRES
 10. Photo import: whether to start collecting and labelling photos early (during Phases 2–4), since data is the slowest part of Phase 5.
 11. Photo import: what to do when not all four corners are visible (refuse with guidance, or attempt with fewer constraints).
 
-## 11. References
+## 13. References
 - Leckie, W. & Greenspan, M. (2006). *An Event-Based Pool Physics Simulator.*
 - pooltool (Evan Kiefl), open-source Python billiards simulator, as design and numerical reference.
 - Dr. Dave Alciatore's technical proofs on billiards physics (throw, squirt, 30° and 90° rules, cloth friction measurements).
