@@ -330,12 +330,12 @@ The planner does not choose the physics. It is handed a **shot runner**, a funct
 | Module | Contents |
 |---|---|
 | `types.ts` | `PlanInput`, `PlanBall`, `GameState`, `PlayerLevel`, `PlannedShot`, `Route`, `PlanProgress`, `ShotRunner` |
-| `math.ts` | Deterministic `atan2`, the normal distribution function, small vector helpers |
-| `rules.ts` | Which balls are on, what a pot is worth, the basic fouls judged from a `SimResult`, the next game state, snooker respotting |
-| `geometry.ts` | Pocket aim points, ghost ball, blocked lines, cut angle, the geometric pot-chance estimate |
-| `shots.ts` | Shot candidates for one position, aim refined with the runner |
-| `chance.ts` | Pot window by searching the aim angle; pot chance against a player level |
-| `position.ts` | Where the cue ball stops under speed error; the value of a position |
+| `math.ts` | Deterministic `atan2`, the normal distribution function, angle wrapping |
+| `rules.ts` | Which balls are on, what a pot is worth (`ballsLeftFor`), the basic fouls judged from a `SimResult`, the next game state, snooker respotting |
+| `geometry.ts` | Pocket aim points, ghost ball, blocked lines, cut angle, the geometric aim window, chance in a window |
+| `levels.ts` | Player levels |
+| `shots.ts` | Shot candidates for one position: aim refined with the runner, the pot window by searching the aim angle, variants, pot chance; `remeasureChance` |
+| `position.ts` | The value of the position a pot leaves |
 | `search.ts` | Beam search over shot sequences with a simulation budget, reporting the best route so far |
 | `safety.ts` | Safety candidates and their score |
 | `rate.ts` | Rating of one given shot (pot chance and the position it leaves) |
@@ -344,7 +344,7 @@ The planner does not choose the physics. It is handed a **shot runner**, a funct
 
 ```ts
 type GameState =
-  | { game: 'snooker'; phase: 'red' | 'colour' | 'colours'; nextColour?: BallKind }
+  | { game: 'snooker'; phase: 'red' | 'colour' | 'colours' }   // 'colours': the lowest colour left is on
   | { game: 'nine-ball' }
   | { game: 'eight-ball'; group: 'solids' | 'stripes' | 'reds' | 'yellows'; }
   | { game: 'straight' };
@@ -356,19 +356,19 @@ The game is inferred from the ball set (snooker sets, 9-ball rack, 8-ball and bl
 
 1. For each ball on and each pocket: the aim point in the pocket mouth, the ghost ball, skipped if a line is blocked or the cut is beyond 80 degrees; pairs ranked by the geometric estimate and only the best few go on to the simulator.
 2. For each kept pair: the aim angle is refined with the runner (secant steps on where the object ball crosses the pocket line) for a stun shot at a middle speed; the pot window is the range of aim angles that still pots, found by bisection on each side.
-3. Variants: a spread of speeds and tip positions, each re-centred in one or two runner calls, sharing the window width of the pair.
-4. Pot chance: the window against the player's aim error, `Phi(hi / sigma) - Phi(lo / sigma)`, times the share of the speed-error offsets at which the ball still drops.
+3. Variants: a spread of speeds and tip positions, each re-centred in one or two runner calls, sharing the window width of the pair for ranking. The shots the search keeps have their window measured again with their own speed and tip, around their own aim (`remeasureChance`).
+4. Pot chance: the window against the player's aim error, `Phi(hi / sigma) - Phi(lo / sigma)`, times the share of the speed-error offsets at which the ball still drops. The planned speed is capped so that the faster speed offset stays within the speed limit.
 5. Position: the cue ball's stopping place at the planned speed and at fixed speed offsets; the value of each is the best geometric next-shot estimate, averaged.
 
 Player levels (`PlayerLevel`: aim error in radians at the cue, speed error as a share) are estimates kept in `packages/planner` with a source note and the UNVERIFIED mark; they are not table, ball or cloth values.
 
 ### Search
 
-Beam search: each node is a game state with ball positions; it is expanded into its best shots, and the routes are scored by expected value, `sum_k (prod_{j<=k} p_j) v_k`, plus the end-of-route estimate times the chance of getting there. `v_k` is points (snooker), or one per ball potted with the game ball worth all the balls left (pool). Depth grows one shot at a time (1, 2, 3, ...), so a usable route exists early; the run stops at a budget of runner calls, never at a time, so the result does not depend on the machine. Ties are broken by a fixed order (ball id, pocket id, variant index).
+Beam search: each node is a game state with ball positions; it is expanded into its best shots, and the routes are scored by expected value, `sum_k (prod_{j<=k} p_j) v_k`, plus the end-of-route estimate times the chance of getting there. `v_k` is points (snooker), or one per ball potted with the game ball worth all the balls the player can still pot (pool; in eight-ball the own group and the game ball, not the opponent's balls). Depth grows one shot at a time (1, 2, 3, ...), so a usable route exists early; the run stops at a budget of runner calls, never at a time, so the result does not depend on the machine. Ties are broken by a fixed order (ball id, pocket id, variant index). The search reports between pots (each pot is up to about 120 runner calls), so a caller can pause between reports.
 
 ### Editor
 
-`apps/web/src/planner/`: the worker (`plannerWorker.ts`, behind a small client like the photo analyser, falling back to the main thread in slices), the panel, and the route layer drawn over the table. "Use this shot" writes `doc.shot` (one undo step); "Play the route" uses `continueFromShot` step by step. Nothing from the planner is stored in the document or the link.
+`apps/web/src/planner/`: the worker (`plannerWorker.ts`, behind a small client like the photo analyser, falling back to the main thread, paused between reports), the panel, and the route layer drawn over the table. "Use this shot" writes `doc.shot` (one undo step) and stops a running search, so the route stays the one the shot came from; "Next shot" continues from the editor's own result, puts back any colour the planner respotted, and sets the next step's shot (one undo step). A route belongs to the document, the debug-panel numbers, the game and the level it was planned for; any other change drops it. Nothing from the planner is stored in the document or the link. The 100 ms responsiveness target holds with the worker; on the fallback the page is blocked for up to one pot's simulations at a time.
 
 ## 11. Video overlays (Phase 7)
 
@@ -470,4 +470,5 @@ Settled now, the rest at the start of the phase (task 7.1):
 | 2026-11-15 | In naming, the black ball is compared with how bright it is seen (0.17 of the brightest ball pixels) rather than its paint (0.08), and its tint counts at 0.3 of other balls'. Lighter shade of the cloth's colour now fills a dark-ball disc (the ring around it still judged strictly). | A naming confusion table on the 231 real pictures showed half of the 8 balls named the blue 2 or purple 4 (a black ball mirrors a blue cloth), with the black slot then given to another solid. Named to the group: 83.9 % to 90.4 % with corners given. Most balls still missed were blue balls and the black on blue cloth, alone in the open: found 91.1 % to 92.5 %. Both constants were measured on the set they are judged on. |
 | 2026-11-19 | Two phases added with the project owner: Phase 6, the position-play planner, and Phase 7, broadcast-style video overlays (SPEC sections 10 and 11). The planner comes first. | Both were always part of the vision (SPEC section 1) but were outside the build plan. The planner builds directly on the finished physics and needs no new data; the overlays need the project's own clips and benefit from the learned detector of stage B. |
 | 2026-11-19 | The planner is a separate package, `packages/planner`, with the physics package's determinism rules; it is handed a shot runner instead of choosing the physics; its search is limited by a count of simulations, not by time; game state lives in the planner panel, not in the document. | A runner keeps the planner's shots identical to what the editor draws, with the debug-panel numbers included, and keeps the planner testable with either model version. A simulation budget makes the route the same on every machine. Keeping game state out of the document leaves the URL format unchanged. |
-
+| 2026-11-19 | "Play the route" is a "Next shot" button that steps through the route one shot per press (continue from the editor's result, then the next shot), each one undo step, rather than playing all the shots in one animation. | Each step stays something the user can look at, play back and undo; the playback controls stay as they are. SPEC section 10 updated. |
+| 2026-11-19 | Phase 6 review fixes. The window search capped its first step at the edge limit, so the easiest pots (a hanger with the cue ball close) got a window, and a chance, of 0; it now starts at most half-way and reports the limit when the pot still drops there. Variants share their pot's window for ranking, which overstated some chances (a route showed 34 % for a shot rated 27 %); the shots the search keeps are measured again with their own window, and a test holds the route's chances within 3 points of a rating of the same shots. In eight-ball the game ball counted the opponent's balls; it now counts the own group and itself. The planned speed is capped so the faster speed node is not clamped back to it. Cuts beyond 80 degrees are skipped, as this section says. | Found by the independent review (task 6.12). Two rules tests encoded the old eight-ball count and were corrected. |

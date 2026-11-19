@@ -304,7 +304,7 @@ Each phase ends with: all checks green in CI, a short demo note in `docs/PROGRES
 1. With a layout on the table (placed, loaded from a drill or imported from a photo), the user opens the planner and checks what it inferred: the game, which ball is on (for 8-ball and blackball, which group is theirs), and the player level.
 2. "Find a route" searches in the background. The best route so far is shown while it searches and improves as it goes; the page stays responsive.
 3. The route is drawn on the table: numbered shots, each with its target ball and pocket, the cue ball's path and where it lands, the pot chance and (snooker) the points. Tapping a step shows its simulated paths.
-4. "Use this shot" puts the first shot into the diagram as the shot (one undo step); "Play the route" plays it shot after shot using continue-from-result.
+4. "Use this shot" puts the first shot into the diagram as the shot (one undo step); "Next shot" then moves the balls to where that shot leaves them (continue-from-result) and puts in the next shot of the route, one step per press, so each can be played back in turn.
 5. When no pot is reasonable, the planner suggests safety shots instead, ranked by how little they leave the opponent.
 6. For any shot the user sets up by hand, a rating shows its pot chance and how good the position it leaves is, so "my shot vs the planner's" can be compared.
 
