@@ -2,6 +2,7 @@ import { usePlayKey, usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
 import { PhotoImport } from "../photo/PhotoImport";
 import { useDoc, useEditor } from "../store/store";
+import { EDITOR_ORIENTATION } from "../view/transform";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
 import "./Editor.css";
@@ -13,6 +14,8 @@ import { MeasurePanel } from "./MeasurePanel";
 import { PathsLayer } from "./PathsLayer";
 import { PlayBar } from "./PlayBar";
 import { PlaybackLayer } from "./PlaybackLayer";
+import { PlannerPanel } from "./PlannerPanel";
+import { RouteLayer } from "./RouteLayer";
 import { SetupPanel } from "./SetupPanel";
 import { SharePanel } from "./SharePanel";
 import { ShotPanel } from "./ShotPanel";
@@ -53,7 +56,7 @@ export function Editor() {
           }}
         />
         {scene ? (
-          <TableView scene={scene} orientation="landscape" style={doc.style}>
+          <TableView scene={scene} orientation={EDITOR_ORIENTATION} style={doc.style}>
             {result && playingAt !== undefined ? (
               <>
                 <PathsLayer paths={paths} />
@@ -65,6 +68,7 @@ export function Editor() {
                 <AimSurface scene={scene} />
                 <PathsLayer paths={paths} />
                 <BallsLayer scene={scene} />
+                <RouteLayer scene={scene} />
                 <AimLayer scene={scene} />
                 <MeasureLayer scene={scene} interactive />
               </>
@@ -87,6 +91,7 @@ export function Editor() {
         ) : null}
         <SetupPanel />
         <ShotPanel />
+        <PlannerPanel />
         <MeasurePanel />
         <LookPanel />
         <SharePanel />

@@ -155,8 +155,8 @@ SPEC section 10, ARCHITECTURE section 10. The planner is handed a shot runner bu
 | 6.6 | Search: beam search with a runner-call budget, routes by expected value, best route so far reported; benchmark fixtures | L | 6.5 | Every step of every benchmark route pots its ball without a foul when replayed; same input gives the same route; runs on the smallest and largest presets and a random custom table | done: five benchmark layouts; a 3-shot route takes 1,400 to 5,000 simulator calls, 0.3 to 1.7 s in Node |
 | 6.7 | Safety suggestions when no pot is reasonable | L | 6.6 | On safety fixtures the best suggestion is legal and leaves the opponent less than the position as it stands would; offered when the route's first pot is below 40 % | done |
 | 6.8 | Planner worker in the editor, with progress and a main-thread fallback | I | 6.6 | Worker message tests; the page is never blocked more than 100 ms while planning (measured) | done |
-| 6.9 | Planner panel and route layer: game, ball on, group and level; find a route; numbered steps with chances; use this shot; play the route | U | 6.8 | Interaction tests; e2e: a 9-ball ending gives a route and "Use this shot" pots the first ball | todo |
-| 6.10 | Rating of the user's own shot (pot chance, position left) | U | 6.5, 6.9 | Component test; the rating matches `rate` for a fixed shot | doing: `rateShot` in the planner done; the editor part comes with 6.9 |
+| 6.9 | Planner panel and route layer: game, ball on, group and level; find a route; numbered steps with chances; use this shot; play the route | U | 6.8 | Interaction tests; e2e: a 9-ball ending gives a route and "Use this shot" pots the first ball | done |
+| 6.10 | Rating of the user's own shot (pot chance, position left) | U | 6.5, 6.9 | Component test; the rating matches `rate` for a fixed shot | done |
 | 6.11 | Speed in the browser: first route and 3-shot route timed on a production build | I | 6.9 | Measured within 1 s and 5 s on a desktop, or the shortfall stated | todo |
 | 6.12 | Independent review, fixes, PROGRESS entry | R, L | all | Findings closed; `pnpm check` passes | todo |
 

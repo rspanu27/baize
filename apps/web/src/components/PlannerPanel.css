@@ -1,0 +1,100 @@
+.planner-panel h2 {
+  margin: 1rem 0 0.4rem;
+}
+
+.planner-panel h3 {
+  margin: 0.75rem 0 0.3rem;
+  font-size: 0.95rem;
+}
+
+.planner-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.planner-field > label {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.editor-panels .planner-field select {
+  min-height: 2.5rem;
+}
+
+.planner-fixed {
+  margin: 0;
+  align-self: end;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.planner-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.editor-panels .planner-row button,
+.editor-panels .planner-group > button {
+  min-height: 2.5rem;
+}
+
+.planner-status {
+  margin: 0.3rem 0;
+  min-height: 1.2em;
+  color: #c9d6ce;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-error {
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
+  border-left: 3px solid #e0b040;
+  background: #2f2a17;
+  color: #f1dfa6;
+  font-size: 0.85rem;
+}
+
+.planner-route,
+.planner-safeties {
+  margin: 0.3rem 0;
+  padding-left: 1.6rem;
+}
+
+.planner-route li,
+.planner-safeties li {
+  margin: 0.3rem 0;
+}
+
+.editor-panels .planner-route button {
+  width: 100%;
+  min-height: 2.5rem;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-panels .planner-route button[aria-pressed="true"] {
+  background: #2f7d5b;
+  border-color: #3f9a72;
+}
+
+.planner-safeties li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.editor-panels .planner-safeties button {
+  min-height: 2.5rem;
+}
+
+.planner-rating {
+  margin: 0.5rem 0;
+}

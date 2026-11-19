@@ -12,6 +12,9 @@
 
 export type Orientation = "landscape" | "portrait";
 
+/** How the editor draws the table: always lengthways, the head end on the left. */
+export const EDITOR_ORIENTATION: Orientation = "landscape";
+
 export interface Point {
   x: number;
   y: number;
