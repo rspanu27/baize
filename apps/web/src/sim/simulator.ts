@@ -7,6 +7,7 @@ import {
 } from "@baize/physics";
 import type { PreparedTable, SimResult } from "@baize/physics";
 import { BALL_BALL_FRICTION, cueEndMassKg, napDrift } from "@baize/tables";
+import type { ShotRunner } from "@baize/planner";
 import type { TableSpec } from "@baize/tables";
 import type { Scene } from "../doc/resolve";
 import { NO_TUNING } from "./tuning";
@@ -89,35 +90,55 @@ const PROBLEMS: Partial<Record<SimInputError["code"], string>> = {
   "invalid-table": "This table cannot be built from its measurements.",
 };
 
-export const mainThreadSimulator: Simulator = {
-  run(scene: Scene, tuning: Tuning = NO_TUNING): SimOutcome {
-    const shot = scene.shot;
-    if (!shot || scene.balls.length === 0) return { ms: 0 };
-    const cue = scene.balls.find((b) => b.id === shot.cueBallId);
-    // Nap: the document stores a strength; the physics takes the push it stands for.
-    const drift = napDrift(scene.cloth, tuning.napFullRatio);
+/**
+ * The editor's physics for a scene as a shot runner: the version 2 models, squirt from the cue
+ * end mass, nap drift and any debug-panel numbers. The editor's own simulation and the planner
+ * both use it, so a planned shot is exactly what the editor draws when it is used.
+ */
+export function editorRunner(scene: Scene, tuning: Tuning = NO_TUNING): ShotRunner {
+  const table = tunedTable(preparedTable(scene.table), tuning);
+  // Nap: the document stores a strength; the physics takes the push it stands for.
+  const drift = napDrift(scene.cloth, tuning.napFullRatio);
+  const cloth = drift ? { ...scene.cloth, napDrift: drift } : scene.cloth;
+  const ballRestitution = tuning.ballRestitution ?? scene.ballSet.restitution;
+  const models = tunedModels(tuning);
+  return (balls, shot) => {
+    const cue = balls.find((b) => b.id === shot.ballId);
     const endMassKg = cue
       ? tuning.cueEndMassRatio === undefined
         ? cueEndMassKg(cue.massKg)
         : cue.massKg / tuning.cueEndMassRatio
       : undefined;
+    return simulate({
+      table,
+      cloth,
+      balls,
+      ballRestitution,
+      shot: {
+        ballId: shot.ballId,
+        aimAngleRad: shot.aimAngleRad,
+        speedMps: shot.speedMps,
+        tipOffset: shot.tipOffset,
+        // Squirt: the cue ball leaves a little off the aim line when hit with side.
+        ...(endMassKg === undefined ? {} : { cueEndMassKg: endMassKg }),
+      },
+      // Throw: friction between the balls.
+      models,
+    });
+  };
+}
+
+export const mainThreadSimulator: Simulator = {
+  run(scene: Scene, tuning: Tuning = NO_TUNING): SimOutcome {
+    const shot = scene.shot;
+    if (!shot || scene.balls.length === 0) return { ms: 0 };
     const started = performance.now();
     try {
-      const result = simulate({
-        table: tunedTable(preparedTable(scene.table), tuning),
-        cloth: drift ? { ...scene.cloth, napDrift: drift } : scene.cloth,
-        balls: scene.balls,
-        ballRestitution: tuning.ballRestitution ?? scene.ballSet.restitution,
-        shot: {
-          ballId: shot.cueBallId,
-          aimAngleRad: shot.aimAngleRad,
-          speedMps: shot.speedMps,
-          tipOffset: shot.tipOffset,
-          // Squirt: the cue ball leaves a little off the aim line when hit with side.
-          ...(endMassKg === undefined ? {} : { cueEndMassKg: endMassKg }),
-        },
-        // Throw: friction between the balls.
-        models: tunedModels(tuning),
+      const result = editorRunner(scene, tuning)(scene.balls, {
+        ballId: shot.cueBallId,
+        aimAngleRad: shot.aimAngleRad,
+        speedMps: shot.speedMps,
+        tipOffset: shot.tipOffset,
       });
       return { result, ms: performance.now() - started };
     } catch (e) {

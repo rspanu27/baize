@@ -35,6 +35,9 @@ importers:
       '@baize/physics':
         specifier: workspace:*
         version: link:../../packages/physics
+      '@baize/planner':
+        specifier: workspace:*
+        version: link:../../packages/planner
       '@baize/tables':
         specifier: workspace:*
         version: link:../../packages/tables
@@ -81,6 +84,31 @@ importers:
       '@baize/tables':
         specifier: workspace:*
         version: link:../tables
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+      eslint:
+        specifier: 10.14.0
+        version: 10.14.0
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2))
+
+  packages/planner:
+    dependencies:
+      '@baize/physics':
+        specifier: workspace:*
+        version: link:../physics
+      '@baize/tables':
+        specifier: workspace:*
+        version: link:../tables
+    devDependencies:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2

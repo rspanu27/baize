@@ -110,6 +110,48 @@ export default tseslint.config(
     },
   },
   {
+    // The planner follows the physics' determinism rules (the same route on every machine),
+    // but may import the physics and tables packages.
+    files: ["packages/planner/src/**/*.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        ...physicsProperties.map((p) => ({
+          ...p,
+          message: p.message.replace("in physics", "in the planner"),
+        })),
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...physicsSyntax
+          .filter((s) => !/Import|Export|require/.test(s.selector))
+          .map((s) => ({ ...s, message: s.message.replace("in physics", "in the planner") })),
+        {
+          selector:
+            "ImportDeclaration[source.value=/^[^.]/][source.value!='@baize/physics'][source.value!='@baize/tables'], ExportAllDeclaration[source.value=/^[^.]/], ExportNamedDeclaration[source.value=/^[^.]/]",
+          message: "The planner may import only relative paths, @baize/physics and @baize/tables.",
+        },
+        {
+          selector: "ImportExpression:not([source.value=/^[.]/])",
+          message: "The planner may only dynamically import relative paths.",
+        },
+        {
+          selector: "CallExpression[callee.name='require']",
+          message: "The planner must not use require(); use ES imports only.",
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...["fetch", "XMLHttpRequest", "WebSocket", "localStorage", "indexedDB", "document"].map(
+          (name) => ({
+            name,
+            message: `${name} is banned in the planner: it works only on the positions it is given.`,
+          }),
+        ),
+      ],
+    },
+  },
+  {
     files: ["packages/tables/src/**/*.ts"],
     rules: {
       "no-restricted-syntax": [

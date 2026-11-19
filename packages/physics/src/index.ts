@@ -18,3 +18,7 @@ export { noseImpulseCushion } from "./models/cushion";
 export { mathavanCushion } from "./models/cushionMathavan";
 export { frictionalBallBall } from "./models/ballBallFriction";
 export type { BallBallFriction } from "./models/ballBallFriction";
+// Deterministic maths, for packages that must give the same answer on every machine too.
+export { sinCos } from "./math/trig";
+export type { SinCos } from "./math/trig";
+export { expNeg } from "./math/exp";

@@ -6,6 +6,7 @@ import { newDoc, resolveDoc } from "../doc/resolve";
 import type { DiagramDoc } from "../doc/types";
 import { withNap } from "../setup/cloth";
 import { pointOnPiece } from "./pathModel";
+import { editorRunner } from "./simulator";
 import { simulateDoc, simulationFor } from "./useSimulation";
 
 function must<T>(value: T | undefined, what: string): T {
@@ -214,5 +215,26 @@ describe("nap", () => {
     expect(light.y).toBeGreaterThan(none.y + 0.002);
     expect(heavy.y).toBeGreaterThan(light.y + 0.002);
     expect(heavy.y).toBeLessThan(none.y + 0.03);
+  });
+});
+
+describe("editorRunner", () => {
+  test("gives the editor's own result for the document's shot, side and nap included", () => {
+    const base = setShot(twoBalls({ x: W / 2 + 0.05, y: L / 2 }), {
+      aimAngleRad: Math.PI / 2 + 0.01,
+      speedMps: 2.5,
+      tipOffset: { side: 0.3, vertical: -0.2 },
+    });
+    const doc = { ...base, cloth: withNap(base.cloth, "heavy") };
+    const s = simulateDoc(doc);
+    const scene = must(s.scene, "scene");
+    const shot = must(scene.shot, "shot");
+    const result = editorRunner(scene)(scene.balls, {
+      ballId: shot.cueBallId,
+      aimAngleRad: shot.aimAngleRad,
+      speedMps: shot.speedMps,
+      tipOffset: shot.tipOffset,
+    });
+    expect(result).toEqual(s.outcome.result);
   });
 });

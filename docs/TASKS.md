@@ -147,7 +147,7 @@ SPEC section 10, ARCHITECTURE section 10. The planner is handed a shot runner bu
 
 | ID | Task | Owner | Deps | Done-check | Status |
 |---|---|---|---|---|---|
-| 6.1 | `packages/planner` scaffold: types, `ShotRunner` contract, deterministic `atan2` and normal distribution function, lint guards as for physics; the editor's runner built by the same code as its simulator | L | 3.5 | Typecheck and lint pass; a lint test proves the bans; the editor's runner gives the same result as the editor's simulator for a fixed shot | todo |
+| 6.1 | `packages/planner` scaffold: types, `ShotRunner` contract, deterministic `atan2` and normal distribution function, lint guards as for physics; the editor's runner built by the same code as its simulator | L | 3.5 | Typecheck and lint pass; a lint test proves the bans; the editor's runner gives the same result as the editor's simulator for a fixed shot | done |
 | 6.2 | Rules: balls on per game, values, basic fouls judged from a `SimResult`, next state, snooker respotting | I | 6.1 | Unit tests per game and per foul; respotting covers an occupied own spot and all spots taken | todo |
 | 6.3 | Geometry: pocket aim points, ghost ball, blocked lines, cut angle, geometric pot-chance estimate | L | 6.1 | Unit tests with known angles; on any table; the estimate falls with cut angle and distance | todo |
 | 6.4 | Shots: aim refined with the runner, pot window by bisection, variants of speed and tip, pot chance against a player level; player levels with a source note | L | 6.2, 6.3 | A refined straight and a refined cut shot pot in the runner; window shrinks with distance; calibration test against replays with fixed noise offsets within 10 points | todo |
