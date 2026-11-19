@@ -1,5 +1,5 @@
 import type { BallInput, PocketId, ShotInput, SimResult, Vec2 } from "@baize/physics";
-import type { BallKind, TableSpec } from "@baize/tables";
+import type { BallKind, ClothSpec, TableSpec } from "@baize/tables";
 
 /** A ball as the planner sees it: the physics input plus what it is. */
 export interface PlanBall extends BallInput {
@@ -58,6 +58,8 @@ export interface PlanInput {
   readonly cueBallId: string;
   readonly state: GameState;
   readonly level: PlayerLevel;
+  /** The cloth's friction, used only to choose sensible speeds to try. */
+  readonly cloth: Pick<ClothSpec, "slidingFriction" | "rollingResistance">;
   readonly run: ShotRunner;
 }
 
