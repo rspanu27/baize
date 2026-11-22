@@ -101,6 +101,25 @@ export default tseslint.config(
     files: ["apps/web/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat.recommended],
     languageOptions: { globals: globals.browser },
+    rules: {
+      // Mediabunny (MPL-2.0) is reached only through src/video/media.ts, so it can be replaced.
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "mediabunny",
+              message:
+                "Use apps/web/src/video/media.ts; it is the only module that may import Mediabunny.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["apps/web/src/video/media.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
   {
     files: ["packages/physics/src/**/*.ts"],

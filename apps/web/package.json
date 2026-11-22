@@ -16,6 +16,7 @@
     "@baize/planner": "workspace:*",
     "@baize/tables": "workspace:*",
     "@baize/vision": "workspace:*",
+    "mediabunny": "1.65.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zustand": "5.1.0"

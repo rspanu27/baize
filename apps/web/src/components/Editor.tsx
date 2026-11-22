@@ -102,6 +102,12 @@ export function Editor() {
           where the cue points; with side the ball leaves slightly off it, and the ghost ball shows
           where it really arrives.
         </p>
+        <p className="editor-note">
+          Baize is open source (MIT).{" "}
+          <a href="./third-party-notices.txt" target="_blank" rel="noreferrer">
+            Third-party notices
+          </a>
+        </p>
       </aside>
     </div>
   );
