@@ -146,6 +146,9 @@ importers:
         specifier: workspace:*
         version: link:../tables
     devDependencies:
+      '@baize/physics':
+        specifier: workspace:*
+        version: link:../physics
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2

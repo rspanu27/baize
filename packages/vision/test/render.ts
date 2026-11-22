@@ -68,7 +68,7 @@ const CUSHION_DARKEN = 0.75;
 /** Cloth gets up to this much darker towards the corners of the table. */
 const CLOTH_FALLOFF = 0.1;
 /** Multiplier for cloth in the shadow of a ball. */
-const SHADOW = 0.6;
+export const SHADOW = 0.6;
 /** Share of the floor colour kept for a ray that goes above the horizon. */
 const SKY_DARKEN = 0.5;
 /** Ambient share of the ball shading; the rest is Lambert. */
@@ -101,7 +101,7 @@ interface BallPrep {
 }
 
 /** Approximately normal, mean 0, standard deviation 1: four uniforms summed (variance 1/3). */
-function gaussian(rand: () => number): number {
+export function gaussian(rand: () => number): number {
   return (rand() + rand() + rand() + rand() - 2) * Math.sqrt(3);
 }
 
@@ -112,8 +112,59 @@ export function renderPhoto(
   layout: Layout,
   look: SceneLook,
 ): RenderedPhoto {
-  const width = Math.round(2 * camera.centre.u);
-  const height = Math.round(2 * camera.centre.v);
+  const W = table.playingArea.widthM;
+  const L = table.playingArea.lengthM;
+  return {
+    image: renderPixels(camera, table, ballSet, layout, look),
+    corners: cornersSeen(camera, W, L),
+    balls: layout.balls.map((b) => {
+      const radiusM = ballSizeOf(ballSet, b.kind).diameterM / 2;
+      const p = { x: b.x, y: b.y, z: radiusM };
+      const centre = projectPoint(camera, p);
+      if (!centre) throw new Error(`ball ${b.kind} is behind the camera`);
+      return {
+        kind: b.kind,
+        x: b.x,
+        y: b.y,
+        radiusM,
+        centre,
+        radiusPx: apparentRadiusPx(camera, p, radiusM) ?? 0,
+      };
+    }),
+  };
+}
+
+/** A rectangle of pixels: columns i0 to i1 - 1, rows j0 to j1 - 1. */
+export interface PixelBox {
+  i0: number;
+  j0: number;
+  i1: number;
+  j1: number;
+}
+
+/**
+ * The picture of `renderPhoto`, or only the pixels inside `box` of it, as an image the size of
+ * the box whose pixel (0, 0) is pixel (i0, j0) of the photo. Every pixel is computed exactly as
+ * in the whole photo, so the clip renderer can redraw only where balls move. Noise is the one
+ * exception: it is drawn in the scan order of the box, so it matches the whole photo only when
+ * the box is the whole photo.
+ */
+export function renderPixels(
+  camera: Camera,
+  table: TableSpec,
+  ballSet: BallSetSpec,
+  layout: Layout,
+  look: SceneLook,
+  box?: PixelBox,
+): PhotoImage {
+  const { i0, j0, i1, j1 } = box ?? {
+    i0: 0,
+    j0: 0,
+    i1: Math.round(2 * camera.centre.u),
+    j1: Math.round(2 * camera.centre.v),
+  };
+  const width = i1 - i0;
+  const height = j1 - j0;
   const W = table.playingArea.widthM;
   const L = table.playingArea.lengthM;
   const data = new Uint8ClampedArray(4 * width * height);
@@ -173,8 +224,8 @@ export function renderPhoto(
   };
 
   const pixel: Rgb = [0, 0, 0];
-  for (let j = 0; j < height; j++) {
-    for (let i = 0; i < width; i++) {
+  for (let j = j0; j < j1; j++) {
+    for (let i = i0; i < i1; i++) {
       const xc = (i + 0.5 - camera.centre.u) / f;
       const yc = (j + 0.5 - camera.centre.v) / f;
       // Ray direction in table coordinates: R^T (xc, yc, 1), normalised.
@@ -260,7 +311,7 @@ export function renderPhoto(
         for (let k = 0; k < 3; k++) pixel[k] = (colour[k] as number) * factor;
       }
 
-      const o = 4 * (j * width + i);
+      const o = 4 * ((j - j0) * width + (i - i0));
       for (let k = 0; k < 3; k++) {
         let v = (pixel[k] as number) * brightness;
         if (noise > 0) v += noise * gaussian(rand);
@@ -270,22 +321,5 @@ export function renderPhoto(
     }
   }
 
-  return {
-    image: { widthPx: width, heightPx: height, data },
-    corners: cornersSeen(camera, W, L),
-    balls: layout.balls.map((b) => {
-      const radiusM = ballSizeOf(ballSet, b.kind).diameterM / 2;
-      const p = { x: b.x, y: b.y, z: radiusM };
-      const centre = projectPoint(camera, p);
-      if (!centre) throw new Error(`ball ${b.kind} is behind the camera`);
-      return {
-        kind: b.kind,
-        x: b.x,
-        y: b.y,
-        radiusM,
-        centre,
-        radiusPx: apparentRadiusPx(camera, p, radiusM) ?? 0,
-      };
-    }),
-  };
+  return { widthPx: width, heightPx: height, data };
 }
