@@ -132,7 +132,9 @@ test("a clip is opened, its table found on the first frame and confirmed, and no
   await review.getByRole("button", { name: "Use this table" }).click();
   const screen = page.getByRole("dialog", { name: "Overlay a clip" });
   await expect(screen).toBeVisible();
-  await expect(screen.getByRole("status")).toHaveText("Calibrated: next, tracking (coming soon).");
+  await expect(screen.getByRole("status")).toHaveText(
+    "The table is placed. Next, track the balls through the clip.",
+  );
   await expect(screen.locator("polygon").first()).toBeVisible();
 
   // Adjusting goes back to the handles, where the table was left.

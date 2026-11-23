@@ -29,8 +29,9 @@ import type { Prepared } from "./prepare";
  */
 
 /**
- * Cloth colour of the "table" theme, which in the editor is the document's own cloth. A clip
- * has no document, so the first cloth preset (green) stands in.
+ * Cloth colour of the "table" theme when the analysis carries none: in the editor it is the
+ * document's own cloth (`ClipAnalysis.clothColour`); without one, the first cloth preset (green)
+ * stands in.
  */
 export const MINIMAP_CLOTH = (CLOTH_COLOURS[0] as { hex: string }).hex;
 
@@ -38,8 +39,8 @@ export const MINIMAP_CLOTH = (CLOTH_COLOURS[0] as { hex: string }).hex;
 const ARC_STEPS = 48;
 const OUTLINE_PX = 1;
 
-export function clothColour(colours: ThemeColours): string {
-  return colours.cloth ?? MINIMAP_CLOTH;
+export function clothColour(colours: ThemeColours, analysisCloth?: string): string {
+  return colours.cloth ?? analysisCloth ?? MINIMAP_CLOTH;
 }
 
 /** Draws the table (sheet, rails, cloth, pockets, cushions, markings) in frame pixels. */
@@ -53,7 +54,7 @@ export function drawMinimapTable(
   const t = layout.transform;
   const s = layout.scale;
   const geometry = buildTableGeometry(analysis.table);
-  const cloth = clothColour(colours);
+  const cloth = clothColour(colours, analysis.clothColour);
   const cushion = colours.cushion ?? shade(cloth, -CUSHION_DARKEN);
   const cushionEdge = colours.cushionEdge ?? shade(cloth, -CUSHION_DARKEN - 0.15);
 

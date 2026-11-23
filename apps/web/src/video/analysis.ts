@@ -251,6 +251,7 @@ export async function analyseClip(
       durationS: clip.info.durationS,
       frames: done.output.frames,
       shots: done.output.shots,
+      clothColour: scene.cloth.colour,
     };
   } finally {
     backend.close();

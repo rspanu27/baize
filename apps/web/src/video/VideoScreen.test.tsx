@@ -12,7 +12,15 @@ import {
 } from "../photo/reviewModel";
 import { CLIP_ACCEPT, CLIP_GUIDANCE, ClipImport, ClipImportView } from "./ClipImport";
 import type { ClipInfo } from "./media";
-import { CALIBRATED_NEXT, CLIP_STAYS, ClipDetails, VideoScreenView } from "./VideoScreenView";
+import { MESSAGE_STOPPED } from "./resultsModel";
+import {
+  CALIBRATED_READY,
+  CLIP_STAYS,
+  ClipDetails,
+  TRACKING_HELP,
+  VideoScreenView,
+  trackingText,
+} from "./VideoScreenView";
 import type { VideoScreenViewProps } from "./VideoScreenView";
 
 const table = getTablePreset("pool-9@1");
@@ -169,8 +177,8 @@ describe("calibrating: the photo review's corner handles on the first frame", ()
 });
 
 describe("calibrated", () => {
-  test("the frame with the table outlined, the clip's details, what comes next", () => {
-    const markup = screen({
+  const calibrated = (over: Partial<Extract<VideoScreenViewProps, { phase: "calibrated" }>> = {}) =>
+    screen({
       phase: "calibrated",
       fileName: "break.mp4",
       info: INFO,
@@ -178,16 +186,77 @@ describe("calibrated", () => {
       frameSize: { widthPx: 1920, heightPx: 1080 },
       corners,
       onAdjust: vi.fn(),
+      onTrack: vi.fn(),
       onClose: vi.fn(),
+      ...over,
     });
+
+  test("the frame with the table outlined, the clip's details, and Track the balls", () => {
+    const markup = calibrated();
     expect(markup).toContain('data-phase="calibrated"');
-    expect(markup).toContain(`<p role="status">${CALIBRATED_NEXT}</p>`);
+    expect(markup).toContain(`<p role="status">${CALIBRATED_READY}</p>`);
     expect(markup).toContain('src="blob:frame"');
     expect(markup).toContain('viewBox="0 0 1920 1080"');
     expect(markup).toContain('points="300,950 1620,950 1400,200 520,200"');
     expect(markup).toContain("<dt>Codec</dt><dd>H.264</dd>");
     expect(markup).toContain("<dt>Length</dt><dd>8.4 s</dd>");
+    expect(markup).toContain(
+      '<button type="button" class="photo-primary">Track the balls</button>',
+    );
     expect(markup).toContain(">Adjust the corners</button>");
     expect(markup).toContain(">Close</button>");
+    expect(markup).not.toContain('role="alert"');
+  });
+
+  test("after an error: the message in plain words, and tracking can be tried again", () => {
+    const markup = calibrated({
+      notice: { kind: "error", text: "The clip analysis could not run in the background." },
+    });
+    expect(markup).toMatch(
+      /role="alert"[^>]*>The clip analysis could not run in the background\.</,
+    );
+    expect(markup).toContain(">Track the balls again</button>");
+    expect(markup).toContain(`<p role="status">${CALIBRATED_READY}</p>`);
+  });
+
+  test("after Stop: back to the placed table, saying so", () => {
+    const markup = calibrated({ notice: { kind: "stopped", text: MESSAGE_STOPPED } });
+    expect(markup).toContain(`<p role="status">${MESSAGE_STOPPED}</p>`);
+    expect(markup).not.toContain('role="alert"');
+    expect(markup).toContain(">Track the balls again</button>");
+  });
+});
+
+describe("tracking", () => {
+  const tracking = (stage: "tracking" | "fitting", share: number) =>
+    screen({
+      phase: "tracking",
+      fileName: "break.mp4",
+      info: INFO,
+      frameUrl: "blob:frame",
+      frameSize: { widthPx: 1920, heightPx: 1080 },
+      corners,
+      progress: { stage, share },
+      onStop: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+  test("the stage and share as words and a progress bar, with Stop", () => {
+    const markup = tracking("tracking", 0.423);
+    expect(markup).toContain('data-phase="tracking"');
+    expect(markup).toContain('<p role="status">Tracking the balls: 42 %</p>');
+    expect(markup).toContain('<progress max="1" value="0.423" aria-label="Tracking progress"');
+    expect(markup).toContain(TRACKING_HELP);
+    expect(markup).toContain(">Stop</button>");
+    expect(markup).toContain(">Close</button>");
+    expect(markup).not.toContain("Track the balls</button>");
+    expect(markup).not.toContain("Adjust the corners");
+    expect(tracking("fitting", 1)).toContain('<p role="status">Fitting the shots: 100 %</p>');
+  });
+
+  test("shares out of range are shown within 0 and 100 %", () => {
+    expect(trackingText({ stage: "tracking", share: -1 })).toBe("Tracking the balls: 0 %");
+    expect(trackingText({ stage: "fitting", share: 3 })).toBe("Fitting the shots: 100 %");
+    expect(trackingText({ stage: "fitting", share: Number.NaN })).toBe("Fitting the shots: 0 %");
   });
 });

@@ -1,6 +1,9 @@
-import type { BallSetSpec, TableSpec } from "@baize/tables";
 import { Component, Suspense, lazy, useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
+import type { Scene } from "../doc/resolve";
+import type { DiagramTheme } from "../doc/types";
+import { useTuning } from "../sim/tuning";
+import type { Tuning } from "../sim/tuning";
 import { simulationFor } from "../sim/useSimulation";
 import { useDoc } from "../store/store";
 import { VideoScreenView } from "./VideoScreenView";
@@ -93,10 +96,12 @@ class ScreenBoundary extends Component<
   }
 }
 
+/** What the screen works with, fixed when the clip is chosen. */
 interface Opened {
   file: File;
-  table: TableSpec;
-  ballSet: BallSetSpec;
+  scene: Scene;
+  tuning: Tuning;
+  theme: DiagramTheme;
 }
 
 /**
@@ -106,7 +111,8 @@ interface Opened {
  */
 export function ClipImport() {
   const doc = useDoc();
-  const scene = simulationFor(doc).scene;
+  const tuning = useTuning();
+  const scene = simulationFor(doc, tuning).scene;
   const [focusToken, setFocusToken] = useState(0);
   const [opened, setOpened] = useState<Opened | undefined>(undefined);
 
@@ -121,7 +127,9 @@ export function ClipImport() {
         disabled={!scene}
         focusToken={focusToken}
         onChoose={(file) => {
-          if (scene) setOpened({ file, table: scene.table, ballSet: scene.ballSet });
+          if (scene) {
+            setOpened({ file, scene, tuning, theme: doc.style?.theme ?? "table" });
+          }
         }}
       />
       {opened ? (
@@ -133,8 +141,9 @@ export function ClipImport() {
           >
             <VideoScreen
               file={opened.file}
-              table={opened.table}
-              ballSet={opened.ballSet}
+              scene={opened.scene}
+              tuning={opened.tuning}
+              theme={opened.theme}
               onClose={close}
             />
           </Suspense>

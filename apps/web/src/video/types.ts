@@ -51,6 +51,8 @@ export interface ClipAnalysis {
   /** The tracked balls, one entry per decoded frame (clip time order). */
   readonly frames: readonly TrackedFrame[];
   readonly shots: readonly ClipShot[];
+  /** The document's cloth colour when the clip was analysed (the "table" theme's cloth). */
+  readonly clothColour?: string;
 }
 
 /** The overlays drawn on the video. */
