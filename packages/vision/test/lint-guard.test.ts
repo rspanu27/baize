@@ -29,8 +29,8 @@ describe("vision lint guard", () => {
     ["self.indexedDB", "export const a = self.indexedDB;\n"],
     ["document", "export const a = document.cookie;\n"],
     [
-      "a package other than tables",
-      'import { simulate } from "@baize/physics";\nexport const a = simulate;\n',
+      "a package other than tables and physics",
+      'import { createRoot } from "react-dom/client";\nexport const a = createRoot;\n',
     ],
     ["node: import", 'import { writeFileSync } from "node:fs";\nexport const a = writeFileSync;\n'],
     ["dynamic import of a package", 'export const a = import("onnxruntime-web");\n'],
@@ -42,9 +42,9 @@ describe("vision lint guard", () => {
     expect((await errors(source)).length).toBeGreaterThan(0);
   });
 
-  test("allows relative imports, @baize/tables and plain maths", async () => {
+  test("allows relative imports, @baize/tables, @baize/physics and plain maths", async () => {
     const source =
-      'import type { Layout } from "@baize/tables";\nimport { y } from "./other.js";\nexport const a: Layout = { balls: [] };\nexport const b = Math.atan2(y, 1);\n';
+      'import type { Layout } from "@baize/tables";\nimport { sampleAt } from "@baize/physics";\nimport { y } from "./other.js";\nexport const a: Layout = { balls: [] };\nexport const b = Math.atan2(y, 1);\nexport const c = sampleAt;\n';
     expect(await errors(source)).toEqual([]);
   });
 

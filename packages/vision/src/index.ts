@@ -35,3 +35,5 @@ export type {
 } from "./video/track";
 export { findShots } from "./video/shotTiming";
 export type { ShotSpan } from "./video/shotTiming";
+export { fitShot } from "./video/fit";
+export type { FitInput, FitResult, FitRunner } from "./video/fit";

@@ -194,9 +194,9 @@ export default tseslint.config(
         "error",
         {
           selector:
-            "ImportDeclaration[source.value=/^[^.]/][source.value!='@baize/tables'], ExportAllDeclaration[source.value=/^[^.]/], ExportNamedDeclaration[source.value=/^[^.]/]",
+            "ImportDeclaration[source.value=/^[^.]/][source.value!='@baize/tables'][source.value!='@baize/physics'], ExportAllDeclaration[source.value=/^[^.]/], ExportNamedDeclaration[source.value=/^[^.]/]",
           message:
-            "Vision may import only relative paths and @baize/tables: photos are processed in the browser with nothing else involved.",
+            "Vision may import only relative paths, @baize/tables and @baize/physics: photos and clips are processed in the browser with nothing else involved.",
         },
         {
           selector: "ImportExpression:not([source.value=/^[.]/])",
