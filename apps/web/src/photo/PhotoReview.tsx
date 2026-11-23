@@ -3,7 +3,7 @@ import { imageToTableAtHeight } from "@baize/vision";
 import type { Camera, ImagePoint, ImportProblem, PhotoImage, TableCorners } from "@baize/vision";
 import { ballSizeOf } from "@baize/tables";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useEditor } from "../store/store";
 import type { PhotoAnalyser } from "./analyser";
 import { toPhotoPoint } from "./overlay";
@@ -14,6 +14,7 @@ import {
   addReviewBall,
   arrowStep,
   ballMarkers,
+  calibrationSummary,
   confirmedLayout,
   defaultCorners,
   kindChoices,
@@ -27,7 +28,7 @@ import {
   summaryText,
   turnCorners,
 } from "./reviewModel";
-import type { BallMarker, ReviewBall } from "./reviewModel";
+import type { BallMarker, ReviewBall, ReviewInitial } from "./reviewModel";
 import "./PhotoReview.css";
 
 export interface KindChoice {
@@ -35,7 +36,39 @@ export interface KindChoice {
   name: string;
 }
 
+/**
+ * What the review is for: "photo" checks the balls of a photo before they are imported;
+ * "calibration" checks only the table (its four corners) on the first frame of a video clip.
+ */
+export type ReviewPurpose = "photo" | "calibration";
+
+const TEXT: Record<
+  ReviewPurpose,
+  { title: string; alt: string; busy: string; confirm: string; cancel: string; note: string }
+> = {
+  photo: {
+    title: "Check the photo",
+    alt: "Your photo of the table",
+    busy: "Finding the balls…",
+    confirm: "Use these balls",
+    cancel: "Cancel",
+    note: ` ${NOTE_EDITS_LOST}`,
+  },
+  calibration: {
+    title: "Find the table",
+    alt: "The first frame of your clip",
+    busy: "Finding the table…",
+    confirm: "Use this table",
+    cancel: "Close the clip",
+    note: "",
+  },
+};
+
 export interface PhotoReviewViewProps {
+  /** Default "photo". */
+  purpose?: ReviewPurpose;
+  /** Shown under the title, e.g. what the clip is. */
+  details?: ReactNode;
   photoUrl: string;
   widthPx: number;
   heightPx: number;
@@ -125,6 +158,7 @@ function BallRing({ m, upp, selected }: { m: BallMarker; upp: number; selected: 
 /** The review screen's markup; `PhotoReviewDialog` connects it. */
 export function PhotoReviewView(props: PhotoReviewViewProps) {
   const { widthPx, heightPx, corners, markers } = props;
+  const text = TEXT[props.purpose ?? "photo"];
   const titleId = useId();
   const helpId = useId();
   const kindId = useId();
@@ -213,7 +247,8 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
   };
 
   const points = corners.map((c) => `${String(c.u)},${String(c.v)}`).join(" ");
-  const photoOnly = props.hasCamera;
+  // Balls are edited only when importing a photo, and only once the camera is known.
+  const photoOnly = props.hasCamera && (props.purpose ?? "photo") === "photo";
 
   return (
     <div className="photo-backdrop">
@@ -228,9 +263,10 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
         onKeyDown={onDialogKey}
       >
         <header className="photo-header">
-          <h2 id={titleId}>Check the photo</h2>
+          <h2 id={titleId}>{text.title}</h2>
+          {props.details}
           <p role="status" className="photo-summary">
-            {props.busy ? "Finding the balls…" : props.summary}
+            {props.busy ? text.busy : props.summary}
           </p>
         </header>
         <div className="photo-frame">
@@ -245,7 +281,7 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
             <img
               className="photo-img"
               src={props.photoUrl}
-              alt="Your photo of the table"
+              alt={text.alt}
               draggable={false}
               style={{
                 left: `${String(offset)}%`,
@@ -388,7 +424,7 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
           ))}
           <p id={helpId} className="photo-help">
             Drag each handle onto its corner of the playing area, or select it and use the arrow
-            keys (Shift for bigger steps). The orange edge is the baulk end. {NOTE_EDITS_LOST}
+            keys (Shift for bigger steps). The orange edge is the baulk end.{text.note}
           </p>
           <div className="photo-row">
             <button type="button" onClick={props.onTurn} disabled={props.busy}>
@@ -463,10 +499,10 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
               onClick={props.onConfirm}
               disabled={!props.canConfirm || props.busy}
             >
-              Use these balls
+              {text.confirm}
             </button>
             <button type="button" onClick={props.onCancel}>
-              Cancel
+              {text.cancel}
             </button>
           </div>
         </div>
@@ -482,16 +518,26 @@ export interface PhotoReviewDialogProps {
   analyser: PhotoAnalyser;
   /** Object URL of the chosen file, for showing it. Revoked by the owner on close. */
   photoUrl: string;
-  initial: {
-    problem?: ImportProblem;
-    corners?: TableCorners;
-    camera?: Camera;
-    cornersDetected: boolean;
-    balls: ReviewBall[];
-  };
+  initial: ReviewInitial;
   table: TableSpec;
   ballSet: BallSetSpec;
+  /**
+   * Calibration of a video frame instead of a photo import: only the table is checked, and
+   * confirming hands the table over (and does not touch the document).
+   */
+  calibration?: {
+    details?: ReactNode;
+    onConfirm: (calibration: TableCalibration) => void;
+  };
   onClose: () => void;
+}
+
+/** A table placed on a picture: its corners in the picture's pixels and the camera they give. */
+export interface TableCalibration {
+  corners: TableCorners;
+  camera: Camera;
+  /** Balls found on the same picture, in table metres (a first guess; tracking redoes them). */
+  balls: ReviewBall[];
 }
 
 /** Delay after the last arrow-key press before the balls are found again. */
@@ -575,7 +621,8 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
     [analyser, table, ballSet, w, h],
   );
 
-  const markers = ballMarkers(analysis.camera, balls, ballSet);
+  const calibration = props.calibration;
+  const markers = calibration ? [] : ballMarkers(analysis.camera, balls, ballSet);
   const status = reviewStatus({
     failed,
     problem: analysis.problem,
@@ -585,12 +632,14 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
 
   return (
     <PhotoReviewView
+      purpose={calibration ? "calibration" : "photo"}
+      details={calibration?.details}
       photoUrl={props.photoUrl}
       widthPx={w}
       heightPx={h}
       corners={corners}
       markers={markers}
-      summary={summaryText(balls)}
+      summary={calibration ? calibrationSummary(status.canConfirm) : summaryText(balls)}
       messages={status.messages}
       hasCamera={analysis.camera !== undefined && analysis.problem === undefined}
       busy={busy}
@@ -624,6 +673,12 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
         void rerun(undefined);
       }}
       onConfirm={() => {
+        if (calibration) {
+          const camera = analysis.camera;
+          if (!camera || !status.canConfirm) return;
+          calibration.onConfirm({ corners: cornersRef.current, camera, balls });
+          return;
+        }
         const layout = confirmedLayout(balls, table, ballSet);
         useEditor.getState().loadLayout(layout, { source: "photo", mode: "replace" });
         props.onClose();

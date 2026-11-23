@@ -2,6 +2,7 @@ import { usePlayKey, usePlayback } from "../sim/usePlayback";
 import { useSimulation } from "../sim/useSimulation";
 import { PhotoImport } from "../photo/PhotoImport";
 import { useDoc, useEditor } from "../store/store";
+import { ClipImport } from "../video/ClipImport";
 import { EDITOR_ORIENTATION } from "../view/transform";
 import { AimLayer, AimSurface } from "./AimLayer";
 import { BallsLayer } from "./BallsLayer";
@@ -82,6 +83,7 @@ export function Editor() {
         <h1 className="editor-title">Baize</h1>
         <Toolbar />
         <PhotoImport />
+        <ClipImport />
         {problems.length > 0 ? (
           <ul className="editor-problems" role="alert">
             {problems.map((p) => (

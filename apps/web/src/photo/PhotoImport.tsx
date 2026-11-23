@@ -8,7 +8,7 @@ import type { PhotoAnalyser } from "./analyser";
 import { decodePhoto } from "./decode";
 import { PhotoReviewDialog } from "./PhotoReview";
 import type { PhotoReviewDialogProps } from "./PhotoReview";
-import { reviewBalls } from "./reviewModel";
+import { reviewInitial } from "./reviewModel";
 import "./PhotoReview.css";
 
 export const PHOTO_GUIDANCE =
@@ -129,13 +129,7 @@ export function PhotoImport() {
           image: { widthPx: image.widthPx, heightPx: image.heightPx },
           analyser,
           photoUrl,
-          initial: {
-            ...(result.problem ? { problem: result.problem } : {}),
-            ...(result.corners ? { corners: result.corners } : {}),
-            ...(result.diagnostics.camera ? { camera: result.diagnostics.camera } : {}),
-            cornersDetected: result.diagnostics.cornersDetected,
-            balls: reviewBalls(result.layout),
-          },
+          initial: reviewInitial(result),
         });
       } catch (e) {
         if (photoUrl) URL.revokeObjectURL(photoUrl);

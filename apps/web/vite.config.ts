@@ -8,4 +8,18 @@ export default defineConfig({
     // starts, so that the first use does not make the dev server reload the page.
     include: ["mediabunny"],
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vite drops legal comments (`/*!`, `@license`) when it minifies. Keep them, so that
+        // Mediabunny's MPL-2.0 header stays in the chunk that carries its code.
+        comments: { legal: true },
+        // Mediabunny in a chunk of its own, loaded with the video screen only: its MPL-2.0 code
+        // stays in one file, apart from the editor's code.
+        codeSplitting: {
+          groups: [{ name: "mediabunny", test: /[\\/]node_modules[\\/]mediabunny[\\/]/ }],
+        },
+      },
+    },
+  },
 });

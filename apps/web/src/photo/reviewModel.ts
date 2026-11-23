@@ -1,7 +1,7 @@
 import { ballAppearance, ballSizeOf, sanitizeLayout } from "@baize/tables";
 import type { BallKind, BallSetSpec, Layout, TableSpec } from "@baize/tables";
 import { CORNER_OUTSIDE_SHARE, apparentRadiusPx, ballInPhoto } from "@baize/vision";
-import type { Camera, ImagePoint, ImportProblem, TableCorners } from "@baize/vision";
+import type { Camera, ImagePoint, ImportProblem, ImportResult, TableCorners } from "@baize/vision";
 import { ballName, isLowConfidence } from "../view/ballLook";
 
 /**
@@ -183,6 +183,34 @@ export function reviewBalls(layout: Layout): ReviewBall[] {
     y: b.y,
     confidence: b.confidence ?? 1,
   }));
+}
+
+/** Where a review starts: the import's first result on the photo or frame. */
+export interface ReviewInitial {
+  problem?: ImportProblem;
+  corners?: TableCorners;
+  camera?: Camera;
+  cornersDetected: boolean;
+  balls: ReviewBall[];
+}
+
+/** The review's starting point from an import result. */
+export function reviewInitial(result: ImportResult): ReviewInitial {
+  return {
+    ...(result.problem ? { problem: result.problem } : {}),
+    ...(result.corners ? { corners: result.corners } : {}),
+    ...(result.diagnostics.camera ? { camera: result.diagnostics.camera } : {}),
+    cornersDetected: result.diagnostics.cornersDetected,
+    balls: reviewBalls(result.layout),
+  };
+}
+
+export const CALIBRATION_PLACED = "The table is placed. Check that each handle is on its corner.";
+export const CALIBRATION_NOT_PLACED = "The table is not placed yet.";
+
+/** The summary line of a calibration: whether the corners give a table and camera. */
+export function calibrationSummary(placed: boolean): string {
+  return placed ? CALIBRATION_PLACED : CALIBRATION_NOT_PLACED;
 }
 
 function nextId(balls: readonly ReviewBall[]): number {
