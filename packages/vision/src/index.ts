@@ -24,3 +24,12 @@ export {
   imageToTableAtHeight,
   projectPoint,
 } from "./geometry/camera";
+export { DEFAULT_TRACK_OPTIONS, createTracker } from "./video/track";
+export type {
+  TrackOptions,
+  TrackStart,
+  TrackState,
+  TrackedBall,
+  TrackedFrame,
+  Tracker,
+} from "./video/track";
