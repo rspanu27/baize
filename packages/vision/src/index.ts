@@ -33,3 +33,5 @@ export type {
   TrackedFrame,
   Tracker,
 } from "./video/track";
+export { findShots } from "./video/shotTiming";
+export type { ShotSpan } from "./video/shotTiming";

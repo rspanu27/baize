@@ -2,6 +2,8 @@ import { getBallSet, getTablePreset, makeCloth } from "@baize/tables";
 import type { BallSetSpec, TableSpec } from "@baize/tables";
 import { describe, expect, test } from "vitest";
 import type { Camera } from "../src/index";
+import { findShots } from "../src/video/shotTiming";
+import type { ShotSpan } from "../src/video/shotTiming";
 import { createTracker } from "../src/video/track";
 import type { TrackedFrame } from "../src/video/track";
 import { renderClip } from "./clip";
@@ -171,5 +173,40 @@ describe("a player in the way", () => {
     expect(s.frames.some((f) => f.balls.some((b) => b.state === "hidden"))).toBe(true);
     const last = s.frames[s.frames.length - 1] as TrackedFrame;
     expect(last.balls.every((b) => b.state !== "lost")).toBe(true);
+  });
+});
+
+describe("shot start and end (task 7.6)", () => {
+  test.each([
+    ["pool", () => shotSpec("pool-9@1", POOL, "one", 0.03, 2.5, { leadInS: 0.5, tailS: 0.8 })],
+    [
+      "snooker, 60 fps",
+      () =>
+        shotSpec("snooker-12@1", SNOOKER, "red", 0.03, 2.2, { fps: 60, leadInS: 0.5, tailS: 0.8 }),
+    ],
+  ] as const)("%s: start within 2 frames, end within 0.5 s", (_name, make) => {
+    const spec = make();
+    const clip = renderClip(spec);
+    const s = track(spec, clip);
+    const shots = findShots(s.frames, "cue");
+    expect(shots).toHaveLength(1);
+    const shot = shots[0] as ShotSpan;
+    // The first frame whose exposure sees the cue ball move.
+    let truthStart = 0;
+    while (!clip.truth(truthStart).balls.some((b) => b.id === "cue" && b.moving)) truthStart++;
+    expect(Math.abs(shot.startIndex - truthStart)).toBeLessThanOrEqual(2);
+    expect(Math.abs(shot.endS - clip.endS)).toBeLessThanOrEqual(0.5);
+    console.log(
+      `${_name}: start frame ${String(shot.startIndex)} (truth ${String(truthStart)}), end ${shot.endS.toFixed(2)} s (truth ${clip.endS.toFixed(2)} s)`,
+    );
+  });
+
+  test("no shot in a clip where nothing moves, and none that is cut off before the balls stop", () => {
+    const spec = shotSpec("pool-9@1", POOL, "one", 0.03, 2.5, { leadInS: 0.5, tailS: 0.5 });
+    const clip = renderClip(spec);
+    const s = track(spec, clip);
+    const strike = s.frames.findIndex((f) => f.balls.some((b) => b.state === "moving"));
+    expect(findShots(s.frames.slice(0, strike), "cue")).toEqual([]);
+    expect(findShots(s.frames.slice(0, strike + 5), "cue")).toEqual([]);
   });
 });
