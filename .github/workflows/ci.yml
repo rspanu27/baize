@@ -34,6 +34,9 @@ jobs:
 
       - run: pnpm --filter web build
 
+      # Mediabunny (MPL-2.0) stays in its own chunk with its licence header, and the notices ship.
+      - run: node apps/web/scripts/check-build.mjs
+
       # End-to-end smoke test of the editor in headless Chromium.
       - run: pnpm --filter web exec playwright install --with-deps chromium
 

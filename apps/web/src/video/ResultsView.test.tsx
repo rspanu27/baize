@@ -1,14 +1,21 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
-import { testAnalysis } from "./overlay/testAnalysis";
-import { MESSAGE_PICK_SHOT, NO_SHOTS, NO_SHOTS_HINT } from "./resultsModel";
+import { fittedShot, testAnalysis } from "./overlay/testAnalysis";
+import { SPEED_MAX } from "../shot/shotModel";
+import {
+  MESSAGE_NOT_FITTED,
+  MESSAGE_PICK_SHOT,
+  NO_SHOTS,
+  NO_SHOTS_HINT,
+  clampNote,
+} from "./resultsModel";
 import { OVERLAY_FLAGS, PREVIEW_BEHIND, ResultsView } from "./ResultsView";
 import type { ResultsViewProps } from "./ResultsView";
 import { DEFAULT_OVERLAYS } from "./types";
 import type { ClipShot } from "./types";
 
 const analysis = testAnalysis({ widthPx: 1280, heightPx: 720 });
-const first = analysis.shots[0] as ClipShot;
+const first = fittedShot(analysis);
 const shots: ClipShot[] = [
   { ...first, startS: 0.5, rmsM: 0.004 },
   { ...first, index: 1, startS: 12.25, rmsM: 0.05, shot: { ...first.shot, speedMps: 1.5 } },
@@ -98,6 +105,37 @@ describe("results", () => {
     expect(whole).toMatch(/aria-describedby="([^"]+)"[^>]*>Open in editor/);
     const hint = /aria-describedby="([^"]+)"[^>]*>Open in editor/.exec(whole)?.[1] ?? "";
     expect(whole).toContain(`id="${hint}" class="photo-help clip-open-hint">${MESSAGE_PICK_SHOT}`);
+  });
+
+  test("a shot that could not be fitted is listed, and cannot be opened in the editor", () => {
+    const withUnfitted: ClipShot[] = [
+      ...shots,
+      {
+        fitted: false,
+        index: 2,
+        startS: 15,
+        endS: 16,
+        cueBallId: first.cueBallId,
+        balls: first.balls,
+      },
+    ];
+    const markup = view(props({ shots: withUnfitted, choice: 2 }));
+    expect(markup).toContain('<p role="status">3 shots found, 1 could not be fitted.</p>');
+    const three = labelWith(markup, "Shot 3 at 0:15.0");
+    expect(three).toContain("could not be fitted");
+    expect(three).toContain('checked=""');
+    expect(markup).toMatch(/disabled=""[^>]*>Open in editor/);
+    expect(markup).toContain(MESSAGE_NOT_FITTED);
+    // A fitted shot beside it still opens.
+    expect(view(props({ shots: withUnfitted, choice: 0 }))).toMatch(
+      /<button type="button">Open in editor</,
+    );
+  });
+
+  test("a shot faster than the editor allows says it opens at the editor's top speed", () => {
+    const fast: ClipShot[] = [{ ...first, shot: { ...first.shot, speedMps: SPEED_MAX + 2 } }];
+    expect(view(props({ shots: fast, choice: 0 }))).toContain(clampNote("metric"));
+    expect(view(props())).not.toContain(clampNote("metric"));
   });
 });
 

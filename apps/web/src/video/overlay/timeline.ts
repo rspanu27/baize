@@ -1,4 +1,4 @@
-import type { ClipAnalysis, ClipShot, OverlayOptions, TimelineFrame } from "../types";
+import type { ClipAnalysis, FittedClipShot, OverlayOptions, TimelineFrame } from "../types";
 
 /**
  * The frames of the video to write (task 7.8, SPEC section 11): the clip in real time, except
@@ -23,7 +23,7 @@ export interface ClipSpan {
  * Time of the cue ball's first contact with another ball in a shot, in simulation seconds (0
  * is the strike), or undefined when the cue ball touches no ball.
  */
-export function firstContactSimS(shot: ClipShot): number | undefined {
+export function firstContactSimS(shot: FittedClipShot): number | undefined {
   for (const e of shot.result.events) {
     if (e.type !== "ball-ball") continue;
     if (e.ballId === shot.cueBallId || e.otherBallId === shot.cueBallId) return e.t;
@@ -33,12 +33,14 @@ export function firstContactSimS(shot: ClipShot): number | undefined {
 
 /**
  * The stretches shown slowed down: from `SLOW_BEFORE_S` before each shot's first contact to
- * `SLOW_AFTER_S` after it, cut to the clip and merged where they overlap, in time order.
+ * `SLOW_AFTER_S` after it, cut to the clip and merged where they overlap, in time order. Shots
+ * the fit could not explain have no contact to slow down for.
  */
 export function slowSpans(analysis: ClipAnalysis): ClipSpan[] {
   const end = analysis.durationS;
   const raw: ClipSpan[] = [];
   for (const shot of analysis.shots) {
+    if (!shot.fitted) continue;
     const t = firstContactSimS(shot);
     if (t === undefined) continue;
     const contact = shot.strikeS + t;

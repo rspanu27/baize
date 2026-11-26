@@ -116,9 +116,13 @@ test("a clip is tracked, saved as a video and opened in the editor, and nothing 
   });
   const review = page.getByRole("dialog", { name: "Find the table" });
   await expect(review).toBeVisible({ timeout: 30_000 });
+  // The table and the balls, which tracking starts from: one cue ball among them, and they can
+  // be edited here.
   await expect(review.locator(".photo-summary")).toHaveText(
-    "The table is placed. Check that each handle is on its corner.",
+    /^The table is placed\. Check that each handle is on its corner\. \d+ balls? found, \d+ uncertain\.$/,
   );
+  await expect(review.getByRole("button", { name: "Add a ball" })).toBeVisible();
+  await expect(review.getByRole("button", { name: /^cue ball/ })).toHaveCount(1);
   await review.getByRole("button", { name: "Use this table" }).click();
 
   const screen = page.getByRole("dialog", { name: "Overlay a clip" });
@@ -215,6 +219,18 @@ test("a clip is tracked, saved as a video and opened in the editor, and nothing 
   });
   expect(stored).not.toMatch(/break\.mp4|data:image|data:video|blob:|widthPx|corners|AAAA/);
   expect(stored.length).toBeLessThan(20_000);
+  // Nor anywhere else the browser keeps data: no database, no cache, no private file system.
+  const kept = await page.evaluate(async () => {
+    const databases = (await indexedDB.databases()).map((d) => d.name ?? "");
+    const cacheNames = await caches.keys();
+    const files: string[] = [];
+    const root = await navigator.storage.getDirectory();
+    for await (const name of (root as unknown as { keys(): AsyncIterable<string> }).keys()) {
+      files.push(name);
+    }
+    return { databases, cacheNames, files };
+  });
+  expect(kept).toEqual({ databases: [], cacheNames: [], files: [] });
   const hash = new URL(page.url()).hash;
   expect(hash).not.toMatch(/break|data:|blob:/);
   expect(hash.length).toBeLessThan(5_000);

@@ -1,11 +1,18 @@
 import { loadLayout, setShot } from "../doc/ops";
+import { SPEED_MAX } from "../shot/shotModel";
 import type { DiagramDoc } from "../doc/types";
 import { useEditor } from "../store/store";
 import { formatDistance, formatSpeed } from "../units/units";
 import type { UnitSystem } from "../units/units";
 import type { ClipSpan } from "./overlay/timeline";
 import { buildTimeline } from "./overlay/timeline";
-import type { ClipAnalysis, ClipShot, OverlayOptions, TimelineFrame } from "./types";
+import type {
+  ClipAnalysis,
+  ClipShot,
+  FittedClipShot,
+  OverlayOptions,
+  TimelineFrame,
+} from "./types";
 
 /**
  * The video screen's results (task 7.10) as plain functions: words for the shots found, the
@@ -19,6 +26,11 @@ export const SHOT_MARGIN_S = 1;
 export const MAX_OUTPUT_SIDE_PX = 1920;
 /** Frame rate used when the clip's own cannot be told. */
 export const DEFAULT_FPS = 30;
+/**
+ * The saved video's frame rate at most. Design limit: a 120 or 240 fps phone clip would make a
+ * file several times larger for no visible gain (slow motion repeats frames anyway).
+ */
+export const MAX_OUTPUT_FPS = 60;
 /** Fit quality bounds: root-mean-square distance between the fit and the tracks, metres. */
 export const GOOD_FIT_M = 0.01;
 export const ROUGH_FIT_M = 0.03;
@@ -32,6 +44,9 @@ export const NO_SHOTS_HINT =
 
 export const MESSAGE_STOPPED = "Tracking stopped. Nothing was kept.";
 export const MESSAGE_PICK_SHOT = "Pick a shot to open it in the editor.";
+export const NOT_FITTED = "could not be fitted";
+export const MESSAGE_NOT_FITTED =
+  "This shot could not be fitted to the physics, so it cannot be opened in the editor. Its video has no overlays.";
 
 /** A clip time as people read it: "0:02.3", "1:05.0". */
 export function clipTimeText(seconds: number): string {
@@ -65,14 +80,33 @@ export function shotLabel(shot: ClipShot): string {
   return `Shot ${String(shot.index + 1)} at ${clipTimeText(shot.startS)}`;
 }
 
-/** What the fit found: "cue ball 2.4 m/s, good fit (0.6 cm)". */
+/** What the fit found: "cue ball 2.4 m/s, good fit (0.6 cm)", or "could not be fitted". */
 export function shotDetails(shot: ClipShot, units: UnitSystem): string {
+  if (!shot.fitted) return NOT_FITTED;
   return `cue ball ${formatSpeed(shot.shot.speedMps, units)}, ${fitText(shot.rmsM, units)}`;
 }
 
-/** Where the results start: the first shot when there is one, else the whole clip. */
+/** "2 shots found.", "2 shots found, 1 could not be fitted." */
+export function shotsFoundText(shots: readonly ClipShot[]): string {
+  const found = shots.length === 1 ? "1 shot found" : `${String(shots.length)} shots found`;
+  const unfitted = shots.filter((s) => !s.fitted).length;
+  return unfitted > 0 ? `${found}, ${String(unfitted)} ${NOT_FITTED}.` : `${found}.`;
+}
+
+/** True if the editor's speed control cannot go as fast as the fitted shot. */
+export function speedClamped(shot: FittedClipShot): boolean {
+  return shot.shot.speedMps > SPEED_MAX;
+}
+
+/** The note when a shot opens in the editor slower than it was fitted. */
+export function clampNote(units: UnitSystem): string {
+  return `The editor's top speed is ${formatSpeed(SPEED_MAX, units)}, so this shot opens there at that speed.`;
+}
+
+/** Where the results start: the first fitted shot when there is one, else the whole clip. */
 export function initialChoice(analysis: ClipAnalysis): ShotChoice {
-  return analysis.shots.length > 0 ? 0 : "whole";
+  const first = analysis.shots.findIndex((s) => s.fitted);
+  return first >= 0 ? first : "whole";
 }
 
 /** The shot a choice names, if any. */
@@ -129,6 +163,11 @@ export function clipFps(analysis: Pick<ClipAnalysis, "frames">): number {
   return Number.isFinite(fps) && fps >= 1 && fps <= 1000 ? fps : DEFAULT_FPS;
 }
 
+/** The saved video's frame rate: the clip's, at most `MAX_OUTPUT_FPS`. */
+export function outputFps(analysis: Pick<ClipAnalysis, "frames">): number {
+  return Math.min(MAX_OUTPUT_FPS, clipFps(analysis));
+}
+
 /** The video's size: the clip's, scaled down so the longer side is at most 1920, even numbers. */
 export function outputSize(
   widthPx: number,
@@ -142,11 +181,12 @@ export function outputSize(
 
 /**
  * The document with a clip's shot in it: the balls at rest before the shot replace those on the
- * table (ids are the document's own), and the shot the physics fit found is set on the cue ball.
+ * table (ids are the document's own), and the shot the physics fit found is set on the cue ball,
+ * at no more than the editor's top speed (`SPEED_MAX`; see `speedClamped`).
  * One document, so the store applies it as one undo step. The layout is marked as coming from
  * a camera picture (`source: "photo"`): the document format has no "video" source.
  */
-export function docWithClipShot(doc: DiagramDoc, shot: ClipShot): DiagramDoc {
+export function docWithClipShot(doc: DiagramDoc, shot: FittedClipShot): DiagramDoc {
   const layout = { balls: shot.balls.map((b) => ({ kind: b.kind, x: b.x, y: b.y })) };
   const placed = loadLayout(doc, layout, { source: "photo", mode: "replace" });
   const cue = shot.balls.find((b) => b.id === shot.cueBallId);
@@ -166,13 +206,13 @@ export function docWithClipShot(doc: DiagramDoc, shot: ClipShot): DiagramDoc {
   return setShot(placed, {
     cueBallId: cueId,
     aimAngleRad: shot.shot.aimAngleRad,
-    speedMps: shot.shot.speedMps,
+    speedMps: Math.min(SPEED_MAX, shot.shot.speedMps),
     tipOffset: { ...shot.shot.tipOffset },
   });
 }
 
 /** Puts a clip's shot into the editor's document as one undo step (see `docWithClipShot`). */
-export function openShotInEditor(shot: ClipShot): void {
+export function openShotInEditor(shot: FittedClipShot): void {
   const { history, replaceDoc } = useEditor.getState();
   replaceDoc(docWithClipShot(history.present, shot));
 }

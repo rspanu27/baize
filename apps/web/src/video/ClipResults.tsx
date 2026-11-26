@@ -5,12 +5,12 @@ import { useUnitSystem } from "../units/usePreference";
 import { exportFileName, exportVideo, saveBlob } from "./export";
 import type { Clip } from "./media";
 import { frameNear, overlayDrawer, paintFrame, playTimeline } from "./preview";
-import { clipFps, initialChoice, outputSize, outputTimeline } from "./resultsModel";
+import { initialChoice, outputFps, outputSize, outputTimeline } from "./resultsModel";
 import type { ShotChoice } from "./resultsModel";
 import { ResultsView } from "./ResultsView";
 import type { OverlayFlag, SaveState } from "./ResultsView";
 import { DEFAULT_OVERLAYS } from "./types";
-import type { ClipAnalysis, ClipShot, OverlayOptions } from "./types";
+import type { ClipAnalysis, FittedClipShot, OverlayOptions } from "./types";
 
 /**
  * The analysed clip on the video screen (task 7.10): picks the shot and overlays, draws the
@@ -26,7 +26,8 @@ export interface ClipResultsProps {
   details: ReactNode;
   /** The document's theme: where the colours start. */
   theme: DiagramTheme;
-  onOpen: (shot: ClipShot) => void;
+  /** Only a fitted shot can be opened. */
+  onOpen: (shot: FittedClipShot) => void;
   onAdjust: () => void;
   onClose: () => void;
 }
@@ -40,7 +41,8 @@ export function ClipResults(props: ClipResultsProps) {
     theme: props.theme,
   }));
   const options: OverlayOptions = useMemo(() => ({ ...look, units }), [look, units]);
-  const fps = useMemo(() => clipFps(analysis), [analysis]);
+  // The clip's frame rate, at most 60 fps: preview and saved video alike.
+  const fps = useMemo(() => outputFps(analysis), [analysis]);
   const size = useMemo(() => outputSize(analysis.widthPx, analysis.heightPx), [analysis]);
   const timeline = useMemo(
     () => outputTimeline(analysis, options, fps, choice),
@@ -239,7 +241,7 @@ export function ClipResults(props: ClipResultsProps) {
       }}
       onOpen={() => {
         const shot = choice === "whole" ? undefined : analysis.shots[choice];
-        if (shot) props.onOpen(shot);
+        if (shot?.fitted) props.onOpen(shot);
       }}
       onAdjust={props.onAdjust}
       onClose={props.onClose}

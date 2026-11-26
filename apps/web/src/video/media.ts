@@ -32,6 +32,8 @@ export interface ClipInfo {
   readonly rotationDeg: 0 | 90 | 180 | 270;
   /** The video codec, e.g. "avc", "hevc", "vp9". */
   readonly codec: string;
+  /** Average frames per second, from the first packets; undefined if it cannot be told. */
+  readonly fps?: number | undefined;
 }
 
 /** One decoded frame: drawn on a canvas, with its exact time in the clip. */
@@ -63,6 +65,9 @@ export class ClipError extends Error {
   }
 }
 
+/** Packets looked at to estimate the frame rate (a prefix of the file is enough). */
+const FPS_PACKETS = 120;
+
 /** Opens a clip from a file the person picked. */
 export async function openClip(file: Blob): Promise<Clip> {
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
@@ -87,16 +92,24 @@ export async function openClip(file: Blob): Promise<Clip> {
       "This browser cannot decode this video. Try another browser, or record the clip as H.264 (on an iPhone: Settings, Camera, Formats, Most Compatible).",
     );
   }
-  const [widthPx, heightPx, durationS, rotation, codec] = await Promise.all([
+  // The video track's own length: the file's can be longer (an audio track that runs on).
+  const [widthPx, heightPx, durationS, rotation, codec, fps] = await Promise.all([
     track.getDisplayWidth(),
     track.getDisplayHeight(),
-    input.computeDuration(),
+    track.computeDuration(),
     track.getRotation(),
     track.getCodec(),
+    track.computePacketStats(FPS_PACKETS).then(
+      (s) =>
+        Number.isFinite(s.averagePacketRate) && s.averagePacketRate > 0
+          ? s.averagePacketRate
+          : undefined,
+      () => undefined,
+    ),
   ]);
   const sink = new CanvasSink(track);
   return {
-    info: { widthPx, heightPx, durationS, rotationDeg: rotation, codec: codec ?? "unknown" },
+    info: { widthPx, heightPx, durationS, rotationDeg: rotation, codec: codec ?? "unknown", fps },
     async *frames(fromS = 0, toS = Number.POSITIVE_INFINITY) {
       for await (const f of sink.canvases(fromS, toS)) {
         yield { canvas: f.canvas, timestampS: f.timestamp, durationS: f.duration };
@@ -132,17 +145,19 @@ const CODECS: Record<ClipFormat, VideoCodec[]> = {
 
 /**
  * A writer for frames drawn on `canvas`. MP4 is preferred (it plays everywhere), with the first
- * codec this browser can encode at this size; WebM if MP4 cannot be written.
+ * codec this browser can encode at this size and frame rate; WebM if MP4 cannot be written.
  */
 export async function createClipWriter(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   preferred: ClipFormat = "mp4",
+  fps?: number,
 ): Promise<ClipWriter> {
   const order: ClipFormat[] = preferred === "mp4" ? ["mp4", "webm"] : ["webm", "mp4"];
   for (const format of order) {
     const codec = await getFirstEncodableVideoCodec(CODECS[format], {
       width: canvas.width,
       height: canvas.height,
+      ...(fps !== undefined ? { frameRate: fps } : {}),
     });
     if (!codec) continue;
     const output = new Output({

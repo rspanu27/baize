@@ -4,7 +4,7 @@ import { ballSizeOf } from "@baize/tables";
 import type { BallKind } from "@baize/tables";
 import { apparentRadiusPx, projectPoint } from "@baize/vision";
 import type { PathRole } from "../../sim/pathModel";
-import type { ClipAnalysis, ClipShot } from "../types";
+import type { ClipAnalysis, FittedClipShot } from "../types";
 import type { PxPoint } from "./canvas";
 import { minimapLayout } from "./minimapLayout";
 import type { MinimapLayout } from "./minimapLayout";
@@ -58,14 +58,15 @@ export interface GhostBall {
 }
 
 export interface PreparedShot {
-  readonly shot: ClipShot;
+  readonly shot: FittedClipShot;
   readonly trails: readonly BallTrail[];
   readonly ghost: GhostBall | undefined;
   readonly kindOf: ReadonlyMap<string, BallKind>;
 }
 
 export interface Prepared {
-  readonly shots: readonly PreparedShot[];
+  /** One per shot of the analysis, in the same order; undefined for a shot not fitted. */
+  readonly shots: readonly (PreparedShot | undefined)[];
   readonly minimap: MinimapLayout;
   /** Static minimap pictures, per theme (see minimap.ts). */
   readonly statics: Map<string, unknown>;
@@ -78,7 +79,7 @@ export function prepare(analysis: ClipAnalysis): Prepared {
   let p = cache.get(analysis);
   if (!p) {
     p = {
-      shots: analysis.shots.map((s) => prepareShot(analysis, s)),
+      shots: analysis.shots.map((s) => (s.fitted ? prepareShot(analysis, s) : undefined)),
       minimap: minimapLayout(analysis),
       statics: new Map(),
     };
@@ -130,7 +131,7 @@ class Builder {
   }
 }
 
-function sampleTimes(shot: ClipShot): number[] {
+function sampleTimes(shot: FittedClipShot): number[] {
   const end = shot.result.durationS;
   const times: number[] = [];
   const steps = Math.ceil(end / SAMPLE_STEP_S);
@@ -141,7 +142,7 @@ function sampleTimes(shot: ClipShot): number[] {
   return times.filter((t, i) => i === 0 || t !== times[i - 1]);
 }
 
-function prepareShot(analysis: ClipAnalysis, shot: ClipShot): PreparedShot {
+function prepareShot(analysis: ClipAnalysis, shot: FittedClipShot): PreparedShot {
   const { result, cueBallId } = shot;
   const kindOf = new Map<string, BallKind>(shot.balls.map((b) => [b.id, b.kind]));
 

@@ -4,12 +4,16 @@ import type { DiagramTheme } from "../doc/types";
 import type { UnitSystem } from "../units/units";
 import { THEME_LABELS } from "../view/theme";
 import {
+  MESSAGE_NOT_FITTED,
   MESSAGE_PICK_SHOT,
   NO_SHOTS,
   NO_SHOTS_HINT,
+  clampNote,
   clipTimeText,
   shotDetails,
   shotLabel,
+  shotsFoundText,
+  speedClamped,
 } from "./resultsModel";
 import type { ShotChoice } from "./resultsModel";
 import type { ClipShot, OverlayOptions } from "./types";
@@ -112,7 +116,14 @@ export function ResultsView({ canvasRef, ...props }: ResultsViewProps) {
   const id = useId();
   const saving = props.save.kind === "saving";
   const { shots, choice, options } = props;
-  const canOpen = choice !== "whole" && shots[choice] !== undefined;
+  const chosen = choice === "whole" ? undefined : shots[choice];
+  const canOpen = chosen?.fitted === true;
+  const openHint = chosen
+    ? MESSAGE_NOT_FITTED
+    : shots.some((s) => s.fitted)
+      ? MESSAGE_PICK_SHOT
+      : NO_SHOTS;
+  const clamped = chosen?.fitted === true && speedClamped(chosen);
   const ratio = props.widthPx / props.heightPx;
   const last = Math.max(0, props.frameCount - 1);
 
@@ -190,9 +201,10 @@ export function ResultsView({ canvasRef, ...props }: ResultsViewProps) {
           </button>
           {canOpen ? null : (
             <p id={`${id}-open`} className="photo-help clip-open-hint">
-              {shots.length > 0 ? MESSAGE_PICK_SHOT : NO_SHOTS}
+              {shots.length > 0 ? openHint : NO_SHOTS}
             </p>
           )}
+          {clamped ? <p className="photo-help clip-open-hint">{clampNote(props.units)}</p> : null}
         </>
       }
     >
@@ -202,9 +214,7 @@ export function ResultsView({ canvasRef, ...props }: ResultsViewProps) {
           <p className="photo-help">{NO_SHOTS_HINT}</p>
         </div>
       ) : (
-        <p role="status">
-          {shots.length === 1 ? "1 shot found." : `${String(shots.length)} shots found.`}
-        </p>
+        <p role="status">{shotsFoundText(shots)}</p>
       )}
       <fieldset className="photo-panel clip-fieldset" disabled={saving}>
         <legend>The video shows</legend>

@@ -3,18 +3,17 @@ import { apparentRadiusPx, projectPoint } from "@baize/vision";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { THEMES } from "../../view/theme";
 import { DEFAULT_OVERLAYS } from "../types";
-import type { ClipAnalysis, OverlayOptions } from "../types";
+import type { ClipAnalysis, ClipShot, OverlayOptions } from "../types";
 import { currentShotIndex, drawOverlay, slowText, speedText } from "./draw";
 import { FakeContext } from "./fakeContext";
 import type { RecordedStroke } from "./fakeContext";
 import { MINIMAP_MAX_HEIGHT, MINIMAP_MAX_WIDTH, minimapLayout } from "./minimapLayout";
 import { prepare } from "./prepare";
-import { testAnalysis } from "./testAnalysis";
+import { fittedShot, testAnalysis } from "./testAnalysis";
 import { firstContactSimS } from "./timeline";
 
 const analysis = testAnalysis();
-const shot = analysis.shots[0];
-if (!shot) throw new Error("no shot");
+const shot = fittedShot(analysis);
 const contactSim = firstContactSimS(shot);
 if (contactSim === undefined) throw new Error("no contact in the test shot");
 
@@ -101,6 +100,31 @@ describe("trails", () => {
     const two: ClipAnalysis = { ...analysis, durationS: later.endS + 10, shots: [shot, later] };
     expect(currentShotIndex(two, shot.endS + 1)).toBe(0);
     expect(currentShotIndex(two, later.startS)).toBe(1);
+  });
+
+  test("a shot's paths and speed end where the next shot found starts, even one not fitted", () => {
+    // A span the fit could not explain, starting while the first shot's balls still roll.
+    const t = shot.strikeS + 1;
+    const unfitted: ClipShot = {
+      fitted: false,
+      index: 1,
+      startS: t - 0.2,
+      endS: t + 1,
+      cueBallId: shot.cueBallId,
+      balls: shot.balls,
+    };
+    const two: ClipAnalysis = { ...analysis, shots: [shot, unfitted] };
+    const all = { cueTrail: true, allTrails: true, ghostBall: true, speed: true };
+    expect(draw(all, t).strokes.length).toBeGreaterThan(0);
+    expect(draw(all, t).texts.length).toBeGreaterThan(0);
+    const after = draw(all, t, false, two);
+    expect(after.strokes).toHaveLength(0);
+    expect(after.texts).toHaveLength(0);
+    // Before it starts, the first shot is drawn as usual.
+    expect(draw(all, unfitted.startS - 0.05, false, two).strokes.length).toBeGreaterThan(0);
+    // The minimap still shows the balls, from the tracked frames.
+    const mini = draw({ minimap: true }, t, false, two).strokes;
+    expect(mini.some((s) => s.kind === "fill" && s.arcs.length > 0)).toBe(true);
   });
 
   test("print theme paths are near black with a light halo", () => {

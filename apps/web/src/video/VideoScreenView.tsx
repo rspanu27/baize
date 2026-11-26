@@ -174,6 +174,8 @@ export type VideoScreenViewProps = { fileName: string; onClose: () => void } & (
       phase: "calibrated";
       info: ClipInfo;
       notice?: ScreenNotice | undefined;
+      /** A clip beyond the limits: said before tracking, which can still go ahead. */
+      warning?: string | undefined;
       onAdjust: () => void;
       onTrack: () => void;
     } & FrameProps)
@@ -215,6 +217,7 @@ export function VideoScreenView(props: VideoScreenViewProps) {
         <p role="status">
           {props.notice?.kind === "stopped" ? props.notice.text : CALIBRATED_READY}
         </p>
+        {props.warning ? <p className="photo-message clip-warning">{props.warning}</p> : null}
       </>
     );
     actions = (

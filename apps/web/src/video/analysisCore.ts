@@ -1,3 +1,4 @@
+import { sanitizeLayout } from "@baize/tables";
 import type { BallKind, BallSetSpec, TableSpec } from "@baize/tables";
 import { createTracker, findShots, fitShot } from "@baize/vision";
 import type { Camera, PhotoImage, TrackedFrame, Tracker } from "@baize/vision";
@@ -46,8 +47,48 @@ export interface AnalysisSession {
 export const MESSAGE_NO_CUE_BALL =
   "No cue ball was found on the first frame. Check the balls before tracking.";
 
-export function createAnalysis(init: AnalysisInit): AnalysisSession {
-  const tracker: Tracker = createTracker(init.table, init.ballSet, init.camera, init.balls);
+type ShotBall = ClipShot["balls"][number];
+
+/**
+ * The balls at rest before a shot made placeable for the simulator: tracked positions can
+ * overlap by more than the physics allows or sit over a pocket, and then every simulation of
+ * the fit would fail. The cue ball goes first so that it keeps its place when two balls
+ * overlap; balls that cannot be placed at all are left out. Deterministic.
+ */
+export function placeableBalls(
+  balls: readonly ShotBall[],
+  cueBallId: string,
+  table: TableSpec,
+  ballSet: BallSetSpec,
+): ShotBall[] {
+  const ordered = [
+    ...balls.filter((b) => b.id === cueBallId),
+    ...balls.filter((b) => b.id !== cueBallId),
+  ];
+  const { layout, removed } = sanitizeLayout(
+    { balls: ordered.map((b) => ({ kind: b.kind, x: b.x, y: b.y })) },
+    table,
+    ballSet,
+  );
+  const gone = new Set(removed);
+  const kept = ordered.filter((_, i) => !gone.has(i));
+  return kept.flatMap((b, i) => {
+    const placed = layout.balls[i];
+    return placed ? [{ id: b.id, kind: b.kind, x: placed.x, y: placed.y }] : [];
+  });
+}
+
+/** The vision steps the analysis uses; stand-ins in tests. */
+export interface AnalysisSteps {
+  readonly createTracker: typeof createTracker;
+  readonly findShots: typeof findShots;
+  readonly fitShot: typeof fitShot;
+}
+
+const VISION: AnalysisSteps = { createTracker, findShots, fitShot };
+
+export function createAnalysis(init: AnalysisInit, steps: AnalysisSteps = VISION): AnalysisSession {
+  const tracker: Tracker = steps.createTracker(init.table, init.ballSet, init.camera, init.balls);
   const frames: TrackedFrame[] = [];
   const k = init.toDisplay;
   return {
@@ -64,34 +105,53 @@ export function createAnalysis(init: AnalysisInit): AnalysisSession {
     finish(onShot) {
       const cue = init.balls.find((b) => b.kind === "cue");
       if (!cue) throw new Error(MESSAGE_NO_CUE_BALL);
-      const spans = findShots(frames, cue.id);
+      const spans = steps.findShots(frames, cue.id);
       const run = editorRunner(init.scene, init.tuning);
       const shots: ClipShot[] = [];
       spans.forEach((span, n) => {
         onShot?.(n, spans.length);
         const before = frames[Math.max(0, span.startIndex - 1)] as TrackedFrame;
-        const balls = before.balls
-          .filter((b) => b.state !== "pocketed" && b.state !== "lost")
-          .map((b) => ({ id: b.id, kind: b.kind, x: b.x, y: b.y }));
-        const fit = fitShot({
-          ballSet: init.ballSet,
-          balls,
-          cueBallId: cue.id,
-          frames: frames.slice(Math.max(0, span.startIndex - 1), span.endIndex + 1),
-          run,
-        });
-        if (!fit) return;
-        shots.push({
-          index: shots.length,
+        const balls = placeableBalls(
+          before.balls
+            .filter((b) => b.state !== "pocketed" && b.state !== "lost")
+            .map((b) => ({ id: b.id, kind: b.kind, x: b.x, y: b.y })),
+          cue.id,
+          init.table,
+          init.ballSet,
+        );
+        const found = {
+          index: n,
           startS: span.startS,
           endS: span.endS,
-          strikeS: fit.strikeS,
           cueBallId: cue.id,
           balls,
-          shot: fit.shot,
-          result: fit.result,
-          rmsM: fit.rmsM,
-        });
+        };
+        let fit: ReturnType<typeof fitShot>;
+        try {
+          fit = steps.fitShot({
+            ballSet: init.ballSet,
+            balls,
+            cueBallId: cue.id,
+            frames: frames.slice(Math.max(0, span.startIndex - 1), span.endIndex + 1),
+            run,
+          });
+        } catch {
+          // A layout the simulator refuses: the shot is still listed, as not fitted.
+          fit = undefined;
+        }
+        // Every shot found is kept: one the fit cannot explain is listed as not fitted.
+        shots.push(
+          fit
+            ? {
+                ...found,
+                fitted: true,
+                strikeS: fit.strikeS,
+                shot: fit.shot,
+                result: fit.result,
+                rmsM: fit.rmsM,
+              }
+            : { ...found, fitted: false },
+        );
       });
       onShot?.(spans.length, spans.length);
       return { frames, shots };

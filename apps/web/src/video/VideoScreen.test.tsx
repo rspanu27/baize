@@ -6,12 +6,14 @@ import { PhotoReviewView } from "../photo/PhotoReview";
 import type { PhotoReviewViewProps } from "../photo/PhotoReview";
 import {
   CALIBRATION_NOT_PLACED,
+  CALIBRATION_ONE_CUE,
   CALIBRATION_PLACED,
   calibrationSummary,
   kindChoices,
 } from "../photo/reviewModel";
 import { CLIP_ACCEPT, CLIP_GUIDANCE, ClipImport, ClipImportView } from "./ClipImport";
 import type { ClipInfo } from "./media";
+import { MESSAGE_NO_CUE, clipLimitWarning } from "./clipSession";
 import { MESSAGE_STOPPED } from "./resultsModel";
 import {
   CALIBRATED_READY,
@@ -152,20 +154,54 @@ describe("calibrating: the photo review's corner handles on the first frame", ()
     expect(markup).toContain(CALIBRATION_PLACED);
   });
 
-  test("offers the table, not ball editing", () => {
+  test("offers the table and the balls, which tracking starts from", () => {
     const markup = review(props());
     for (const name of [
       "Turn the table round",
       "Find the table again",
       "Use this table",
       "Close the clip",
+      "Add a ball",
     ]) {
       expect(markup).toContain(`>${name}</button>`);
     }
     expect(markup).not.toContain("Use these balls");
-    expect(markup).not.toContain("Add a ball");
-    expect(markup).not.toContain("Tap a ball");
-    expect(markup).not.toContain("changes you made to balls by hand are lost");
+    expect(markup).toContain("Tap a ball");
+    expect(markup).toContain("Ball to add</label>");
+    expect(markup).toContain("changes you made to balls by hand are lost");
+    // Ball editing needs the camera, as for a photo.
+    expect(review(props({ hasCamera: false }))).not.toContain("Add a ball");
+  });
+
+  test("a selected ball can be changed or removed, the cue ball among them", () => {
+    const marker = {
+      id: 3,
+      kind: "cue" as const,
+      name: "cue ball",
+      u: 900,
+      v: 600,
+      radiusPx: 12,
+      colour: "#ffffff",
+      uncertain: false,
+    };
+    const markup = review(props({ markers: [marker], selectedId: 3 }));
+    expect(markup).toContain('aria-label="cue ball"');
+    expect(markup).toContain("Ball kind</label>");
+    expect(markup).toContain(">Remove</button>");
+  });
+
+  test("the summary counts the balls and asks for exactly one cue ball", () => {
+    const ball = (id: number, kind: "cue" | "1") => ({ id, kind, x: 0.5, y: id, confidence: 1 });
+    expect(calibrationSummary(true, [ball(1, "cue"), ball(2, "1")])).toBe(
+      `${CALIBRATION_PLACED} 2 balls found, 0 uncertain.`,
+    );
+    expect(calibrationSummary(true, [ball(2, "1")])).toBe(
+      `${CALIBRATION_PLACED} 1 ball found, 0 uncertain. ${CALIBRATION_ONE_CUE}`,
+    );
+    expect(calibrationSummary(true, [ball(1, "cue"), ball(2, "cue")])).toContain(
+      CALIBRATION_ONE_CUE,
+    );
+    expect(calibrationSummary(false, [ball(1, "cue")])).toBe(CALIBRATION_NOT_PLACED);
   });
 
   test("a table not placed cannot be used, and a busy screen says what it is doing", () => {
@@ -217,6 +253,21 @@ describe("calibrated", () => {
     );
     expect(markup).toContain(">Track the balls again</button>");
     expect(markup).toContain(`<p role="status">${CALIBRATED_READY}</p>`);
+  });
+
+  test("no cue ball: said before tracking, in plain words", () => {
+    const markup = calibrated({ notice: { kind: "error", text: MESSAGE_NO_CUE } });
+    expect(markup).toContain(`role="alert" class="photo-error clip-error">${MESSAGE_NO_CUE}<`);
+    expect(markup).toContain(">Adjust the corners</button>");
+  });
+
+  test("a clip beyond the limits: a warning, and tracking can still start", () => {
+    const warning = clipLimitWarning({ ...INFO, durationS: 95 });
+    if (!warning) throw new Error("no warning");
+    const markup = calibrated({ info: { ...INFO, durationS: 95 }, warning });
+    expect(markup).toContain(`<p class="photo-message clip-warning">${warning}</p>`);
+    expect(markup).toContain(">Track the balls</button>");
+    expect(calibrated()).not.toContain("clip-warning");
   });
 
   test("after Stop: back to the placed table, saying so", () => {

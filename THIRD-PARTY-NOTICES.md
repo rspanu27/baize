@@ -1,7 +1,8 @@
 # Third-party notices
 
 Baize is released under the MIT License (`LICENSE`). Its packages `physics`, `tables`,
-`vision` and `planner` have no runtime dependencies. The web app (`apps/web`) includes:
+`vision` and `planner` have no third-party runtime dependencies (they depend only on each
+other: `vision` and `planner` on `physics` and `tables`). The web app (`apps/web`) includes:
 
 | Software         | Version                     | Licence | Source                                   | Used for                                  |
 | ---------------- | --------------------------- | ------- | ---------------------------------------- | ----------------------------------------- |
@@ -15,7 +16,7 @@ Copyright (c) 2026-present, Vanilagy and contributors. Licensed under the Mozill
 version 2.0. Baize uses it **unmodified**. The MPL's conditions that apply here:
 
 - Its licence and copyright headers stay in its files (the production build keeps `/*!`
-  comments; checked when the video screen first bundles it, task 7.4).
+  comments; `apps/web/scripts/check-build.mjs` checks every build in CI).
 - Recipients of the built site are told where its source is: the site serves
   `third-party-notices.txt` (from `apps/web/public/`) with this notice and the full licence
   text, linked from the editor.

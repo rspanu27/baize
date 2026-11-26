@@ -11,6 +11,7 @@ import type { AnalysisReply, AnalysisRequest } from "./analysis";
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<AnalysisRequest>) => void) | null;
+  onmessageerror: ((event: MessageEvent) => void) | null;
   postMessage: (message: AnalysisReply) => void;
 }
 
@@ -19,6 +20,12 @@ let session: AnalysisSession | undefined;
 
 const errorText = (e: unknown) =>
   e instanceof Error && e.message ? e.message : "The clip could not be analysed.";
+
+// A request that cannot be read: say so, so the page does not wait for ever.
+scope.onmessageerror = () => {
+  session = undefined;
+  scope.postMessage({ type: "error", message: "The clip analysis could not read a frame." });
+};
 
 scope.onmessage = (event) => {
   const m = event.data;

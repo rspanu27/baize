@@ -207,10 +207,18 @@ export function reviewInitial(result: ImportResult): ReviewInitial {
 
 export const CALIBRATION_PLACED = "The table is placed. Check that each handle is on its corner.";
 export const CALIBRATION_NOT_PLACED = "The table is not placed yet.";
+export const CALIBRATION_ONE_CUE = "Tracking needs exactly one cue ball.";
 
-/** The summary line of a calibration: whether the corners give a table and camera. */
-export function calibrationSummary(placed: boolean): string {
-  return placed ? CALIBRATION_PLACED : CALIBRATION_NOT_PLACED;
+/**
+ * The summary line of a calibration: whether the corners give a table and camera and, once they
+ * do, the balls found (tracking follows them, and needs exactly one cue ball).
+ */
+export function calibrationSummary(placed: boolean, balls?: readonly ReviewBall[]): string {
+  if (!placed) return CALIBRATION_NOT_PLACED;
+  if (!balls) return CALIBRATION_PLACED;
+  const cues = balls.filter((b) => b.kind === "cue").length;
+  const found = `${CALIBRATION_PLACED} ${summaryText(balls)}.`;
+  return cues === 1 ? found : `${found} ${CALIBRATION_ONE_CUE}`;
 }
 
 function nextId(balls: readonly ReviewBall[]): number {

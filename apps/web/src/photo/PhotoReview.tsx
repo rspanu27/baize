@@ -38,7 +38,8 @@ export interface KindChoice {
 
 /**
  * What the review is for: "photo" checks the balls of a photo before they are imported;
- * "calibration" checks only the table (its four corners) on the first frame of a video clip.
+ * "calibration" checks the table (its four corners) and the balls on the first frame of a video
+ * clip, which tracking starts from.
  */
 export type ReviewPurpose = "photo" | "calibration";
 
@@ -60,7 +61,7 @@ const TEXT: Record<
     busy: "Finding the table…",
     confirm: "Use this table",
     cancel: "Close the clip",
-    note: "",
+    note: ` ${NOTE_EDITS_LOST}`,
   },
 };
 
@@ -247,8 +248,9 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
   };
 
   const points = corners.map((c) => `${String(c.u)},${String(c.v)}`).join(" ");
-  // Balls are edited only when importing a photo, and only once the camera is known.
-  const photoOnly = props.hasCamera && (props.purpose ?? "photo") === "photo";
+  // Balls can be edited once the camera is known: for a photo import, and for a clip's first
+  // frame, where tracking starts from them (and needs the cue ball).
+  const editBalls = props.hasCamera;
 
   return (
     <div className="photo-backdrop">
@@ -435,7 +437,7 @@ export function PhotoReviewView(props: PhotoReviewViewProps) {
             </button>
           </div>
 
-          {photoOnly ? (
+          {editBalls ? (
             <div className="photo-edit">
               {selected ? (
                 <div role="group" aria-label="Selected ball" className="photo-panel">
@@ -522,8 +524,8 @@ export interface PhotoReviewDialogProps {
   table: TableSpec;
   ballSet: BallSetSpec;
   /**
-   * Calibration of a video frame instead of a photo import: only the table is checked, and
-   * confirming hands the table over (and does not touch the document).
+   * Calibration of a video frame instead of a photo import: the table and the balls are checked,
+   * and confirming hands them over (and does not touch the document).
    */
   calibration?: {
     details?: ReactNode;
@@ -536,7 +538,7 @@ export interface PhotoReviewDialogProps {
 export interface TableCalibration {
   corners: TableCorners;
   camera: Camera;
-  /** Balls found on the same picture, in table metres (a first guess; tracking redoes them). */
+  /** Balls on the same picture, in table metres, as checked: tracking starts from them. */
   balls: ReviewBall[];
 }
 
@@ -622,7 +624,7 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
   );
 
   const calibration = props.calibration;
-  const markers = calibration ? [] : ballMarkers(analysis.camera, balls, ballSet);
+  const markers = ballMarkers(analysis.camera, balls, ballSet);
   const status = reviewStatus({
     failed,
     problem: analysis.problem,
@@ -639,7 +641,7 @@ export function PhotoReviewDialog(props: PhotoReviewDialogProps) {
       heightPx={h}
       corners={corners}
       markers={markers}
-      summary={calibration ? calibrationSummary(status.canConfirm) : summaryText(balls)}
+      summary={calibration ? calibrationSummary(status.canConfirm, balls) : summaryText(balls)}
       messages={status.messages}
       hasCamera={analysis.camera !== undefined && analysis.problem === undefined}
       busy={busy}

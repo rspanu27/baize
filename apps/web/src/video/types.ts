@@ -10,23 +10,44 @@ import type { UnitSystem } from "../units/units";
  * Plain data: none of it holds the clip's pixels.
  */
 
-/** A shot found in the clip, explained by the physics fit. */
-export interface ClipShot {
-  /** 0 for the first shot in the clip. */
+/** What every shot found in the clip has, fitted or not. */
+interface ClipShotSpan {
+  /** 0 for the first shot in the clip; also its index in `ClipAnalysis.shots`. */
   readonly index: number;
   /** Clip time at which the cue ball starts to move and at which every ball is still again. */
   readonly startS: number;
   readonly endS: number;
-  /** Clip time of the strike, from the fit (the simulation's time 0). */
-  readonly strikeS: number;
   readonly cueBallId: string;
-  /** The balls at rest before the shot, in table metres. */
+  /**
+   * The balls at rest before the shot, in table metres: where the tracker had them, made
+   * placeable by `sanitizeLayout` (no overlaps, none over a pocket). The fit simulated exactly
+   * these, and "Open in editor" puts exactly these on the table.
+   */
   readonly balls: readonly {
     readonly id: string;
     readonly kind: BallKind;
     readonly x: number;
     readonly y: number;
   }[];
+}
+
+/**
+ * A shot found in the clip that the physics fit could not explain (for example the cue ball was
+ * not on the table, or no simulated strike came close). It is listed, has no overlays and cannot
+ * be opened in the editor.
+ */
+export interface UnfittedClipShot extends ClipShotSpan {
+  readonly fitted: false;
+}
+
+/** A shot found in the clip: every span the shot finder reports is kept, fitted or not. */
+export type ClipShot = FittedClipShot | UnfittedClipShot;
+
+/** A shot found in the clip and explained by the physics fit. */
+export interface FittedClipShot extends ClipShotSpan {
+  readonly fitted: true;
+  /** Clip time of the strike, from the fit (the simulation's time 0). */
+  readonly strikeS: number;
   /** The strike the fit found. */
   readonly shot: {
     readonly aimAngleRad: number;

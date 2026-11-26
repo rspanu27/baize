@@ -26,7 +26,7 @@ export interface ExportRequest {
   signal?: AbortSignal;
   preferred?: ClipFormat;
   /** For tests: the writer (default `createClipWriter`). */
-  createWriter?(canvas: Canvas, preferred: ClipFormat): Promise<ClipWriter>;
+  createWriter?(canvas: Canvas, preferred: ClipFormat, fps: number): Promise<ClipWriter>;
   /** For tests: a blank canvas of this size (default an OffscreenCanvas, or a canvas element). */
   createCanvas?(widthPx: number, heightPx: number): Canvas;
 }
@@ -73,7 +73,7 @@ export async function exportVideo(req: ExportRequest): Promise<ExportResult> {
   const total = timeline.length;
   const first = timeline[0];
   if (!first) throw new Error(MESSAGE_NOT_WRITTEN);
-  const writer = await (req.createWriter ?? createClipWriter)(out, req.preferred ?? "mp4");
+  const writer = await (req.createWriter ?? createClipWriter)(out, req.preferred ?? "mp4", fps);
   const decoded = clip.frames(first.clipTimeS);
   try {
     req.onProgress?.(0, total);

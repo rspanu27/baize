@@ -118,7 +118,7 @@ test("a clip is opened, its table found on the first frame and confirmed, and no
   }
   // The table was found by itself on this frame.
   await expect(review.locator(".photo-summary")).toHaveText(
-    "The table is placed. Check that each handle is on its corner.",
+    /^The table is placed\. Check that each handle is on its corner\. \d+ balls? found/,
   );
   // A corner can still be moved by hand; the table is found again for it.
   const handle = review.getByRole("button", { name: "Top left" });

@@ -22,7 +22,7 @@ import {
 } from "@baize/vision";
 import type { TrackedBall, TrackedFrame } from "@baize/vision";
 import { ballLook } from "../../view/ballLook";
-import type { ClipAnalysis, ClipShot } from "../types";
+import type { ClipAnalysis, FittedClipShot } from "../types";
 import type { Ctx2D } from "./canvas";
 
 /**
@@ -137,7 +137,8 @@ export function testAnalysis(o: TestAnalysisOptions = {}): ClipAnalysis {
     });
   }
 
-  const clipShot: ClipShot = {
+  const clipShot: FittedClipShot = {
+    fitted: true,
     index: 0,
     startS: strikeS,
     endS,
@@ -149,6 +150,13 @@ export function testAnalysis(o: TestAnalysisOptions = {}): ClipAnalysis {
     rmsM: 0,
   };
   return { widthPx, heightPx, camera, table, ballSet, durationS, frames, shots: [clipShot] };
+}
+
+/** Shot `index` of an analysis, which must have been fitted (for tests). */
+export function fittedShot(analysis: ClipAnalysis, index = 0): FittedClipShot {
+  const shot = analysis.shots[index];
+  if (!shot?.fitted) throw new Error(`shot ${String(index)} is not fitted`);
+  return shot;
 }
 
 /**

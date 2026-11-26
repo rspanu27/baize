@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, test } from "vitest";
+import { SPEED_MAX } from "../shot/shotModel";
 import { newDoc } from "../doc/resolve";
 import type { DiagramDoc } from "../doc/types";
 import { useEditor } from "../store/store";
 import { THEMES } from "../view/theme";
 import { MINIMAP_CLOTH, clothColour } from "./overlay/minimap";
 import { buildTimeline } from "./overlay/timeline";
-import { testAnalysis } from "./overlay/testAnalysis";
+import { fittedShot, testAnalysis } from "./overlay/testAnalysis";
 import {
   DEFAULT_FPS,
+  MAX_OUTPUT_FPS,
+  NOT_FITTED,
+  clampNote,
   SHOT_MARGIN_S,
   clipFps,
   clipTimeText,
@@ -17,17 +21,28 @@ import {
   fitWord,
   initialChoice,
   openShotInEditor,
+  outputFps,
   outputSize,
   outputTimeline,
   shotDetails,
   shotLabel,
+  shotsFoundText,
+  speedClamped,
 } from "./resultsModel";
 import { DEFAULT_OVERLAYS } from "./types";
-import type { ClipAnalysis, ClipShot } from "./types";
+import type { ClipAnalysis, ClipShot, UnfittedClipShot } from "./types";
 
 /** A clip with 3 s of still table before the shot and after it, at 30 fps. */
 const analysis = testAnalysis({ leadInS: 3, tailS: 3, widthPx: 1280, heightPx: 720 });
-const shot = analysis.shots[0] as ClipShot;
+const shot = fittedShot(analysis);
+const unfitted: UnfittedClipShot = {
+  fitted: false,
+  index: 1,
+  startS: 9,
+  endS: 10,
+  cueBallId: shot.cueBallId,
+  balls: shot.balls,
+};
 
 describe("words for the shots found", () => {
   test("clip times as minutes, seconds and tenths", () => {
@@ -55,12 +70,30 @@ describe("words for the shots found", () => {
     expect(shotDetails(s, "metric")).toBe("cue ball 3 m/s, rough fit (1.5 cm)");
     expect(shotDetails(s, "imperial")).toMatch(/^cue ball 6\.7 mph, rough fit/);
   });
+
+  test("a shot the fit could not explain is listed as such", () => {
+    expect(shotLabel(unfitted)).toBe("Shot 2 at 0:09.0");
+    expect(shotDetails(unfitted, "metric")).toBe(NOT_FITTED);
+    expect(shotsFoundText([shot])).toBe("1 shot found.");
+    expect(shotsFoundText([shot, unfitted])).toBe("2 shots found, 1 could not be fitted.");
+  });
 });
 
 describe("what the video covers", () => {
   test("starts on the first shot, or the whole clip when there is none", () => {
     expect(initialChoice(analysis)).toBe(0);
     expect(initialChoice({ ...analysis, shots: [] })).toBe("whole");
+    // The first fitted shot; the whole clip when none was fitted.
+    expect(
+      initialChoice({
+        ...analysis,
+        shots: [
+          { ...unfitted, index: 0 },
+          { ...shot, index: 1 },
+        ],
+      }),
+    ).toBe(1);
+    expect(initialChoice({ ...analysis, shots: [unfitted] })).toBe("whole");
   });
 
   test("a shot from a second before it starts to a second after it ends, cut to the clip", () => {
@@ -114,6 +147,15 @@ describe("size and frame rate of the video", () => {
     expect(clipFps({ frames: [{ timeS: 1, balls: [] }] })).toBe(DEFAULT_FPS);
   });
 
+  test("the saved video's frame rate is the clip's, at most 60 fps", () => {
+    expect(MAX_OUTPUT_FPS).toBe(60);
+    expect(outputFps(analysis)).toBe(30);
+    expect(outputFps(testAnalysis({ fps: 60 }))).toBe(60);
+    const fast = Array.from({ length: 20 }, (_, i) => ({ timeS: i / 240, balls: [] }));
+    expect(clipFps({ frames: fast })).toBe(240);
+    expect(outputFps({ frames: fast })).toBe(60);
+  });
+
   test("the clip's size, the longer side at most 1920, even numbers", () => {
     expect(outputSize(1280, 720)).toEqual({ widthPx: 1280, heightPx: 720 });
     expect(outputSize(3840, 2160)).toEqual({ widthPx: 1920, heightPx: 1080 });
@@ -158,6 +200,16 @@ describe("Open in editor", () => {
     });
     // The document format has no video source: the layout is marked as from a camera picture.
     expect(doc.source).toEqual({ kind: "photo" });
+  });
+
+  test("a shot faster than the editor's top speed opens at that speed, and says so", () => {
+    const fast = { ...shot, shot: { ...shot.shot, speedMps: SPEED_MAX + 4 } };
+    expect(speedClamped(fast)).toBe(true);
+    expect(speedClamped(shot)).toBe(false);
+    expect(docWithClipShot(startDoc(), fast).shot?.speedMps).toBe(SPEED_MAX);
+    expect(clampNote("metric")).toBe(
+      "The editor's top speed is 10 m/s, so this shot opens there at that speed.",
+    );
   });
 
   test("is one undo step", () => {

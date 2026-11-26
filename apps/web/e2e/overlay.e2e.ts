@@ -23,8 +23,7 @@ test("overlays render onto 1080p frames", async ({ page }) => {
     const ty = (await import(typesPath)) as typeof import("../src/video/types");
 
     const analysis = fx.testAnalysis();
-    const shot = analysis.shots[0];
-    if (!shot) throw new Error("no shot");
+    const shot = fx.fittedShot(analysis);
     const contact = tl.firstContactSimS(shot) ?? 0;
     const canvas = document.createElement("canvas");
     canvas.width = analysis.widthPx;

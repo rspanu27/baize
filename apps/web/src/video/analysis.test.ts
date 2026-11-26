@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { PhotoImage } from "@baize/vision";
 // The synthetic clip renderer lives with the vision package's tests: a shot simulated by the
 // physics and drawn through a known camera, frame by frame, with exact truth.
@@ -11,6 +11,8 @@ import { newDoc, resolveDoc } from "../doc/resolve";
 import type { Scene } from "../doc/resolve";
 import { NO_TUNING } from "../sim/tuning";
 import { MESSAGE_CANCELLED, analyseClip, pageBackend } from "./analysis";
+import type { AnalysisBackend, AnalysisReply, AnalysisRequest } from "./analysis";
+import { MESSAGE_NO_CUE, messageCueBalls } from "./clipSession";
 import type { CalibratedClip } from "./clipSession";
 import type { Clip, ClipFrame } from "./media";
 
@@ -130,7 +132,7 @@ describe("analysing a clip", () => {
     expect(analysis.frames.length).toBe(images.size);
     expect(analysis.shots).toHaveLength(1);
     const shot = analysis.shots[0];
-    if (!shot) throw new Error("no shot");
+    if (!shot?.fitted) throw new Error("no fitted shot");
     expect(Math.abs(shot.shot.speedMps - spec.shot.speedMps) / spec.shot.speedMps).toBeLessThan(
       0.05,
     );
@@ -159,4 +161,63 @@ describe("analysing a clip", () => {
     });
     await expect(run).rejects.toThrow(MESSAGE_CANCELLED);
   });
+
+  /** A backend that tracks at once but never finishes fitting (a very long fit). */
+  function slowFit() {
+    let handler: ((r: AnalysisReply) => void) | undefined;
+    const sent: AnalysisRequest["type"][] = [];
+    const reply = (r: AnalysisReply) => setTimeout(() => handler?.(r), 0);
+    const backend: AnalysisBackend = {
+      send(m) {
+        sent.push(m.type);
+        if (m.type === "init") reply({ type: "ready" });
+        else if (m.type === "frame") reply({ type: "ack" });
+        else reply({ type: "fitting", done: 0, total: 3 });
+      },
+      onReply(h) {
+        handler = h;
+      },
+      close: vi.fn(() => {
+        handler = undefined;
+      }),
+    };
+    return { backend, sent };
+  }
+
+  test("stopping while the shots are fitted ends the worker at once", async () => {
+    const { scene, calibrated, images } = setup();
+    const { backend, sent } = slowFit();
+    const controller = new AbortController();
+    const run = analyseClip(calibrated, scene, NO_TUNING, {
+      backend,
+      signal: controller.signal,
+      readPixels: (frame) => images.get(frame) as PhotoImage,
+      onProgress: (p) => {
+        if (p.stage === "fitting") controller.abort();
+      },
+    });
+    await expect(run).rejects.toThrow(MESSAGE_CANCELLED);
+    expect(sent[sent.length - 1]).toBe("finish");
+    expect(backend.close).toHaveBeenCalled();
+    // Rendering the synthetic clip takes a few seconds when the test files run together.
+  }, 30_000);
+
+  test("without exactly one cue ball it stops before any frame is decoded", async () => {
+    const { scene, calibrated } = setup();
+    for (const [balls, message] of [
+      [calibrated.balls.filter((b) => b.kind !== "cue"), MESSAGE_NO_CUE],
+      [calibrated.balls.map((b) => ({ ...b, kind: "cue" as const })), messageCueBalls(3)],
+    ] as const) {
+      const { backend, sent } = slowFit();
+      const frames = vi.spyOn(calibrated.clip, "frames");
+      const readPixels = vi.fn();
+      await expect(
+        analyseClip({ ...calibrated, balls }, scene, NO_TUNING, { backend, readPixels }),
+      ).rejects.toThrow(message);
+      expect(frames).not.toHaveBeenCalled();
+      expect(readPixels).not.toHaveBeenCalled();
+      expect(sent).toEqual([]);
+      frames.mockRestore();
+    }
+  }, 30_000);
 });

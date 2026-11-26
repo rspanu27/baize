@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { DEFAULT_OVERLAYS } from "../types";
 import type { ClipAnalysis } from "../types";
-import { testAnalysis } from "./testAnalysis";
+import { fittedShot, testAnalysis } from "./testAnalysis";
 import {
   SLOW_AFTER_S,
   SLOW_BEFORE_S,
@@ -12,8 +12,7 @@ import {
 } from "./timeline";
 
 const analysis = testAnalysis();
-const shot = analysis.shots[0];
-if (!shot) throw new Error("no shot");
+const shot = fittedShot(analysis);
 const contactSim = firstContactSimS(shot);
 if (contactSim === undefined) throw new Error("no contact in the test shot");
 const contact = shot.strikeS + contactSim;
@@ -84,6 +83,14 @@ describe("buildTimeline", () => {
     expect(spans).toHaveLength(1);
     expect(spans[0]?.startS).toBeCloseTo(contact - SLOW_BEFORE_S, 12);
     expect(spans[0]?.endS).toBeCloseTo(contact + 0.4 + SLOW_AFTER_S, 12);
+  });
+
+  test("a shot not fitted is not slowed", () => {
+    const { index, startS, endS, cueBallId, balls } = shot;
+    const span = { index, startS, endS, cueBallId, balls, fitted: false as const };
+    const unfitted = { ...analysis, shots: [span] };
+    expect(slowSpans(unfitted)).toEqual([]);
+    expect(buildTimeline(unfitted, DEFAULT_OVERLAYS, FPS).some((f) => f.slow)).toBe(false);
   });
 
   test("a shot with no contact is not slowed; bad frame rates are refused", () => {

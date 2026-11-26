@@ -4,6 +4,7 @@ import type { Scene } from "../doc/resolve";
 import type { Tuning } from "../sim/tuning";
 import { createAnalysis } from "./analysisCore";
 import type { AnalysisInit, AnalysisOutput } from "./analysisCore";
+import { cueBallProblem } from "./clipSession";
 import type { CalibratedClip } from "./clipSession";
 import type { ClipFrame } from "./media";
 import type { ClipAnalysis } from "./types";
@@ -56,6 +57,9 @@ export interface AnalysisBackend {
 
 export const MESSAGE_CANCELLED = "The analysis was stopped.";
 export const MESSAGE_NO_CAMERA = "The table's corners do not give a camera. Adjust the corners.";
+export const MESSAGE_WORKER_FAILED = "The clip analysis could not run in the background.";
+export const MESSAGE_UNREADABLE_REPLY =
+  "The clip analysis sent back something this page could not read. Try again.";
 
 function scaleCorners(corners: TableCorners, k: number): TableCorners {
   return corners.map((c) => ({ u: c.u * k, v: c.v * k })) as unknown as TableCorners;
@@ -141,8 +145,13 @@ function workerBackend(): AnalysisBackend {
       worker.onmessage = (e: MessageEvent<AnalysisReply>) => {
         h(e.data);
       };
-      worker.onerror = () => {
-        h({ type: "error", message: "The clip analysis could not run in the background." });
+      worker.onerror = (e) => {
+        e.preventDefault();
+        h({ type: "error", message: MESSAGE_WORKER_FAILED });
+      };
+      // A reply that cannot be read must end the wait, not leave it hanging.
+      worker.onmessageerror = () => {
+        h({ type: "error", message: MESSAGE_UNREADABLE_REPLY });
       };
     },
     close() {
@@ -153,7 +162,9 @@ function workerBackend(): AnalysisBackend {
 
 /**
  * Analyses a calibrated clip: tracking, shots and their physics fit. `scene` and `tuning` are
- * the editor's, so the fitted shots are what the editor would draw.
+ * the editor's, so the fitted shots are what the editor would draw. The balls must hold exactly
+ * one cue ball (checked before any frame is decoded). Aborting `signal` stops the worker at once,
+ * whatever it is doing (tracking or fitting), and rejects with `MESSAGE_CANCELLED`.
  */
 export async function analyseClip(
   calibrated: CalibratedClip,
@@ -162,6 +173,9 @@ export async function analyseClip(
   options: AnalyseOptions = {},
 ): Promise<ClipAnalysis> {
   const { clip } = calibrated;
+  if (options.signal?.aborted) throw new Error(MESSAGE_CANCELLED);
+  const problem = cueBallProblem(calibrated.balls);
+  if (problem) throw new Error(problem);
   const display = { widthPx: clip.info.widthPx, heightPx: clip.info.heightPx };
   const longest = Math.max(calibrated.frameSize.widthPx, calibrated.frameSize.heightPx);
   const toTrack = Math.min(1, TRACK_SIDE_PX / longest);
@@ -199,7 +213,7 @@ export async function analyseClip(
   const durationS = Math.max(1e-6, clip.info.durationS);
 
   // One reply at a time: each request waits for its answer before the next is sent.
-  let waiting: ((r: AnalysisReply) => void) | undefined;
+  let waiting: { resolve: (r: AnalysisReply) => void; reject: (e: Error) => void } | undefined;
   let fitting: ((done: number, total: number) => void) | undefined;
   backend.onReply((r) => {
     if (r.type === "fitting") {
@@ -208,13 +222,25 @@ export async function analyseClip(
     }
     const w = waiting;
     waiting = undefined;
-    w?.(r);
+    w?.resolve(r);
   });
   const ask = (m: AnalysisRequest, transfer?: Transferable[]) =>
-    new Promise<AnalysisReply>((resolve) => {
-      waiting = resolve;
+    new Promise<AnalysisReply>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(new Error(MESSAGE_CANCELLED));
+        return;
+      }
+      waiting = { resolve, reject };
       backend.send(m, transfer);
     });
+  // Stopping ends the worker straight away (a long fit is not waited for) and the wait with it.
+  const stop = () => {
+    backend.close();
+    const w = waiting;
+    waiting = undefined;
+    w?.reject(new Error(MESSAGE_CANCELLED));
+  };
+  options.signal?.addEventListener("abort", stop, { once: true });
   const expect = (r: AnalysisReply, type: AnalysisReply["type"]) => {
     if (r.type === "error") throw new Error(r.message);
     if (r.type !== type) throw new Error("The clip could not be analysed.");
@@ -254,6 +280,7 @@ export async function analyseClip(
       clothColour: scene.cloth.colour,
     };
   } finally {
+    options.signal?.removeEventListener("abort", stop);
     backend.close();
   }
 }

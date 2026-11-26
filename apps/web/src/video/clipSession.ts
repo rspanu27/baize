@@ -38,7 +38,11 @@ export interface CalibratedClip {
   readonly frameSize: { readonly widthPx: number; readonly heightPx: number };
   readonly table: TableSpec;
   readonly ballSet: BallSetSpec;
-  /** Balls found on the first frame: a first guess, which tracking redoes. */
+  /**
+   * Balls on the first frame, as found and checked by the person: tracking starts from them
+   * (refining their positions on the first frame) and follows each through the clip, so a ball
+   * missing here is not tracked, and there must be exactly one cue ball.
+   */
   readonly balls: readonly ReviewBall[];
 }
 
@@ -53,6 +57,51 @@ export interface ClipSessionDeps {
 }
 
 export const MESSAGE_NO_FRAME = "This clip has no picture that can be shown.";
+export const MESSAGE_NO_CUE =
+  "There is no cue ball on the first frame, and tracking follows the cue ball. Adjust the corners, then add the cue ball or change a ball to the cue ball.";
+
+/** The message when there are several cue balls on the first frame. */
+export function messageCueBalls(count: number): string {
+  return `There are ${String(count)} cue balls on the first frame, and tracking needs exactly one. Adjust the corners, then change or remove the others.`;
+}
+
+/** What is wrong with the balls for tracking (not exactly one cue ball), or undefined. */
+export function cueBallProblem(balls: readonly { kind: string }[]): string | undefined {
+  const cues = balls.filter((b) => b.kind === "cue").length;
+  if (cues === 0) return MESSAGE_NO_CUE;
+  return cues > 1 ? messageCueBalls(cues) : undefined;
+}
+
+/**
+ * Clip limits (ARCHITECTURE section 11). The analysis keeps every tracked frame and the saved
+ * video is held in memory until saved, so long or very large clips may run out of memory on a
+ * phone. Design limits: a minute covers a few shots; above 1920 px at above 60 fps, decoding
+ * alone takes several times the clip's length.
+ */
+export const LIMIT_DURATION_S = 60;
+export const LIMIT_SIDE_PX = 1920;
+export const LIMIT_FPS = 60;
+
+/** A warning in plain words for a clip beyond the limits (it can still be tracked), or undefined. */
+export function clipLimitWarning(
+  info: Pick<ClipInfo, "widthPx" | "heightPx" | "durationS" | "fps">,
+): string | undefined {
+  const parts: string[] = [];
+  if (info.durationS > LIMIT_DURATION_S) {
+    parts.push(`it is longer than ${String(LIMIT_DURATION_S)} seconds`);
+  }
+  if (
+    Math.max(info.widthPx, info.heightPx) > LIMIT_SIDE_PX &&
+    info.fps !== undefined &&
+    info.fps > LIMIT_FPS
+  ) {
+    parts.push(
+      `it is larger than ${String(LIMIT_SIDE_PX)} pixels at more than ${String(LIMIT_FPS)} frames a second`,
+    );
+  }
+  if (parts.length === 0) return undefined;
+  return `This clip is big for tracking on this device: ${parts.join(", and ")}. Tracking may be slow or run out of memory; you can still try, or trim the clip first.`;
+}
 export const MESSAGE_UNREADABLE = "The clip could not be read.";
 
 /** The first frame of a clip: the one at 0 s, or the first there is if the clip starts later. */

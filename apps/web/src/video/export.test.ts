@@ -141,9 +141,11 @@ function request(
       created.push(c);
       return c as unknown as OffscreenCanvas;
     },
-    createWriter: (canvas, preferred) => {
+    createWriter: (canvas, preferred, writerFps) => {
       sink.canvas = canvas as unknown as FakeCanvas;
       expect(preferred).toBe(over.preferred ?? "mp4");
+      // The writer is told the frame rate, so the codec is chosen for it.
+      expect(writerFps).toBe(fps);
       return Promise.resolve(w.writer);
     },
     ...over,

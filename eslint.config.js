@@ -92,6 +92,12 @@ const physicsProperties = [
   })),
 ];
 
+const MEDIABUNNY_MSG =
+  "Use apps/web/src/video/media.ts; it is the only module that may import Mediabunny (MPL-2.0).";
+
+/** Browser storage the video screen must not touch (a clip is never stored). */
+const VIDEO_STORAGE = ["indexedDB", "caches", "localStorage", "sessionStorage"];
+
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/.vite/**"] },
   js.configs.recommended,
@@ -102,24 +108,57 @@ export default tseslint.config(
     extends: [reactHooks.configs.flat.recommended],
     languageOptions: { globals: globals.browser },
     rules: {
-      // Mediabunny (MPL-2.0) is reached only through src/video/media.ts, so it can be replaced.
+      // Mediabunny (MPL-2.0) is reached only through src/video/media.ts, so it can be replaced:
+      // no static import of it or of a file inside it, and no dynamic import either.
       "no-restricted-imports": [
         "error",
         {
-          paths: [
-            {
-              name: "mediabunny",
-              message:
-                "Use apps/web/src/video/media.ts; it is the only module that may import Mediabunny.",
-            },
-          ],
+          paths: [{ name: "mediabunny", message: MEDIABUNNY_MSG }],
+          patterns: [{ group: ["mediabunny/*"], message: MEDIABUNNY_MSG }],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression[source.value=/^mediabunny/]",
+          message: MEDIABUNNY_MSG,
+        },
+        {
+          selector: "ImportExpression > TemplateLiteral.source[quasis.0.value.raw=/^mediabunny/]",
+          message: MEDIABUNNY_MSG,
         },
       ],
     },
   },
   {
     files: ["apps/web/src/video/media.ts"],
-    rules: { "no-restricted-imports": "off" },
+    rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" },
+  },
+  {
+    // A clip and everything made from it stay in memory on this device: the video screen never
+    // stores anything in the browser (the e2e test checks storage is empty afterwards).
+    files: ["apps/web/src/video/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        ...VIDEO_STORAGE.map((name) => ({
+          name,
+          message: `${name} is banned in the video screen: a clip must never be stored.`,
+        })),
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          property: "storage",
+          message:
+            "navigator.storage (and the private file system) is banned in the video screen: a clip must never be stored.",
+        },
+        ...VIDEO_STORAGE.map((property) => ({
+          property,
+          message: `${property} is banned in the video screen: a clip must never be stored.`,
+        })),
+      ],
+    },
   },
   {
     files: ["packages/physics/src/**/*.ts"],

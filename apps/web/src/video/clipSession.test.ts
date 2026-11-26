@@ -3,9 +3,13 @@ import type { ImportResult, PhotoImage, TableCorners } from "@baize/vision";
 import { describe, expect, test, vi } from "vitest";
 import type { PhotoAnalyser } from "../photo/analyser";
 import {
+  MESSAGE_NO_CUE,
   MESSAGE_NO_FRAME,
   MESSAGE_UNREADABLE,
+  clipLimitWarning,
   codecText,
+  cueBallProblem,
+  messageCueBalls,
   durationText,
   firstFrame,
   openClipSession,
@@ -199,5 +203,30 @@ describe("clip details in words", () => {
       "This file has no video in it.",
     );
     expect(openingMessage("boom")).toBe(MESSAGE_UNREADABLE);
+  });
+});
+
+describe("before tracking", () => {
+  test("exactly one cue ball, or a message in plain words", () => {
+    expect(cueBallProblem([{ kind: "cue" }, { kind: "1" }])).toBeUndefined();
+    expect(cueBallProblem([{ kind: "1" }])).toBe(MESSAGE_NO_CUE);
+    expect(cueBallProblem([])).toBe(MESSAGE_NO_CUE);
+    expect(cueBallProblem([{ kind: "cue" }, { kind: "cue" }])).toBe(messageCueBalls(2));
+    expect(messageCueBalls(2)).toMatch(/^There are 2 cue balls on the first frame/);
+  });
+
+  test("a warning for a clip over a minute, or larger than 1920 px at over 60 fps", () => {
+    const base = { widthPx: 1920, heightPx: 1080, durationS: 30, fps: 60 };
+    expect(clipLimitWarning(base)).toBeUndefined();
+    expect(clipLimitWarning({ ...base, widthPx: 3840, heightPx: 2160, fps: 30 })).toBeUndefined();
+    expect(clipLimitWarning({ ...base, fps: 240 })).toBeUndefined();
+    expect(clipLimitWarning({ ...base, fps: undefined })).toBeUndefined();
+    expect(clipLimitWarning({ ...base, durationS: 75 })).toMatch(/longer than 60 seconds/);
+    const big = clipLimitWarning({ ...base, widthPx: 1080, heightPx: 2400, fps: 120 });
+    expect(big).toMatch(/larger than 1920 pixels at more than 60 frames a second/);
+    expect(big).toMatch(/you can still try/);
+    expect(clipLimitWarning({ ...base, durationS: 90, widthPx: 3840, fps: 120 })).toMatch(
+      /longer than 60 seconds, and it is larger/,
+    );
   });
 });

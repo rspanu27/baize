@@ -44,7 +44,9 @@ const FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 /**
  * The shot the overlays describe at `clipTimeS`: the last one that has started (so a finished
- * shot stays on screen until the next starts), or undefined before the first.
+ * shot stays on screen until the next starts), or -1 before the first. Shots the fit could not
+ * explain count too: a shot's paths and speed end where the next shot found starts, and a shot
+ * not fitted shows no overlays of its own.
  */
 export function currentShotIndex(analysis: ClipAnalysis, clipTimeS: number): number {
   let best = -1;

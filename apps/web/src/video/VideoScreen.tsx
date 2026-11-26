@@ -9,7 +9,7 @@ import type { Tuning } from "../sim/tuning";
 import { analyseClip, MESSAGE_CANCELLED } from "./analysis";
 import type { AnalyseProgress } from "./analysis";
 import { ClipResults } from "./ClipResults";
-import { openClipSession, openingMessage } from "./clipSession";
+import { clipLimitWarning, cueBallProblem, openClipSession, openingMessage } from "./clipSession";
 import type { CalibratedClip, ClipSession, ClipSessionDeps } from "./clipSession";
 import { readFrame } from "./frame";
 import { openClip } from "./media";
@@ -126,6 +126,8 @@ export default function VideoScreen({ file, scene, tuning, theme, onClose }: Vid
         calibration={{
           details,
           onConfirm: (c: TableCalibration) => {
+            // Said now, before any frame is decoded, rather than after the whole clip.
+            const problem = cueBallProblem(c.balls);
             setState({
               phase: "calibrated",
               session,
@@ -138,6 +140,7 @@ export default function VideoScreen({ file, scene, tuning, theme, onClose }: Vid
                 ballSet,
                 balls: c.balls,
               },
+              notice: problem ? { kind: "error", text: problem } : undefined,
             });
           },
         }}
@@ -151,6 +154,16 @@ export default function VideoScreen({ file, scene, tuning, theme, onClose }: Vid
     setState({ phase: "calibrating", session, initial: initialFrom(calibrated) });
   };
   const track = () => {
+    const problem = cueBallProblem(calibrated.balls);
+    if (problem) {
+      setState({
+        phase: "calibrated",
+        session,
+        calibrated,
+        notice: { kind: "error", text: problem },
+      });
+      return;
+    }
     const abort = new AbortController();
     tracking.current = abort;
     const current = (s: VideoScreenState): s is Extract<VideoScreenState, { phase: "tracking" }> =>
@@ -230,6 +243,7 @@ export default function VideoScreen({ file, scene, tuning, theme, onClose }: Vid
       phase="calibrated"
       {...frame}
       notice={state.notice}
+      warning={clipLimitWarning(session.clip.info)}
       onAdjust={adjust}
       onTrack={track}
     />
