@@ -1,4 +1,4 @@
-import { sampleAt } from "@baize/physics";
+import { MAX_TIP_OFFSET, sampleAt } from "@baize/physics";
 import type { BallInput, ShotInput, SimResult } from "@baize/physics";
 import { ballSizeOf } from "@baize/tables";
 import type { BallKind, BallSetSpec } from "@baize/tables";
@@ -49,8 +49,10 @@ export interface FitResult {
   readonly evaluations: number;
 }
 
-/** The tip stays inside the miscue limit. */
-const MAX_TIP = 0.5;
+/** The tip stays inside the miscue limit (the physics' own). */
+const MAX_TIP = MAX_TIP_OFFSET;
+/** Earliest strike considered before the one the first moves point back to, seconds. */
+const STRIKE_MARGIN_S = 0.03;
 /** A seen position further than this many radii from the simulation counts only this far. */
 const CAP_RADII = 4;
 const MAX_EVALUATIONS = 600;
@@ -178,12 +180,11 @@ export function fitShot(input: FitInput): FitResult | undefined {
   const fps =
     1 / Math.max(1e-6, (frames[1] as TrackedFrame).timeS - (frames[0] as TrackedFrame).timeS);
   const strike0 = a.t - Math.hypot(a.b.x - cueStart.x, a.b.y - cueStart.y) / Math.max(0.05, step);
-  // The cue ball was last seen at rest in the frame before `a`.
-  const restFrame = [...frames].reverse().find((f) => {
-    if (f.timeS >= a.t) return false;
-    return f.balls.find((b) => b.id === cueBallId)?.state === "rest";
-  });
-  const strikeFrom = (restFrame ? restFrame.timeS : a.t - 1 / fps) - 0.5 / fps;
+  // The strike is between the moment the first moves point back to (where the cue ball would
+  // have left its place at the speed it was seen moving), less a margin, and the first frame
+  // it was seen moving. Not the last frame it was seen at rest: at a high frame rate a soft shot
+  // is noticed a few frames late, which would leave the true strike outside the window.
+  const strikeFrom = Math.min(strike0, a.t) - Math.max(STRIKE_MARGIN_S, 1 / fps);
   const strikeTo = a.t + 0.5 / fps;
   const guess: Params = {
     aim: Math.atan2(dy, dx),

@@ -97,13 +97,20 @@ function describeScore(name: string, s: Score): string {
 }
 
 /** Runs the tracker through the clip and scores every ball in every frame where it can be seen. */
-function track(spec: ClipSpec, clip: RenderedClip): Score {
+function track(spec: ClipSpec, clip: RenderedClip, startOffsetM = 0): Score {
   const first = clip.truth(0);
   const tracker = createTracker(
     spec.table,
     spec.ballSet,
     spec.camera,
-    first.balls.map((b) => ({ id: b.id, kind: b.kind, x: b.x, y: b.y })),
+    // Start places as the photo finder would give them: off by `startOffsetM` in turn
+    // directions (the tracker refines them on the first frame).
+    first.balls.map((b, i) => ({
+      id: b.id,
+      kind: b.kind,
+      x: b.x + startOffsetM * Math.cos(1 + 2.1 * i),
+      y: b.y + startOffsetM * Math.sin(1 + 2.1 * i),
+    })),
   );
   const R = spec.ballSet.object.diameterM / 2;
   const score: Score = { visible: 0, within: 0, worstM: 0, moving: [], frames: [] };
@@ -209,4 +216,69 @@ describe("shot start and end (task 7.6)", () => {
     expect(findShots(s.frames.slice(0, strike), "cue")).toEqual([]);
     expect(findShots(s.frames.slice(0, strike + 5), "cue")).toEqual([]);
   });
+});
+
+describe("review fixes (Phase 7 review)", () => {
+  test("start places 1.5 cm off are refined on the first frame", () => {
+    const spec = shotSpec("pool-9@1", POOL, "one", 0.03, 2.5);
+    const clip = renderClip(spec);
+    const s = track(spec, clip, 0.015);
+    console.log(describeScore("start 1.5 cm off", s));
+    expect(s.within / s.visible).toBeGreaterThanOrEqual(0.95);
+    const R = spec.ballSet.object.diameterM / 2;
+    expect(q(s.moving, 0.5)).toBeLessThan(R / 3);
+  });
+
+  test("a cue lying over the cue ball before the strike does not start a shot", () => {
+    // A cue: a thin dark capsule from beyond the cue ball, over it, until just before the strike.
+    const base = shotSpec("pool-9@1", POOL, "one", 0.03, 2.5, { leadInS: 0.6, tailS: 0.5 });
+    const probe = renderClip(base);
+    const cue = probe.truth(0).balls.find((b) => b.id === "cue");
+    if (!cue) throw new Error("no cue ball");
+    const c = cue.centre;
+    const stick = (tS: number): Occluder | undefined =>
+      tS < 0.05 || tS > 0.5
+        ? undefined
+        : {
+            u0: c.u - 4,
+            v0: c.v + 6,
+            u1: c.u - 90,
+            v1: c.v + 120,
+            radiusPx: 4 + (tS > 0.25 ? 3 : 0),
+          };
+    const spec = { ...base, occluder: stick };
+    const clip = renderClip(spec);
+    const s = track(spec, clip);
+    const shots = findShots(s.frames, "cue");
+    expect(shots).toHaveLength(1);
+    let truthStart = 0;
+    while (!clip.truth(truthStart).balls.some((b) => b.id === "cue" && b.moving)) truthStart++;
+    expect(Math.abs((shots[0] as ShotSpan).startIndex - truthStart)).toBeLessThanOrEqual(2);
+    // Before the strike the cue ball stays where it is.
+    for (let i = 0; i < truthStart - 1; i++) {
+      const got = (s.frames[i] as TrackedFrame).balls.find((b) => b.id === "cue");
+      expect(got?.state).toBe("rest");
+    }
+    expect(s.within / s.visible).toBeGreaterThanOrEqual(0.95);
+  });
+
+  test("a slow shot at 120 fps with camera noise: tracked, timed, at rest at the end", () => {
+    const spec = shotSpec("pool-9@1", POOL, "one", 0.03, 1.2, {
+      fps: 120,
+      leadInS: 0.3,
+      tailS: 0.4,
+      look: { cloth: CLOTH, noise: 4, seed: 7 },
+    });
+    const clip = renderClip(spec);
+    const s = track(spec, clip);
+    console.log(describeScore("slow, 120 fps, noise", s));
+    expect(s.within / s.visible).toBeGreaterThanOrEqual(0.95);
+    const shots = findShots(s.frames, "cue");
+    expect(shots).toHaveLength(1);
+    let truthStart = 0;
+    while (!clip.truth(truthStart).balls.some((b) => b.id === "cue" && b.moving)) truthStart++;
+    const shot = shots[0] as ShotSpan;
+    expect(Math.abs(shot.startIndex - truthStart)).toBeLessThanOrEqual(4);
+    expect(Math.abs(shot.endS - clip.endS)).toBeLessThanOrEqual(0.5);
+  }, 60_000);
 });
